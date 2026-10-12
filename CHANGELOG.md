@@ -38,6 +38,11 @@ Feedback visual: saber de un vistazo que el plugin está analizando, y si creó 
 
 ### Cambiado
 
+- **Nomenclatura comercial: LifeCode Skill-Compiler** (familia de producto *LifeCode*). El nombre visible
+  en la ficha del plugin es `LifeCode Skill-Compiler`; el identificador técnico sigue siendo
+  `skill-compiler` —paquete, identidad del Loader, prefijo del marcador y carpeta del almacén—, porque
+  renombrar algo que el arranque del perfil valida es un riesgo que no se corre antes de la primera
+  instalación. Cuando la instalación esté verificada, el renombrado completo es un commit.
 - El resultado de `skill_propose` y `skill_vendor` abre con la línea del marcador. Las dos herramientas de
   solo lectura (`skill_review`, `skill_upstream_check`) **no** lo llevan: no aprenden nada.
 - El plegado dejó de atribuir un id a un resultado sin marcador: prefiere no decir de qué skill se trata

@@ -1,4 +1,9 @@
-# skill-compiler — aprendizaje progresivo para DeepSeek Harness
+# LifeCode Skill-Compiler
+
+> El nombre técnico del plugin —el del paquete, la identidad del Loader y la carpeta del almacén— sigue
+> siendo `skill-compiler`. **LifeCode Skill-Compiler** es el nombre comercial, y es el que se ve en la
+> ficha del plugin. Se mantienen separados a propósito: renombrar un identificador que el arranque del
+> perfil valida es un riesgo que no se corre antes de la primera instalación.
 
 Convierte el conocimiento reutilizable de una tarea compleja en una **skill propuesta**, con ámbito de
 proyecto, fuera de todo repositorio y sin solaparse con lo que ya existe. Y cuando le das **el enlace de

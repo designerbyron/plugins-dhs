@@ -1,12 +1,16 @@
-# plugins-dsh — plugins de DeepSeek Harness
+# LifeCode Plugins — plugins de DeepSeek Harness
 
-Colección de plugins propios para DeepSeek Harness. Cada plugin vive en su propia carpeta, con su
-código, sus pruebas y su documentación, y **se instala por ruta absoluta** con el gestor de plugins del
-harness.
+Colección de plugins propios para DeepSeek Harness, bajo la familia de producto **LifeCode**. Cada plugin
+vive en su propia carpeta, con su código, sus pruebas y su documentación, y **se instala por ruta
+absoluta** con el gestor de plugins del harness.
+
+> **Marca y titularidad.** *LifeCode* es la familia de producto; el titular del copyright de este
+> repositorio es `designerbyron` (ver [`LICENSE`](LICENSE)). Una marca no sustituye a un titular: si algún
+> día la familia cambia de manos, la licencia sigue diciendo de quién es el código.
 
 | Plugin | Qué hace | Estado |
 |---|---|---|
-| [`skill-compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Funcional, 105 pruebas en verde. **Pendiente de instalar.** |
+| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Funcional, 105 pruebas en verde. **Pendiente de instalar.** |
 
 ## Por qué está en `htdocs`
 

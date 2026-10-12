@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Compila el conocimiento reutilizable de una tarea en una skill propuesta, ligada a su proyecto y fuera de todo repositorio.",
+  "description": "LifeCode Skill-Compiler: compila el conocimiento reutilizable de una tarea en una skill propuesta, ligada a su proyecto y fuera de todo repositorio.",
   "license": "MIT",
   "author": "designerbyron",
   "repository": {
@@ -34,7 +34,7 @@
     }
   },
   "meta": {
-    "title": "Compilador de conocimiento",
-    "description": "Convierte el conocimiento reutilizable de una tarea compleja en una skill PROPUESTA, con ámbito de proyecto y sin solaparse con lo que ya existe. No activa nada: la aprobación es humana."
+    "title": "LifeCode Skill-Compiler",
+    "description": "LifeCode Skill-Compiler: convierte el conocimiento reutilizable de una tarea compleja en una skill PROPUESTA, con ámbito de proyecto y sin solaparse con lo que ya existe. Vendoriza skills de repositorios ajenos como versión propia, con procedencia. No activa nada: la aprobación es humana."
   }
 }
