@@ -19,6 +19,7 @@
  *                                                         # nuestra versión de una skill externa
  *   node bin/skill-compiler.mjs upstream <id>             # ¿se movió el origen?
  *   node bin/skill-compiler.mjs provenance <id>           # procedencia guardada, entera
+ *   node bin/skill-compiler.mjs doctor                    # ¿están las dependencias en su sitio?
  *
  * Opciones: `--project-key <clave>` para actuar sobre otro proyecto, `--force` para aprobar aunque
  * `check` avise (nunca si `check` falla).
@@ -26,7 +27,7 @@
  * Exit: 0 correcto · 1 problema (check en rojo, aprobación rechazada, vendorizado bloqueado) · 2 uso.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -41,6 +42,8 @@ import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
  * de aprobación que no funciona es peor que no darla.
  */
 const SELF = fileURLToPath(import.meta.url);
+/** La raíz del paquete, derivada de la ruta de este fichero: `bin/` está un nivel por debajo. */
+const packageRoot = join(dirname(SELF), '..');
 
 const argv = process.argv.slice(2);
 const command = argv[0];
@@ -230,6 +233,68 @@ switch (command) {
     if (!record) { process.stderr.write(`${id} no tiene procedencia de origen (no es una skill vendorizada).\n`); process.exit(1); }
     process.stdout.write(`${JSON.stringify(record, null, 2)}\n`);
     break;
+  }
+
+  case 'doctor': {
+    // Existe por un fallo real: el plugin importaba un paquete del harness sin declararlo, funcionaba
+    // en la máquina donde estaba suelto y fallaba al instalarse en un perfil con «failed to import».
+    // Este comando dice exactamente qué falta y qué hacer, en vez de dejar que se descubra instalando.
+    const fs = await import('node:fs');
+    const { pathToFileURL } = await import('node:url');
+    const pkgPath = join(packageRoot, 'package.json');
+    const manifest = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const declared = manifest.dependencies ?? {};
+    const declaredNames = Object.keys(declared);
+    let bad = 0;
+    const line = (ok, text, remedy) => {
+      if (!ok) bad++;
+      process.stdout.write(`${ok ? 'ok    ' : 'FALLA '} ${text}\n`);
+      if (!ok && remedy) process.stdout.write(`        remedio: ${remedy}\n`);
+    };
+
+    process.stdout.write(`\ndependencias declaradas: ${declaredNames.length}\n`);
+    line(declaredNames.length > 0, 'el manifiesto declara sus dependencias',
+      'un plugin que importe paquetes del harness tiene que declararlos: si no, se instala y falla al activarse');
+
+    const missing = declaredNames.filter((name) => !fs.existsSync(join(packageRoot, 'node_modules', name)));
+    line(missing.length === 0, `instaladas: ${declaredNames.length - missing.length}/${declaredNames.length}`,
+      `npm install   (faltan: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? '…' : ''})`);
+
+    // No basta con que la carpeta exista: lo que importa es que el módulo se pueda CARGAR.
+    for (const name of ['@deepseek-ai/dsh-tools', '@deepseek-ai/schemastery']) {
+      try {
+        const loaded = await import(name);
+        const version = JSON.parse(fs.readFileSync(join(packageRoot, 'node_modules', name, 'package.json'), 'utf8')).version;
+        line(true, `${name} se carga (${version}${declared[name] && declared[name] !== version ? `, declarada ${declared[name]}` : ''})`);
+        if (name === '@deepseek-ai/dsh-tools' && typeof loaded.defineTool !== 'function') {
+          line(false, 'dsh-tools no exporta defineTool', 'la versión declarada no es la del runtime del harness');
+        }
+      } catch (error) {
+        line(false, `${name} NO se carga: ${error.code ?? error.message}`,
+          'el paquete declara peers que también tienen que estar instalados; reinstala con «npm install» sin --legacy-peer-deps');
+      }
+    }
+
+    // El paso que de verdad decide: compilar las definiciones como hace el arranque del plugin.
+    try {
+      const { defineTool } = await import('@deepseek-ai/dsh-tools');
+      const defs = await import(pathToFileURL(join(packageRoot, 'lib', 'definitions.mjs')).href);
+      for (const factory of ['skillPropose', 'skillVendor', 'skillReview', 'skillUpstreamCheck']) {
+        try {
+          const tool = defineTool(defs[factory]({ root }));
+          line(true, `${tool.name} compila · parámetros: ${Object.keys(tool.parameters.properties ?? {}).join(', ') || '(ninguno)'}`);
+        } catch (error) {
+          line(false, `${factory} no compila: ${error.message}`, 'corrige el esquema en lib/definitions.mjs');
+        }
+      }
+    } catch (error) {
+      line(false, `no se pudieron comprobar las herramientas: ${error.message}`, 'npm install');
+    }
+
+    process.stdout.write(bad === 0
+      ? '\ntodo en su sitio: el plugin puede activarse\n'
+      : `\n${bad} problema(s): con esto el plugin falla al activarse\n`);
+    process.exit(bad === 0 ? 0 : 1);
   }
 
   default:

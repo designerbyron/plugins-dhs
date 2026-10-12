@@ -78,12 +78,19 @@ hace improbable.
 ## Pruebas
 
 ```sh
-npm test              # 115 pruebas
-npm run test:hermetic # las 83 + huella del almacén real antes y después
+npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
+npm test              # 120 pruebas
+npm run test:hermetic # las mismas + huella del almacén real antes y después
 ```
 
 - `tests/compiler.test.mjs` — el núcleo.
 - `tests/definitions.test.mjs` — el protocolo y las definiciones ejecutadas con un `exec` falso.
+- `tests/harness-contracts.test.mjs` — los contratos con el harness, y la puerta que habría cazado el
+  defecto de la primera instalación: **toda importación de paquete tiene que estar declarada como
+  dependencia**. Compila además las cuatro herramientas con el compilador **real** (esquemas y parámetros
+  que verá el modelo), exige que la familia `dsh-*` comparta una sola versión, y comprueba que el cierre
+  declarado esté instalado. Por eso la suite **necesita `npm install`**: sin él, esta puerta no puede
+  cargar el compilador, que es justo lo que hace el arranque del plugin.
 - `tests/vendor.test.mjs` — vendorizado con un `fetch` **falso inyectado**: sin red y capaz de provocar
   un secreto en el origen, una orden al agente, texto invisible, un 404 o una respuesta gigante.
 - `tests/presentation.test.mjs` — el estado del feedback visual: el contrato del marcador congelado contra

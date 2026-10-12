@@ -33,6 +33,13 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 | `vendor <url>` | Nuestra versión de una skill externa | Bloqueado, conflicto, o el enlace pide elegir carpeta |
 | `upstream <id>` | ¿Se movió el origen? | No se pudo comprobar, o no es vendorizada |
 | `provenance <id>` | La procedencia guardada, entera | No es vendorizada |
+| `doctor` | Comprueba que las dependencias del harness están declaradas, instaladas y **se cargan**, y que las cuatro herramientas compilan | Algo falta o no carga |
+| `where` | El ámbito de este directorio y dónde está el almacén | — |
+
+**`doctor` es el primer comando que hay que ejecutar cuando el plugin no se activa.** Distingue tres cosas
+que se ven iguales desde fuera y se arreglan distinto: que falte una dependencia (`npm install`), que no se
+pueda cargar por un *peer* sin instalar, y que un esquema de herramienta no compile. El porqué de todo
+esto, en [`DEPENDENCIAS.md`](DEPENDENCIAS.md).
 
 ## Qué se ve en la interfaz
 
@@ -94,8 +101,10 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 
 | Síntoma | Causa probable | Qué hacer |
 |---|---|---|
-| El plugin no aparece y la fila dice `failed` | El paquete no resolvió `@deepseek-ai/dsh-tools` en el perfil | Diagnóstico: `node -e "import('@deepseek-ai/dsh-tools').then(()=>console.log('resuelve'),e=>console.log(e.code))"` desde el directorio del perfil. Si no resuelve, declara la dependencia en `package.json` y reinstala |
-| Cambié el código y el comportamiento no cambia | El perfil tiene **su propia copia** del paquete | Reinstala el bundle (y reinicia si el resultado dice `restart-required`) |
+| El plugin no aparece y la fila dice `failed` | Casi siempre, una dependencia: o no está declarada, o no está instalada, o no se puede cargar | **`node bin/skill-compiler.mjs doctor`** desde la carpeta del plugin. Dice qué falta y con qué comando se arregla. Casi siempre es `npm install` |
+| El diálogo de instalación dice `Installed` pero al encender dice `failed to import` | El bundle se instaló **enlazando** la carpeta del repositorio, y las dependencias del plugin no están ahí | `npm install` en la carpeta del plugin y vuelve a encenderlo. El motivo completo, en [`DEPENDENCIAS.md`](DEPENDENCIAS.md) |
+| Cambié el código y el comportamiento no cambia | El perfil puede tener **su propia copia** del paquete, o conservar el módulo cargado | Si se instaló por ruta, el perfil enlaza el repositorio y el cambio es inmediato tras un ciclo de encendido; si no, reinstala el bundle y reinicia cuando el resultado diga `restart-required` |
+| Cambié el código del **navegador** (`client.js`) y no se ve | El artefacto de interfaz lo carga la página | Recarga la página (F5) después de cambiar el fichero |
 | La apruebo y el modelo no la ve | No es su proyecto, o hay una skill curada con el mismo nombre que gana por rango | `node bin/skill-compiler.mjs active` desde el directorio del proyecto; `where` para comprobar la clave |
 | `vendor` dice `needs-choice` | El enlace apunta a una carpeta con varias skills | Llama otra vez con el enlace a la subcarpeta concreta |
 | `vendor` dice `fetch-failed` con HTTP 403 | Límite de peticiones de GitHub sin autenticar (60/hora) | Espera, o usa el enlace `raw` del fichero, que no pasa por la API |

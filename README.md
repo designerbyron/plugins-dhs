@@ -36,22 +36,36 @@ El gestor de plugins de DSH no lee repositorios: instala un **bundle** por ruta 
 
 ### En este equipo (recomendado)
 
-1. Autoriza el gestor: en el preset `standard` la herramienta `plugin_manager` está deshabilitada; hace
-   falta el modo Creator, o instalar desde la página **Plugins** de la interfaz.
-2. Instala por ruta absoluta la carpeta del plugin:
+1. **Instala las dependencias del plugin**, que van declaradas en su manifiesto:
+
+   ```sh
+   cd C:\xampp\htdocs\plugins-dhs\skill-compiler
+   npm install
+   node bin/skill-compiler.mjs doctor   # dice si algo falta, y con qué comando se arregla
+   ```
+
+   Este paso es obligatorio y no es un detalle: el plugin importa paquetes del harness, y al instalarse
+   por ruta el perfil **enlaza** esta carpeta, así que el plugin carga sus dependencias **de aquí**. Sin
+   `npm install`, el bundle se instala y después falla al activarse con `failed to import`. El porqué
+   completo, en [`skill-compiler/docs/DEPENDENCIAS.md`](skill-compiler/docs/DEPENDENCIAS.md).
+
+2. Abre la página **Plugins** de la barra lateral y pulsa **Add plugin**.
+3. En el diálogo, pega la ruta absoluta de la carpeta del plugin:
 
    ```
    C:\xampp\htdocs\plugins-dhs\skill-compiler
    ```
 
-3. Comprueba que el resultado dice `application: applied`. Si dice `restart-required`, reinicia el
-   harness.
+4. Cuando diga **Installed**, pulsa **Enable now**. Si el resultado pide reiniciar, reinicia el harness.
+5. **Recarga la página** para que el navegador cargue la pieza de interfaz del plugin.
 
 ### En otra máquina
 
-1. Clona el repositorio donde quieras y **desde ese clon** instala por ruta absoluta (o por la dirección
-   git del repositorio, si el gestor la acepta).
-2. Si el plugin referencia rutas de este equipo (el caso de `skill-compiler` con su CLI), exporta la
+1. Clona el repositorio donde quieras, entra en la carpeta del plugin y ejecuta **`npm install`** —sin
+   ese paso el bundle se instala y falla al activarse, porque sus dependencias del harness no están.
+2. **Desde ese clon** instala por ruta absoluta (o por la dirección git del repositorio, si el gestor la
+   acepta).
+3. Si el plugin referencia rutas de este equipo (el caso de `skill-compiler` con su CLI), exporta la
    variable que corresponda: cada plugin la documenta en su README.
 
 ### Desinstalar

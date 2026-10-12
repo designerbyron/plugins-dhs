@@ -4,6 +4,46 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.1.1] — 2026-10-12
+
+**El plugin no se activaba al instalarlo.** Se instalaba bien —ficha, título, icono y versión correctos—
+y al encenderlo el harness respondía `failed to import`. Detrás de ese error había dos defectos, y el
+primero escondía al segundo.
+
+### Corregido — la dependencia que nadie declaró
+
+- El plugin importaba `@deepseek-ai/dsh-tools` **sin declararlo**. Funcionaba en la máquina donde se
+  escribió y fallaba en cuanto se instalaba en un perfil: Node resuelve las importaciones desde la ruta
+  real del módulo, y los paquetes del harness viven dentro del archivo de la aplicación. Los plugins que
+  el harness trae dentro pueden importarlos porque son hermanos suyos ahí dentro; uno externo no.
+- Se declaran ahora las **20 dependencias** del cierre completo, con versión exacta. No son tres: el
+  propio `dsh-tools` importa en su primera línea paquetes que declara como *peers*, y el perfil de DSH
+  trae `autoInstallPeers: false`, así que declarar solo las directas dejaría el plugin roto según qué
+  gestor lo instalara. El cierre explícito funciona con cualquier gestor y cualquier política.
+- `npm install` pasa a ser un paso **obligatorio y documentado** antes de instalar el bundle por ruta: al
+  instalarse por ruta, el perfil enlaza la carpeta del repositorio, así que el plugin carga sus
+  dependencias de ahí.
+- Se evaluó y se descartó registrar la declaración sin `defineTool`: el registro acepta la declaración
+  cruda, pero `defineTool` es quien convierte `parameters` en el esquema que ve el modelo. Habría
+  funcionado con las herramientas **sin parámetros**. Queda escrito en `docs/DEPENDENCIAS.md`.
+
+### Corregido — las herramientas que no se podían compilar
+
+- Los esquemas de salida se construían solo al activarse el plugin, así que un esquema inválido se
+  descubría instalando. Ahora `tests/harness-contracts.test.mjs` compila las cuatro definiciones con el
+  **compilador real** del harness y comprueba los parámetros que el modelo verá, los obligatorios
+  incluidos.
+
+### Añadido — puertas y diagnóstico
+
+- `tests/harness-contracts.test.mjs` (5 pruebas): las herramientas compilan, el modelo ve los parámetros
+  declarados, **toda importación de paquete está declarada como dependencia** —la regla que faltaba—, la
+  familia `dsh-*` comparte una sola versión, y el cierre está instalado. Total: **120 pruebas**.
+- `node bin/skill-compiler.mjs doctor`: dice qué falta y con qué comando se arregla, y distingue «no está
+  instalado» de «no se puede cargar», que son problemas distintos.
+- `docs/DEPENDENCIAS.md`: el fallo contado entero, el experimento que lo aisló (enlace frente a copia),
+  qué está declarado y por qué, y el procedimiento para subir versiones cuando el harness se actualice.
+
 ## [1.1.0] — 2026-10-12
 
 Feedback visual: saber de un vistazo que el plugin está analizando, y si creó una skill **nueva** o
