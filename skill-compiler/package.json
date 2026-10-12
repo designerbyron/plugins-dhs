@@ -16,6 +16,8 @@
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
     "./compiler": "./lib/compiler.mjs",
     "./presentation": "./lib/presentation.mjs",
     "./cli": "./bin/skill-compiler.mjs"
@@ -32,9 +34,5 @@
       "immediately": true,
       "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
     }
-  },
-  "meta": {
-    "title": "LifeCode Skill-Compiler",
-    "description": "LifeCode Skill-Compiler: convierte el conocimiento reutilizable de una tarea compleja en una skill PROPUESTA, con ámbito de proyecto y sin solaparse con lo que ya existe. Vendoriza skills de repositorios ajenos como versión propia, con procedencia. No activa nada: la aprobación es humana."
   }
 }
