@@ -4,6 +4,19 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [Sin publicar]
+
+### Documentado — por qué la bandeja de pendientes no puede vivir en la interfaz
+
+- Se intentó diseñar una bandeja de propuestas pendientes **dentro** de la aplicación y se descartó con el
+  contrato delante: exponer un remoto exige `@Remote` (decoradores de TypeScript procesados por el
+  pipeline de compilación de `dsh-typert-protocol`), y este plugin escribe su artefacto de navegador a
+  mano, sin build. La proyección tampoco puede contar los pendientes: es un plegado puro de eventos y no
+  puede leer el almacén —y si lo intentara, mentiría en cuanto aprobaras algo por CLI—.
+- Queda escrito en `docs/FEEDBACK-VISUAL.md`, con la alternativa viable (un servidor local bajo demanda
+  del CLI, con token, abierto en una pestaña) y por qué esa es **más** inalcanzable para el modelo que
+  cualquier cosa dentro de la interfaz.
+
 ## [1.1.2] — 2026-10-12
 
 **El adorno visual dejaba el historial de sesiones sin cargar.** El harness respondía, al abrir el

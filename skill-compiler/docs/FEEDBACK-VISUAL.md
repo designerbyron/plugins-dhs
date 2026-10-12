@@ -117,6 +117,27 @@ antes se retiró: no existe en la identidad.
 - Los diccionarios se registran dentro de `ctx.effect`, y los estilos viven en el árbol de React: al
   desmontar, se retiran los dos.
 
+## Lo que la interfaz NO puede hacer, y por qué (para no reintentarlo)
+
+La píldora informa de lo que el plugin **aprendió**, pero no hay en la aplicación una **bandeja de
+propuestas pendientes de aprobar**. Se intentó diseñar y se descartó con el contrato delante, no por
+gusto. Tres caminos, y los tres están cerrados:
+
+| Camino | Por qué no |
+|---|---|
+| Que la **proyección** cuente los pendientes | Una proyección es un **plegado puro de eventos de la sesión**: por diseño no puede leer el almacén del disco. Es lo que la hace reproducible —y lo que impediría saber que aprobaste algo por CLI, así que el número mentiría— |
+| Que el **cliente pida la lista al Host** por un remoto | Exponer un remoto exige `@Remote`: **decoradores de TypeScript** que procesa un *pipeline* de compilación (`dsh-typert-protocol`). Este plugin escribe su artefacto de navegador a mano, sin build, y meter un pipeline para un adorno cambia la arquitectura del plugin entero |
+| Que el cliente **lea el almacén** | El navegador no tiene acceso al disco del Host, y no debe tenerlo |
+
+**Lo que sí es viable, si algún día se quiere:** un **servidor local bajo demanda** del propio CLI
+(escucha solo en `127.0.0.1`, con un token de un solo uso en la URL) que sirva una página de revisión con
+botones de aprobar y rechazar. Se abre en una pestaña, no dentro de la aplicación, y a cambio es **más
+inalcanzable para el modelo que cualquier cosa dentro de la interfaz**: es una URL, no una herramienta, y
+no hay camino desde una sesión hasta ella.
+
+Hoy, la superficie de decisión es el **terminal** (`list`, `check`, `show`, `approve`, `reject`) y lo que
+el modelo te diga cuando le preguntes: `skill_review` devuelve las pendientes del proyecto.
+
 ## Límites, dichos en voz alta
 
 - **El dibujo no está verificado visualmente.** El estado que lo alimenta (132 pruebas, incluido el
