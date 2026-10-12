@@ -10,6 +10,7 @@
 import { basename } from 'node:path';
 
 import { defaultRoot, listForProject, overview, projectKey, propose, readSkill } from './compiler.mjs';
+import { markerLine } from './presentation.mjs';
 import { upstreamStatus, vendor } from './vendor.mjs';
 
 /**
@@ -58,6 +59,27 @@ const CLI_PATH = process.env.SKILL_COMPILER_CLI
 
 const approveHint = (id) => `node "${CLI_PATH}" approve ${id}`;
 
+/**
+ * El resultado, en una palabra, para el marcador y para la interfaz.
+ *
+ * `created` y `updated` son la distinción que el usuario quiere ver: su biblioteca creció, o se afinó
+ * algo que ya estaba. `rejected` es un intento que se rechazó (solapamiento, validación); `blocked` es
+ * una parada deliberada por contenido ajeno peligroso, y por eso se muestra en vez de esconderse;
+ * `none` es que no pasó nada, y el motivo está en la transcripción.
+ */
+function outcomeOf(value) {
+  if (value.status === 'proposed') return value.updatesProposal || value.updatesApproved ? 'updated' : 'created';
+  if (value.status === 'blocked') return 'blocked';
+  if (value.status === 'conflict' || value.status === 'invalid' || value.status === 'no-project') return 'rejected';
+  return 'none';
+}
+
+/** Todo resultado abre con el marcador: legible para el modelo y estable para el plegado. */
+const renderWithMarker = (value) => [{
+  type: 'text',
+  text: `${markerLine(outcomeOf(value), value.id ?? '')}\n\n${value.summary}`,
+}];
+
 /** Definición de `skill_propose`. Objeto plano: `index.js` lo pasa por `defineTool`. */
 export function skillPropose({ root = defaultRoot(), curated } = {}) {
   return {
@@ -89,7 +111,7 @@ export function skillPropose({ root = defaultRoot(), curated } = {}) {
           errors: { type: 'array', items: { type: 'string' } },
         },
       },
-      render: (_args, value) => [{ type: 'text', text: value.summary }],
+      render: (_args, value) => renderWithMarker(value),
     },
     execute(args, exec) {
       const cwd = scopeOf(exec);
@@ -121,6 +143,7 @@ export function skillPropose({ root = defaultRoot(), curated } = {}) {
             projectKey: result.projectKey,
             path: result.path,
             updatesApproved: result.updatesApproved,
+            updatesProposal: result.updatesProposal,
             // Los avisos van TAMBIÉN en el resumen: un aviso que no se lee no es un aviso, y el resumen
             // es lo único que el modelo ve del resultado.
             summary: [
@@ -181,6 +204,8 @@ export function skillReview({ root = defaultRoot() } = {}) {
           summary: { type: 'string', required: true },
         },
       },
+      // Sin marcador: esta herramienta solo lee, no aprende nada, y el marcador es el contrato de
+      // «qué resultado tuvo el aprendizaje».
       render: (_args, value) => [{ type: 'text', text: value.summary }],
     },
     execute(_args, exec) {
@@ -278,13 +303,15 @@ export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutM
           path: { type: 'string' },
           upstreamUrl: { type: 'string' },
           upstreamSha256: { type: 'string' },
+          updatesProposal: { type: 'boolean', description: 'True when this vendoring patched a version that already existed instead of creating a new one.' },
+          updatesApproved: { type: 'boolean', description: 'True when approving it would replace an already approved skill.' },
           findings: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { file: { type: 'string' }, line: { type: 'integer' }, label: { type: 'string' } } } },
           dirs: { type: 'array', items: { type: 'string' } },
           warnings: { type: 'array', items: { type: 'string' } },
           errors: { type: 'array', items: { type: 'string' } },
         },
       },
-      render: (_args, value) => [{ type: 'text', text: value.summary }],
+      render: (_args, value) => renderWithMarker(value),
     },
     async execute(args, exec) {
       const cwd = scopeOf(exec);
@@ -310,8 +337,11 @@ export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutM
             path: result.path,
             upstreamUrl: result.provenance?.source?.url,
             upstreamSha256: result.upstream?.sha256,
+            // Re-vendorizar el mismo id es un parche de lo que ya había, y el usuario quiere verlo así.
+            updatesProposal: result.updatesProposal,
+            updatesApproved: result.updatesApproved,
             summary: [
-              `Nuestra versión creada: ${result.id}`,
+              `${result.updatesProposal || result.updatesApproved ? 'Nuestra versión ACTUALIZADA' : 'Nuestra versión creada'}: ${result.id}`,
               `Origen: ${result.provenance?.source?.url}${result.upstream?.ref ? ` (${result.upstream.ref})` : ''}`,
               `SHA-256 del original: ${result.upstream?.sha256} · guardado verbatim en upstream/`,
               `Ámbito: ${result.projectKey}`,

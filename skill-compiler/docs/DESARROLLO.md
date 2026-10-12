@@ -8,10 +8,13 @@ Cómo está organizado, cómo se amplía sin romperlo, y qué reglas hacen que e
 |---|---|---|
 | `lib/compiler.mjs` | El núcleo: identidad de proyecto, validación, anti-solapamiento, composición del `SKILL.md`, escritura atómica, propuesta, aprobación, proveedor | **Sí**, es Node puro |
 | `lib/vendor.mjs` | El vendorizado: análisis del enlace, descarga, análisis del contenido ajeno, adaptación, procedencia, comprobación del origen | **Sí**, con `fetch` inyectado |
+| `lib/presentation.mjs` | El estado del feedback visual: el contrato del marcador y el plegado de eventos | **Sí**, es Node puro |
 | `lib/definitions.mjs` | El protocolo y las definiciones de las cuatro herramientas y del proveedor, como objetos planos | **Sí**, con un `exec` falso |
-| `index.js` | El adaptador Cordis: elige los puntos de extensión y registra. **~40 líneas** | No: importa `@deepseek-ai/dsh-tools` |
+| `index.js` | El adaptador Cordis: elige los puntos de extensión y registra. **~120 líneas** | No: importa `@deepseek-ai/dsh-tools` |
+| `client.js` | La pieza de interfaz del navegador (engranaje, píldora, idioma, estilos) | No: es un artefacto de navegador. Se comprueba su **forma**, no su dibujo |
 | `bin/skill-compiler.mjs` | La CLI humana, incluido **aprobar** | Sí, manualmente |
-| `package.json` · `cordis.patch.yml` | El bundle que instala el gestor de plugins | — |
+| `tools/ico-to-png.mjs` | Extrae el PNG de un `.ico` para usarlo como icono (el harness no acepta `.ico`) | Sí, manualmente |
+| `package.json` · `cordis.patch.yml` | El bundle que instala el gestor de plugins, y la declaración del artefacto de cliente | — |
 
 ## La regla que sostiene todo: núcleo puro, adaptador fino
 
@@ -53,6 +56,24 @@ hace improbable.
 2. Reutiliza `lib/`: la CLI y el plugin **comparten implementación**, y así las reglas no pueden
    divergir entre lo que el modelo puede proponer y lo que tú puedes aprobar.
 3. Documenta el comando en `docs/OPERACION.md` y en la cabecera del propio fichero.
+
+### Añadir o cambiar una pieza de interfaz
+
+1. La lógica va en `lib/` (como `presentation.mjs`), **nunca** en `client.js`: el artefacto de navegador
+   no se puede probar antes de instalar, así que solo dibuja lo que ya viene calculado.
+2. El estado se pliega de **eventos existentes**. No añadas un tipo de evento propio: el registro de
+   sesiones rechaza reabrirse con un evento desconocido sin marca `ignorable`, y esa marca no se puede
+   poner al escribir.
+3. Si necesitas un dato nuevo del Host, amplía la vista de la proyección en `index.js` y **mantén la
+   vista en primitivos** (cadenas y números): el esquema que valida cada lectura es donde menos conviene
+   arriesgar.
+4. En el cliente: `ctx.locale.register` dentro de `ctx.effect`, estilos como elementos de React (al
+   desmontar se van), y **un solo** `role="status"` atómico con la frase completa.
+5. Comprueba la forma del artefacto, que es lo que sí se puede comprobar sin navegador: carga por
+   `window.__ModuleLoader__`, que el `id` coincide con el paquete, que el slot existe, que respeta
+   `prefers-reduced-motion`, que no usa emoji como icono y que no toca `document.body`.
+6. **Di que el dibujo no está verificado** hasta que alguien lo mire instalado. Un adorno sin ver no es
+   un adorno terminado.
 
 ## Pruebas
 

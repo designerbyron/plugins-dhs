@@ -346,6 +346,10 @@ export function propose(input, { root = defaultRoot(), cwd, now = new Date().toI
   const overlap = checkOverlap(candidate, existingSkills({ root, curated }), { scope: key });
   if (!overlap.ok) return { status: 'conflict', conflicts: overlap.conflicts, warnings: validation.warnings };
   const updatesApproved = existsSync(join(root, 'projects', key, 'approved', candidate.id));
+  // Si ya existía una propuesta con ese id, esto es un parche de lo propuesto, no una creación.
+  // La diferencia importa: es lo que el usuario ve en la interfaz y lo que le dice si su biblioteca
+  // creció o si se afinó lo que ya había.
+  const updatesProposal = existsSync(join(root, 'projects', key, 'proposed', candidate.id));
 
   const project = input.project ?? cwd;
   const dir = join(root, 'projects', key, 'proposed', candidate.id);
@@ -375,6 +379,7 @@ export function propose(input, { root = defaultRoot(), cwd, now = new Date().toI
     warnings: validation.warnings,
     sha256: createHash('sha256').update(skill).digest('hex'),
     updatesApproved,
+    updatesProposal,
     relatedElsewhere: overlap.relatedElsewhere,
   };
 }

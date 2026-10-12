@@ -6,7 +6,7 @@ harness.
 
 | Plugin | Qué hace | Estado |
 |---|---|---|
-| [`skill-compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. | Funcional, pruebas en verde. **Pendiente de instalar.** |
+| [`skill-compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Funcional, 105 pruebas en verde. **Pendiente de instalar.** |
 
 ## Por qué está en `htdocs`
 

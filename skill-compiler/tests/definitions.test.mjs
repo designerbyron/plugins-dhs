@@ -117,7 +117,10 @@ describe('skill_propose', () => {
     for (const key of ['id', 'description', 'body']) assert.equal(definition.parameters[key].required, true, `${key} debe ser obligatorio`);
     assert.equal(typeof definition.output.schema.properties.status.required, 'boolean');
     assert.equal(typeof definition.output.render, 'function');
-    assert.equal(definition.output.render({}, { summary: 'hola' })[0].text, 'hola');
+    // El resultado abre con el marcador: es el contrato del que depende el plegado del feedback visual.
+    const rendered = definition.output.render({}, { status: 'proposed', summary: 'hola', id: 'x-y' });
+    assert.equal(rendered[0].text.startsWith('[skill-compiler] '), true, rendered[0].text);
+    assert.match(rendered[0].text, /hola/);
   });
 });
 

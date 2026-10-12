@@ -1,6 +1,6 @@
 {
   "name": "@local/skill-compiler",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Compila el conocimiento reutilizable de una tarea en una skill propuesta, ligada a su proyecto y fuera de todo repositorio.",
@@ -15,7 +15,9 @@
   "bugs": { "url": "https://github.com/designerbyron/plugins-dsh/issues" },
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./compiler": "./lib/compiler.mjs",
+    "./presentation": "./lib/presentation.mjs",
     "./cli": "./bin/skill-compiler.mjs"
   },
   "bin": { "skill-compiler": "./bin/skill-compiler.mjs" },
@@ -24,7 +26,12 @@
     "test:hermetic": "node tests/check-hermetic.mjs"
   },
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" }
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+    }
   },
   "meta": {
     "title": "Compilador de conocimiento",

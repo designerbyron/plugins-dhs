@@ -4,6 +4,61 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.1.0] — 2026-10-12
+
+Feedback visual: saber de un vistazo que el plugin está analizando, y si creó una skill **nueva** o
+**actualizó** una existente.
+
+### Añadido — interfaz
+
+- `client.js`: artefacto de navegador que registra una píldora en `conversation.composer.dock` y lee el
+  estado con `useProjection('skillCompiler')`. El `package.json` declara `dsh.client`
+  (`platform: web`, `immediately: true`, `inject: ['@deepseek-ai/dsh-client-ui-conversation']`).
+- **Engranaje multicolor** con degradado cónico girando despacio mientras el análisis está en marcha: la
+  única animación continua, y solo porque es un indicador de carga.
+- Al terminar, el resultado con su nombre: **nueva**, **actualizada**, sin cambios, no se creó, u origen
+  bloqueado — y `×N` con el acumulado de la sesión cuando hubo varias.
+- Iconos SVG en línea con `aria-hidden` (sin emoji), textos por el servicio de idioma con diccionarios
+  `es`/`en` y reserva propia si el idioma no está, contenedor derivado de `currentColor` con `color-mix`
+  (funciona en claro y en oscuro sin fijar tokens), y `prefers-reduced-motion` desactivando el movimiento.
+
+### Añadido — estado
+
+- `lib/presentation.mjs`: el contrato del marcador (`[skill-compiler] <resultado> <id>`) y el plegado
+  `applyLearning`/`learningView` sobre eventos que **ya existen** (`tool/call`, `tool/result`, `turn/end`,
+  `user/message`), sin añadir tipos de evento propios —prohibido por la guía, porque un evento
+  desconocido sin marca `ignorable` impide reabrir la sesión—.
+- Proyección `skillCompiler` (versión 1) registrada de forma **opcional y a prueba de fallos**: si el
+  perfil no resuelve la biblioteca de esquemas, no se registra y el plugin conserva las herramientas.
+- `skill_propose` y `skill_vendor` distinguen **crear** de **actualizar** (`updatesProposal`,
+  `updatesApproved`), que es justo la diferencia que el usuario quiere ver.
+- `tools/ico-to-png.mjs`: extrae sin recodificar la trama PNG de un `.ico` para usarla como icono (el
+  harness acepta SVG, PNG, JPEG y WebP, y **no** `.ico`), avisando cuando el `.ico` es del formato
+  antiguo de tramas BMP.
+
+### Cambiado
+
+- El resultado de `skill_propose` y `skill_vendor` abre con la línea del marcador. Las dos herramientas de
+  solo lectura (`skill_review`, `skill_upstream_check`) **no** lo llevan: no aprenden nada.
+- El plegado dejó de atribuir un id a un resultado sin marcador: prefiere no decir de qué skill se trata
+  antes que adivinarlo.
+
+### Verificado
+
+- 105 pruebas (22 nuevas), incluida la del contrato del marcador congelada contra el `render` real de las
+  herramientas, y la del plegado: referencias estables, contadores, cierre de turno y retirada del
+  resultado al prompt siguiente.
+- Puerta de hermetismo en verde.
+- Forma del artefacto de cliente comprobada: carga por `window.__ModuleLoader__`, `id` igual al paquete,
+  slot existente, un solo `role="status"`, movimiento reducido presente, **cero emoji** y sin tocar
+  `document.body`.
+
+### No verificado, y se dice
+
+- **El dibujo.** No hay control de navegador en este puesto: que la píldora se vea bien solo se comprueba
+  instalando el plugin y mirándola. Lo verificado es que está construida según las reglas de diseño, no
+  que el resultado guste.
+
 ## [1.0.0] — 2026-10-12
 
 Primera versión funcional y probada de `skill-compiler`.

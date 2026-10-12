@@ -34,6 +34,18 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 | `upstream <id>` | ¿Se movió el origen? | No se pudo comprobar, o no es vendorizada |
 | `provenance <id>` | La procedencia guardada, entera | No es vendorizada |
 
+## Qué se ve en la interfaz
+
+Una píldora en la zona del compositor que aparece **solo cuando hay algo que decir**:
+
+- **Engranaje girando** mientras `skill_propose` o `skill_vendor` están en vuelo.
+- **Al terminar**: «Nueva skill», «Skill actualizada», «Sin cambios», «No se creó» u «Origen bloqueado»,
+  con el nombre de la skill y, si en la sesión hubo varias, un `×N` con el acumulado.
+
+El estado se deriva de la traza de la sesión, no de un registro aparte, así que **se ve igual al reabrir
+una sesión antigua**. Los detalles de diseño y sus límites están en
+[`FEEDBACK-VISUAL.md`](FEEDBACK-VISUAL.md).
+
 Opciones: `--project-key <clave>` (actuar sobre otro proyecto sin cambiar de directorio), `--force`
 (aprobar con avisos; **nunca** si `check` falla), `--id <id>`, `--note "<texto>"` (solo en `vendor`).
 
@@ -91,6 +103,8 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | `propose` o `vendor` dice `conflict` | Ya existe ese id o ese tema | Mejora esa skill, o elige otro tema; si es una versión mejorada de la existente, se decide como actualización |
 | `check` falla en una propuesta que escribí a mano | Una edición posterior rompió el contrato | El propio `check` dice qué regla; edita y repite |
 | `upstream` dice que cambió y quiero la versión nueva | Nuestra versión está adaptada | Vendoriza otra vez con el mismo id: se propone como actualización y, al aprobar, la anterior se aparta en `superseded/` |
+| La píldora del feedback visual no aparece nunca | El perfil no resolvió `@deepseek-ai/schemastery`, o el servicio de proyección no está: el plugin renuncia al adorno antes que romper el trabajo | Mira el diagnóstico de la fila del bundle; con las herramientas funcionando, es un adorno ausente, no una avería |
+| La píldora se queda en «Analizando…» | Una llamada quedó sin resultado (cancelada). Un `turn/end` la cierra; si no, el siguiente prompt humano la retira | Es el estado real de la traza, no un fallo de dibujo |
 
 ## Revertir
 

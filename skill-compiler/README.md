@@ -5,14 +5,18 @@ proyecto, fuera de todo repositorio y sin solaparse con lo que ya existe. Y cuan
 un repositorio**, crea **nuestra versión** de esa skill para este proyecto, guardando el original
 verbatim y su procedencia. **No activa nada**: la aprobación es humana.
 
+Mientras trabaja, la interfaz lo enseña: un engranaje girando durante el análisis, y al terminar si la
+skill es **nueva** o si se **actualizó** una existente.
+
 ## Documentación
 
 | Documento | Para qué |
 |---|---|
 | [`docs/FUNCIONAMIENTO.md`](docs/FUNCIONAMIENTO.md) | Cómo funciona por dentro: puntos de extensión, dónde guarda, recorrido de cada operación, ciclo de vida y reglas de validación |
+| [`docs/FEEDBACK-VISUAL.md`](docs/FEEDBACK-VISUAL.md) | La píldora de la interfaz: qué se ve, de dónde sale el estado, las reglas de diseño que la sostienen y lo que **no** está verificado |
 | [`docs/CONFIANZA.md`](docs/CONFIANZA.md) | El modelo de confianza: qué se controla ante contenido ajeno, qué **no** ocurre nunca, y el riesgo que no se puede mecanizar |
-| [`docs/OPERACION.md`](docs/OPERACION.md) | Referencia de uso: herramientas, CLI, variables, y qué hacer cuando algo no cuadra |
-| [`docs/DESARROLLO.md`](docs/DESARROLLO.md) | Cómo ampliarlo sin romperlo: mapa de ficheros, cómo añadir reglas y herramientas, pruebas, versionado |
+| [`docs/OPERACION.md`](docs/OPERACION.md) | Referencia de uso: herramientas, CLI, variables, qué se ve en la interfaz, y qué hacer cuando algo no cuadra |
+| [`docs/DESARROLLO.md`](docs/DESARROLLO.md) | Cómo ampliarlo sin romperlo: mapa de ficheros, cómo añadir reglas, herramientas y piezas de interfaz, pruebas, versionado |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Historial de versiones |
 
 ## Las dos vías, y en qué se diferencian
