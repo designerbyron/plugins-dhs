@@ -1,0 +1,33 @@
+{
+  "name": "@local/skill-compiler",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Compila el conocimiento reutilizable de una tarea en una skill propuesta, ligada a su proyecto y fuera de todo repositorio.",
+  "license": "MIT",
+  "author": "designerbyron",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/designerbyron/plugins-dsh.git",
+    "directory": "skill-compiler"
+  },
+  "homepage": "https://github.com/designerbyron/plugins-dsh/tree/main/skill-compiler#readme",
+  "bugs": { "url": "https://github.com/designerbyron/plugins-dsh/issues" },
+  "exports": {
+    ".": "./index.js",
+    "./compiler": "./lib/compiler.mjs",
+    "./cli": "./bin/skill-compiler.mjs"
+  },
+  "bin": { "skill-compiler": "./bin/skill-compiler.mjs" },
+  "scripts": {
+    "test": "node --test",
+    "test:hermetic": "node tests/check-hermetic.mjs"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  },
+  "meta": {
+    "title": "Compilador de conocimiento",
+    "description": "Convierte el conocimiento reutilizable de una tarea compleja en una skill PROPUESTA, con ámbito de proyecto y sin solaparse con lo que ya existe. No activa nada: la aprobación es humana."
+  }
+}

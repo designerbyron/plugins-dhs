@@ -1,0 +1,123 @@
+# plugins-dsh — plugins de DeepSeek Harness
+
+Colección de plugins propios para DeepSeek Harness. Cada plugin vive en su propia carpeta, con su
+código, sus pruebas y su documentación, y **se instala por ruta absoluta** con el gestor de plugins del
+harness.
+
+| Plugin | Qué hace | Estado |
+|---|---|---|
+| [`skill-compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. | Funcional, pruebas en verde. **Pendiente de instalar.** |
+
+## Por qué está en `htdocs`
+
+Decisión del operador: llevar estos plugins bajo control de versiones en un repositorio propio, junto al
+resto de su trabajo. Como `C:\xampp\htdocs` es el docroot de Apache, la carpeta lleva un `.htaccess` que
+**deniega todo**:
+
+```apache
+Require all denied
+```
+
+Ese fichero protege dos cosas que no deberían servirse nunca por HTTP: el código en sí y, sobre todo, el
+directorio `.git/` (un `.git/config` accesible es una fuga clásica). `httpd.conf` tiene
+`AllowOverride All` para `htdocs`, así que la regla se aplica de verdad; aun así, **la carpeta no debe
+publicarse**: si algún día se quiere servir algo desde aquí, ese `.htaccess` es lo primero que hay que
+revisar, y la decisión merece su propio acto.
+
+## Instalar un plugin de este repositorio
+
+El gestor de plugins de DSH no lee repositorios: instala un **bundle** por ruta o por dirección git.
+
+### En este equipo (recomendado)
+
+1. Autoriza el gestor: en el preset `standard` la herramienta `plugin_manager` está deshabilitada; hace
+   falta el modo Creator, o instalar desde la página **Plugins** de la interfaz.
+2. Instala por ruta absoluta la carpeta del plugin:
+
+   ```
+   C:\xampp\htdocs\plugins-dhs\skill-compiler
+   ```
+
+3. Comprueba que el resultado dice `application: applied`. Si dice `restart-required`, reinicia el
+   harness.
+
+### En otra máquina
+
+1. Clona el repositorio donde quieras y **desde ese clon** instala por ruta absoluta (o por la dirección
+   git del repositorio, si el gestor la acepta).
+2. Si el plugin referencia rutas de este equipo (el caso de `skill-compiler` con su CLI), exporta la
+   variable que corresponda: cada plugin la documenta en su README.
+
+### Desinstalar
+
+Desde la misma página **Plugins**: deselecciona el bundle. El plugin no escribe nada fuera de
+`$DSH_HOME/<nombre-del-plugin>/` (sus datos), así que desinstalarlo no deja restos en el perfil más allá
+de la dependencia, que el gestor retira.
+
+## Trabajar en un plugin
+
+```sh
+cd skill-compiler
+npm test              # las pruebas automáticas
+npm run test:hermetic # las pruebas + huella del almacén real antes y después
+```
+
+Reglas de la casa, que valen para cualquier plugin de esta colección:
+
+1. **Núcleo puro, adaptador fino.** Lo que decide algo vive en `lib/`, sin dependencias del harness, y
+   se prueba con `node --test`. Lo que se registra en el harness (`index.js`) es lo más corto posible,
+   porque es la única parte que no se puede probar antes de instalar.
+2. **Las pruebas no tocan nada real.** Cada plugin con estado en disco debe redirigir su raíz a una caja
+   de arena, y tener una puerta que **mida** que el almacén real no cambió.
+3. **Nada se activa solo.** Si un plugin produce algo que el modelo va a leer, lo propone y espera
+   aprobación humana.
+4. **Un commit = una cosa**, y el push se decide y se declara. Nunca `git add -A`.
+
+## Licencia
+
+[MIT](LICENSE) — uso, modificación, redistribución y uso comercial libres, conservando el aviso de
+copyright. Texto estándar, sin añadidos: una licencia con cláusulas propias deja de ser estándar, y
+GitHub y las herramientas de cumplimiento dejan de reconocerla.
+
+### Atribución: una petición, no una condición
+
+Si este código te sirve, **te pedimos** que referencies el repositorio original:
+
+```
+https://github.com/designerbyron/plugins-dsh
+```
+
+Y decimos «petición» con precisión: MIT **no** obliga a ello, y por eso esta línea vive aquí y no en el
+`LICENSE`. Lo que sí obliga MIT es a conservar el aviso de copyright al redistribuir. Si algún día
+quieres que la referencia sea **exigible**, la vía estándar no es añadir una cláusula a MIT —eso la saca
+del estándar— sino cambiar a Apache-2.0 con un fichero `NOTICE`, que sí obliga a conservarlo y a declarar
+los cambios.
+
+Es la misma regla que aplica el propio plugin con las skills que vendoriza: guarda de dónde vinieron, con
+su hash y su fecha, para que nadie tenga que creerse nada de memoria.
+
+## Estado del repositorio
+
+- Rama `main`. El remoto se configura con `git remote add origin <url>` (ver más abajo).
+- Licencia **MIT** (ver arriba), con la referencia al repositorio como petición destacada.
+- Identidad de autor configurada **solo en este repositorio** (`git config user.name/user.email`), no en
+  el global de la máquina: así no condiciona otros proyectos.
+- Sin publicar todavía: el primer `git push` es un acto explícito.
+
+## Publicar en GitHub
+
+El remoto ya está configurado en este clon. Para el primer envío:
+
+```sh
+cd C:\xampp\htdocs\plugins-dhs
+git remote -v                 # comprobar a dónde apunta
+git push -u origin main       # el primer envío; después basta `git push`
+```
+
+Si el repositorio se llama distinto de `plugins-dsh`, corrige el remoto antes:
+
+```sh
+git remote set-url origin https://github.com/designerbyron/<nombre>.git
+```
+
+**El push no se ha ejecutado.** Es una decisión del operador, como manda la gobernanza de este puesto.

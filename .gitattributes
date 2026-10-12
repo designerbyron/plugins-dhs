@@ -1,0 +1,14 @@
+# Normaliza a LF dentro del repositorio.
+#
+# Este proyecto se clona en Windows y en Linux, y un fichero con finales de línea mezclados hace que un
+# cambio de una línea parezca el fichero entero: el diff deja de ser legible y oculta lo que de verdad
+# cambió. Fijarlo en el primer commit evita tener que normalizar el repositorio entero más adelante.
+* text=auto eol=lf
+
+# Binarios: sin normalizar y sin intentar diferenciarlos como texto.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.zip binary

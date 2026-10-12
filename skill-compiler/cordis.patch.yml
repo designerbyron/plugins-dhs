@@ -1,0 +1,6 @@
+# Capa de este bundle sobre el perfil que lo instale.
+# `insert` añade la fila del plugin de Host; el gestor de plugins del harness es quien escribe el
+# perfil, no este fichero a mano.
+- insert:
+    - id: skill-compiler
+      name: '@local/skill-compiler'

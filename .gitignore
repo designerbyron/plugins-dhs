@@ -1,0 +1,13 @@
+# Dependencias y artefactos de ejecución
+node_modules/
+*.log
+*.tmp
+*.tmp-*
+
+# Copias de seguridad que generan las herramientas del puesto (documentos generados, etc.)
+*.prev-*
+
+# Ficheros de sistema
+Thumbs.db
+desktop.ini
+.DS_Store

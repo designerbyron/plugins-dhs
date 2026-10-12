@@ -1,0 +1,16 @@
+# Esta carpeta vive bajo el docroot de Apache (C:\xampp\htdocs), así que hay que denegar el acceso
+# desde la web. `httpd.conf` trae `AllowOverride All` para htdocs, de modo que esta regla se aplica.
+#
+# Dos cosas NO deben servirse nunca por HTTP: el código en sí y —sobre todo— el directorio .git/, cuyo
+# config expuesto es una de las fugas más comunes de un repositorio bajo un docroot.
+#
+# Si algún día se quiere publicar algo desde aquí, este fichero es lo primero que hay que revisar, y esa
+# decisión merece su propio acto.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
