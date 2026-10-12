@@ -129,14 +129,17 @@ gusto. Tres caminos, y los tres están cerrados:
 | Que el **cliente pida la lista al Host** por un remoto | Exponer un remoto exige `@Remote`: **decoradores de TypeScript** que procesa un *pipeline* de compilación (`dsh-typert-protocol`). Este plugin escribe su artefacto de navegador a mano, sin build, y meter un pipeline para un adorno cambia la arquitectura del plugin entero |
 | Que el cliente **lea el almacén** | El navegador no tiene acceso al disco del Host, y no debe tenerlo |
 
-**Lo que sí es viable, si algún día se quiere:** un **servidor local bajo demanda** del propio CLI
-(escucha solo en `127.0.0.1`, con un token de un solo uso en la URL) que sirva una página de revisión con
-botones de aprobar y rechazar. Se abre en una pestaña, no dentro de la aplicación, y a cambio es **más
-inalcanzable para el modelo que cualquier cosa dentro de la interfaz**: es una URL, no una herramienta, y
-no hay camino desde una sesión hasta ella.
+**Lo que sí se hizo, y es la superficie de aprobación de verdad:** un **servidor local bajo demanda** del
+propio CLI —`node bin/skill-compiler.mjs review`— que escucha solo en `127.0.0.1`, exige un **token de un
+solo uso** que se imprime en la terminal, y sirve una página con las pendientes, su resultado de validación
+y los botones de aprobar y rechazar. Se abre en una pestaña, no dentro de la aplicación, y a cambio es
+**más inalcanzable para el modelo que cualquier cosa dentro de la interfaz**: es una URL, no una
+herramienta, y desde una sesión no hay camino hasta ella. La implementación está en `lib/review.mjs`, con
+sus decisiones de seguridad razonadas dentro, y se prueba **contra un servidor real**, comprobando el disco.
 
-Hoy, la superficie de decisión es el **terminal** (`list`, `check`, `show`, `approve`, `reject`) y lo que
-el modelo te diga cuando le preguntes: `skill_review` devuelve las pendientes del proyecto.
+Hoy, además, la superficie de decisión incluye el **terminal** (`list`, `check`, `show`, `approve`,
+`reject`, `review`) y lo que el modelo te diga cuando le preguntes: `skill_review` devuelve las pendientes
+del proyecto.
 
 ## Límites, dichos en voz alta
 

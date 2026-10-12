@@ -20,6 +20,7 @@
  *   node bin/skill-compiler.mjs upstream <id>             # ¿se movió el origen?
  *   node bin/skill-compiler.mjs provenance <id>           # procedencia guardada, entera
  *   node bin/skill-compiler.mjs doctor                    # ¿están las dependencias en su sitio?
+ *   node bin/skill-compiler.mjs review [--port N]         # página local para aprobar y rechazar
  *
  * Opciones: `--project-key <clave>` para actuar sobre otro proyecto, `--force` para aprobar aunque
  * `check` avise (nunca si `check` falla).
@@ -56,6 +57,7 @@ for (let i = 1; i < argv.length; i++) {
   if (arg === '--id') { flags.id = argv[++i]; continue; }
   if (arg === '--note') { flags.note = argv[++i]; continue; }
   if (arg === '--url') { flags.url = argv[++i]; continue; }
+  if (arg === '--port') { flags.port = argv[++i]; continue; }
   if (arg.startsWith('--')) { process.stderr.write(`Opción desconocida: ${arg}\n`); process.exit(2); }
   positional.push(arg);
 }
@@ -331,6 +333,35 @@ switch (command) {
       ? '\ntodo en su sitio: el plugin puede activarse\n'
       : `\n${bad} problema(s): con esto el plugin falla al activarse\n`);
     process.exit(bad === 0 ? 0 : 1);
+  }
+
+  case 'review': {
+    // La superficie de decisión para quien no quiere recordar la sintaxis de un comando. Se arranca a
+    // mano, escucha solo en 127.0.0.1 y exige el token que se imprime aquí: ver lib/review.mjs.
+    const key = scope();
+    const port = flags.port !== undefined ? Number(flags.port) : 0;
+    const { createReviewServer } = await import('../lib/review.mjs');
+    const review = createReviewServer({
+      root,
+      key,
+      check: checkSkill,
+      // Se ata la raíz del almacén aquí: la página nunca debe poder actuar sobre otro almacén.
+      approve: (id, projectKey) => approve(id, projectKey, { root }),
+      reject: (id, projectKey) => reject(id, projectKey, { root }),
+      port,
+    });
+    const actual = await review.listen();
+    process.stdout.write([
+      `Revisión de skills — proyecto ${key}`,
+      '',
+      `  ${review.urlFor(actual)}`,
+      '',
+      'Ábrela en el navegador. Escucha solo en 127.0.0.1 y el token es de un solo uso:',
+      'sin él, la página no responde ni dice que existe.',
+      'Ctrl+C para cerrarla.',
+      '',
+    ].join('\n'));
+    break;
   }
 
   default:

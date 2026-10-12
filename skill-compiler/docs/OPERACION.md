@@ -34,6 +34,7 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 | `upstream <id>` | ¿Se movió el origen? | No se pudo comprobar, o no es vendorizada |
 | `provenance <id>` | La procedencia guardada, entera | No es vendorizada |
 | `doctor` | Comprueba que las dependencias del harness están declaradas, instaladas y **se cargan**, y que las cuatro herramientas compilan | Algo falta o no carga |
+| `review [--port N]` | **Sirve una página local** con las pendientes, su validación y botones de aprobar y rechazar. Escucha solo en `127.0.0.1` y exige un token de un solo uso que se imprime al arrancar | El puerto está ocupado, o falta el token |
 | `where` | El ámbito de este directorio y dónde está el almacén | — |
 
 **`doctor` es el primer comando que hay que ejecutar cuando el plugin no se activa.** Distingue tres cosas
