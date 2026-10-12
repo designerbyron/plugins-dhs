@@ -34,11 +34,23 @@ primero escondía al segundo.
   **compilador real** del harness y comprueba los parámetros que el modelo verá, los obligatorios
   incluidos.
 
+### Corregido — la activación que podía caerse sola
+
+- El respaldo de la inyección **opcional** de la proyección podía terminar llamando a `register` sobre
+  `undefined` y **lanzar dentro de `apply`**, lo que se lleva por delante la activación completa,
+  herramientas incluidas. Ahora hay dos guardas: si el registro no está, se sale en silencio, y si
+  rechaza la unidad, se captura. El adorno visual nunca puede costar el trabajo — que es lo que la
+  documentación prometía y el código no cumplía.
+- Lo encontró `tests/activation.test.mjs` en su primera ejecución.
+
 ### Añadido — puertas y diagnóstico
 
 - `tests/harness-contracts.test.mjs` (5 pruebas): las herramientas compilan, el modelo ve los parámetros
   declarados, **toda importación de paquete está declarada como dependencia** —la regla que faltaba—, la
-  familia `dsh-*` comparte una sola versión, y el cierre está instalado. Total: **120 pruebas**.
+  familia `dsh-*` comparte una sola versión, y el cierre está instalado.
+- `tests/activation.test.mjs` (4 pruebas): importa `index.js` y llama a `apply(ctx)` con un contexto
+  doble, igual que hace el harness al activar el bundle, y comprueba que no lanza y que registra la
+  sección, las cuatro herramientas y el proveedor. Total: **124 pruebas**.
 - `node bin/skill-compiler.mjs doctor`: dice qué falta y con qué comando se arregla, y distingue «no está
   instalado» de «no se puede cargar», que son problemas distintos.
 - `docs/DEPENDENCIAS.md`: el fallo contado entero, el experimento que lo aisló (enlace frente a copia),

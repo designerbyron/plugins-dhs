@@ -102,10 +102,21 @@ export function apply(ctx, config = {}) {
 
   // Inyección opcional: el callback recibe un contexto hijo con el servicio disponible (firma
   // verificada en el código que se envía); el respaldo por cierre cubre la otra firma posible.
+  //
+  // Y las dos guardas que siguen no son ceremonia: sin ellas, un perfil donde el servicio no esté
+  // disponible —o donde el registro rechace el esquema— lanzaba DENTRO de `apply` y se llevaba por
+  // delante la activación entera, incluidas las herramientas. El adorno visual nunca puede costar el
+  // trabajo; si no se puede registrar la proyección, se pierde el adorno y nada más.
   if (schemastery !== null) {
     ctx.inject(['sessionProjections'], (scoped) => {
       const registry = scoped?.sessionProjections ?? ctx.sessionProjections;
-      registry.register(learningDefinition(schemastery));
+      if (registry === undefined || typeof registry.register !== 'function') return;
+      try {
+        registry.register(learningDefinition(schemastery));
+      } catch {
+        // El registro de proyecciones no aceptó la unidad (versión, esquema o clave ocupada): el
+        // feedback visual no estará, las herramientas sí.
+      }
     });
   }
 }

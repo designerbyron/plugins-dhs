@@ -79,10 +79,15 @@ hace improbable.
 
 ```sh
 npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
-npm test              # 120 pruebas
+npm test              # 124 pruebas
 npm run test:hermetic # las mismas + huella del almacén real antes y después
 ```
 
+- `tests/activation.test.mjs` — **ejecuta la activación de verdad**: importa `index.js` y llama a
+  `apply(ctx)` con un contexto doble, y comprueba que no lanza y que registra la sección, las cuatro
+  herramientas (con los parámetros que verá el modelo) y el proveedor. Nació de un fallo real: el respaldo
+  de la inyección opcional podía lanzar dentro de `apply` y llevarse por delante la activación entera.
+  Lo que no cubre: el contexto es un doble, así que valida el camino del plugin, no los servicios reales.
 - `tests/compiler.test.mjs` — el núcleo.
 - `tests/definitions.test.mjs` — el protocolo y las definiciones ejecutadas con un `exec` falso.
 - `tests/harness-contracts.test.mjs` — los contratos con el harness, y la puerta que habría cazado el
