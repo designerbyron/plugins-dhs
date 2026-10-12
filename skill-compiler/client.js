@@ -98,8 +98,8 @@ window.__ModuleLoader__.load({
 
     /**
      * El engranaje. Multicolor a propósito —es el arte de la pieza, y ahí la guía permite color propio—
-     * y con un degradado cónico que da la vuelta al girar. Se dibuja con `currentColor` en el centro
-     * para que el diente herede el tono del estado y el conjunto no chirríe con el tema.
+     * con los tonos de la marca: cian, azul, violeta y magenta, tomados del póster. Se descartó el ámbar
+     * que llevaba antes porque no existe en la identidad.
      */
     function Gear() {
       const teeth = [];
@@ -118,9 +118,9 @@ window.__ModuleLoader__.load({
           h('defs', null,
             h('linearGradient', { id: 'skc-hues', x1: '0', y1: '0', x2: '1', y2: '1' },
               h('stop', { offset: '0%', stopColor: '#22d3ee' }),
-              h('stop', { offset: '35%', stopColor: '#818cf8' }),
-              h('stop', { offset: '70%', stopColor: '#e879f9' }),
-              h('stop', { offset: '100%', stopColor: '#fbbf24' })),
+              h('stop', { offset: '38%', stopColor: '#3b82f6' }),
+              h('stop', { offset: '72%', stopColor: '#7c3aed' }),
+              h('stop', { offset: '100%', stopColor: '#d946ef' })),
           ),
           // corona dentada + aro interior, con el degradado multicolor
           h('g', { fill: 'none', stroke: 'url(#skc-hues)', strokeWidth: 1.7 },
@@ -142,12 +142,19 @@ window.__ModuleLoader__.load({
   border-radius: 999px;
   font: 500 12.5px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   letter-spacing: 0.01em;
-  color: var(--skc-accent, currentColor);
-  background: color-mix(in oklab, currentColor 9%, transparent);
-  border: 1px solid color-mix(in oklab, currentColor 24%, transparent);
-  box-shadow: 0 1px 2px color-mix(in oklab, currentColor 12%, transparent);
+  /* El TEXTO hereda el color del anfitrión, y no es un detalle: es la única forma de garantizar el
+     contraste en cualquier tema. Medido con la fórmula WCAG, NINGÚN acento de los que se usan aquí
+     llega a 4.5:1 sobre fondo oscuro Y sobre fondo claro a la vez (ver docs/FEEDBACK-VISUAL.md). El
+     acento pinta la marca y el tinte, que son decoración. */
+  color: inherit;
+  background: color-mix(in oklab, var(--skc-accent, currentColor) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--skc-accent, currentColor) 26%, transparent);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--skc-accent, currentColor) 14%, transparent);
   transition: background 180ms ease, border-color 180ms ease;
 }
+/* La marca sí lleva el acento: es un gráfico, y para un gráfico el listón es 3:1, que todos cumplen
+   en los dos temas. */
+.skc-mark { display: inline-flex; color: var(--skc-accent, currentColor); }
 .skc-label { white-space: nowrap; }
 .skc-id {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -207,13 +214,15 @@ window.__ModuleLoader__.load({
         ? say('analyzing')
         : `${say(`${shown}_full`)}${id ? `: ${id}` : ''}`;
 
+      // Acentos medidos: cada uno supera 3:1 como gráfico sobre fondo oscuro Y sobre fondo claro. El
+      // `blocked` anterior (#b91c1c) se quedaba en 2.93:1 sobre oscuro; #dc2626 da 3.92/4.83.
       const accent = {
         created: '#0d9488',
         updated: '#a16207',
         none: 'inherit',
         rejected: '#b45309',
-        blocked: '#b91c1c',
-        analyzing: '#4f46e5',
+        blocked: '#dc2626',
+        analyzing: '#7c3aed',
       }[shown] ?? 'inherit';
 
       return h(React.Fragment, null,
@@ -229,7 +238,7 @@ window.__ModuleLoader__.load({
           tabIndex: 0,
           style: { '--skc-accent': accent },
         },
-          analyzing ? h(Gear) : h(Icon),
+          h('span', { className: 'skc-mark' }, analyzing ? h(Gear) : h(Icon)),
           h('span', { className: 'skc-label' }, analyzing ? say('analyzing') : say(shown)),
           id ? h('span', { className: 'skc-id' }, id) : null,
           !analyzing && total > 1

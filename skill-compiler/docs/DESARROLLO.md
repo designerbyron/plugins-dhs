@@ -78,7 +78,7 @@ hace improbable.
 ## Pruebas
 
 ```sh
-npm test              # 83 pruebas
+npm test              # 115 pruebas
 npm run test:hermetic # las 83 + huella del almacén real antes y después
 ```
 
@@ -86,6 +86,12 @@ npm run test:hermetic # las 83 + huella del almacén real antes y después
 - `tests/definitions.test.mjs` — el protocolo y las definiciones ejecutadas con un `exec` falso.
 - `tests/vendor.test.mjs` — vendorizado con un `fetch` **falso inyectado**: sin red y capaz de provocar
   un secreto en el origen, una orden al agente, texto invisible, un 404 o una respuesta gigante.
+- `tests/presentation.test.mjs` — el estado del feedback visual: el contrato del marcador congelado contra
+  el `render` real de las herramientas, y el plegado de eventos.
+- `tests/client-artifact.test.mjs` — la **forma** del artefacto de interfaz, que es lo único comprobable sin
+  navegador: identidad igual al paquete, misma clave de proyección que el Host, el texto hereda el color y
+  el acento pinta solo la marca, una sola región viva, movimiento reducido, sin emoji y sin tocar el
+  documento. Un cambio que rompa cualquiera de esos contratos se pone rojo aquí, no en la interfaz.
 - `tests/propose-real.e2e.mjs`, `tests/vendor-real.e2e.mjs` — guiones contra la red real. No los recoge
   `node --test` (necesitan un tercero), se ejecutan a mano.
 - `tests/check-hermetic.mjs` — la puerta que mide que la suite no tocó el almacén real.
@@ -119,6 +125,10 @@ Dos garantías que conviene no romper:
   `menor` cuando se añade capacidad; `parche` cuando se corrige un defecto.
 - Antes de publicar: `npm run test:hermetic` en verde, `CHANGELOG.md` al día, y ningún secreto en el
   árbol (`git diff --check` no comprueba eso: míralo tú).
+- **Los recuentos de pruebas que citan los README y esta documentación se actualizan al cerrar la
+  versión**: un número desfasado es una afirmación falsa, no un detalle. La entrada histórica del
+  CHANGELOG no se toca: allí el número viejo era verdad, y un historial que se reescribe deja de ser un
+  historial.
 
 ## Deliberadamente fuera de alcance
 

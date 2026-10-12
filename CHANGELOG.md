@@ -50,13 +50,17 @@ Feedback visual: saber de un vistazo que el plugin está analizando, y si creó 
 
 ### Verificado
 
-- 105 pruebas (22 nuevas), incluida la del contrato del marcador congelada contra el `render` real de las
+- 115 pruebas (32 nuevas), incluida la del contrato del marcador congelada contra el `render` real de las
   herramientas, y la del plegado: referencias estables, contadores, cierre de turno y retirada del
   resultado al prompt siguiente.
 - Puerta de hermetismo en verde.
 - Forma del artefacto de cliente comprobada: carga por `window.__ModuleLoader__`, `id` igual al paquete,
   slot existente, un solo `role="status"`, movimiento reducido presente, **cero emoji** y sin tocar
   `document.body`.
+- `tests/client-artifact.test.mjs` (10 pruebas) convierte esa comprobación en puerta permanente, e incluye
+  la regla de contraste que impide volver a pintar el texto con el acento. Se escribió **después** de que
+  el propio artefacto incumpliera una de sus reglas: el acento `#b91c1c` del estado bloqueado se quedaba en
+  2.93:1 sobre fondo oscuro, por debajo del 3:1 que se exige a un gráfico.
 
 ### No verificado, y se dice
 
@@ -118,6 +122,15 @@ Primera versión funcional y probada de `skill-compiler`.
 - Cadena completa contra la red real, 15/15: resolver → descargar → adaptar → proponer → aprobar →
   servir, con el original verbatim comprobado y el origen sin cambios.
 - Propuesta real contra la biblioteca curada del puesto (25 skills): sin solapamiento.
+
+### Añadido — identidad visual
+
+- `skill-compiler/icon.png` (192×192, 56 KiB — muy por debajo del límite de 256 KiB que valida el
+  manifiesto) declarado como `icon` de primer nivel en `package.json`, con ruta relativa al manifiesto.
+- `assets/poster.png` en la raíz, mostrado en las portadas del repositorio y del plugin. Un solo
+  fichero, dos referencias: los binarios no se duplican.
+- El engranaje de la interfaz pasa a los **tonos de la marca** (cian → azul → violeta → magenta, tomados
+  del póster). Se retira el ámbar que llevaba: no existe en la identidad.
 
 ### Corregido antes de la primera publicación
 

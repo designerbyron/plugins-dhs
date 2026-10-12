@@ -1,5 +1,7 @@
 # LifeCode Plugins — plugins de DeepSeek Harness
 
+![Póster de LifeCode Skill-Compiler: la letra L dibujada como una cinta blanca, azul y magenta dentro de un anillo neón, sobre fondo azul oscuro, con el nombre LifeCode y el subtítulo Skill-Compiler for DeepSeek Harness](assets/poster.png)
+
 Colección de plugins propios para DeepSeek Harness, bajo la familia de producto **LifeCode**. Cada plugin
 vive en su propia carpeta, con su código, sus pruebas y su documentación, y **se instala por ruta
 absoluta** con el gestor de plugins del harness.
@@ -10,7 +12,7 @@ absoluta** con el gestor de plugins del harness.
 
 | Plugin | Qué hace | Estado |
 |---|---|---|
-| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Funcional, 105 pruebas en verde. **Pendiente de instalar.** |
+| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Funcional, 115 pruebas en verde. **Pendiente de instalar.** |
 
 ## Por qué está en `htdocs`
 
@@ -88,7 +90,7 @@ GitHub y las herramientas de cumplimiento dejan de reconocerla.
 Si este código te sirve, **te pedimos** que referencies el repositorio original:
 
 ```
-https://github.com/designerbyron/plugins-dsh
+https://github.com/designerbyron/plugins-dhs
 ```
 
 Y decimos «petición» con precisión: MIT **no** obliga a ello, y por eso esta línea vive aquí y no en el
@@ -118,7 +120,7 @@ git remote -v                 # comprobar a dónde apunta
 git push -u origin main       # el primer envío; después basta `git push`
 ```
 
-Si el repositorio se llama distinto de `plugins-dsh`, corrige el remoto antes:
+Si el repositorio se llama distinto de `plugins-dhs`, corrige el remoto antes:
 
 ```sh
 git remote set-url origin https://github.com/designerbyron/<nombre>.git

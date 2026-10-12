@@ -1,5 +1,7 @@
 # LifeCode Skill-Compiler
 
+![Póster de LifeCode Skill-Compiler: la letra L como cinta blanca, azul y magenta dentro de un anillo neón, con el nombre LifeCode y el subtítulo Skill-Compiler for DeepSeek Harness](../assets/poster.png)
+
 > El nombre técnico del plugin —el del paquete, la identidad del Loader y la carpeta del almacén— sigue
 > siendo `skill-compiler`. **LifeCode Skill-Compiler** es el nombre comercial, y es el que se ve en la
 > ficha del plugin. Se mantienen separados a propósito: renombrar un identificador que el arranque del

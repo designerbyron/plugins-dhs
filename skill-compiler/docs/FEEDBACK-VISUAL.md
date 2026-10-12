@@ -72,6 +72,36 @@ El contenedor se deriva entero de `currentColor` con `color-mix`, así que funci
 sin fijar ni un token de color del anfitrión. El degradado multicolor vive en el engranaje: es arte, y es
 donde el color propio está permitido.
 
+## El color, medido (no estimado)
+
+La primera versión pintaba la píldora entera con el color del estado. Al medirla con la fórmula de
+contraste de WCAG apareció el problema, y no era el que parecía:
+
+```
+estado     color      vs oscuro   vs claro   gráfico(3:1)   texto(4.5:1)
+analyzing  #7c3aed    3.32:1      5.70:1     ambos          solo claro
+created    #0d9488    5.06:1      3.74:1     ambos          solo oscuro
+updated    #a16207    3.85:1      4.92:1     ambos          solo claro
+rejected   #b45309    3.77:1      5.02:1     ambos          solo claro
+blocked    #b91c1c    2.93:1      6.47:1     solo claro     solo claro   ← fallaba
+```
+
+Dos conclusiones, y la segunda es la importante:
+
+1. **`#b91c1c` no servía**: 2.93:1 sobre fondo oscuro, por debajo del 3:1 que se exige a un gráfico. Se
+   cambió por `#dc2626` (3.92:1 / 4.83:1), que sí cumple en los dos temas.
+2. **Ningún acento de esta paleta llega a 4.5:1 sobre fondo oscuro *y* sobre fondo claro a la vez.** No es
+   cuestión de elegir mejor: un tono saturado y de luminancia media no puede ser legible sobre blanco y
+   sobre casi-negro simultáneamente. Por eso el **texto hereda el color del anfitrión** —que su tema ya
+   garantiza legible— y el acento pasa a pintar **solo la marca y el tinte**, que son decoración.
+
+De ahí la regla que quedó escrita en el código: *el color del texto no se elige aquí, se hereda*. Elegir
+un acento bonito y usarlo para el texto es exactamente cómo se cuela un texto ilegible en un tema que no
+has probado.
+
+Los cuatro tonos del engranaje salen del póster —cian, azul, violeta y magenta—, y el ámbar que llevaba
+antes se retiró: no existe en la identidad.
+
 ## Resiliencia: un adorno no puede estropear el trabajo
 
 - Si el perfil no resuelve la biblioteca de esquemas, **la proyección no se registra** y el plugin
@@ -84,7 +114,7 @@ donde el color propio está permitido.
 
 ## Límites, dichos en voz alta
 
-- **El dibujo no está verificado visualmente.** El estado que lo alimenta (105 pruebas) y la forma del
+- **El dibujo no está verificado visualmente.** El estado que lo alimenta (115 pruebas) y la forma del
   artefacto (carga, slot, idioma, movimiento reducido, ausencia de emoji) sí; **cómo se ve** solo se
   comprueba instalando el plugin y mirando la interfaz. No hay control de navegador en este puesto, así
   que sería deshonesto decir «se ve premium»: lo que está verificado es que está construido según las

@@ -116,7 +116,7 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 ## Comprobaciones de salud
 
 ```sh
-npm test                # 83 pruebas automáticas, en caja de arena
+npm test                # 115 pruebas automáticas, en caja de arena
 npm run test:hermetic   # las mismas + huella del almacén real antes y después
 node tests/vendor-real.e2e.mjs   # la cadena completa contra la red real (necesita internet)
 ```
