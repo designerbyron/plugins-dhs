@@ -9,6 +9,7 @@ Cómo está organizado, cómo se amplía sin romperlo, y qué reglas hacen que e
 | `lib/compiler.mjs` | El núcleo: identidad de proyecto, validación, anti-solapamiento, composición del `SKILL.md`, escritura atómica, propuesta, aprobación, proveedor | **Sí**, es Node puro |
 | `lib/vendor.mjs` | El vendorizado: análisis del enlace, descarga, análisis del contenido ajeno, adaptación, procedencia, comprobación del origen | **Sí**, con `fetch` inyectado |
 | `lib/presentation.mjs` | El estado del feedback visual: el contrato del marcador y el plegado de eventos | **Sí**, es Node puro |
+| `lib/projection.mjs` | La unidad de proyección: los esquemas **Zod** del estado y de la vista, y la comprobación del contrato del registro antes de registrarla | **Sí**, y contra el registro **real** del harness |
 | `lib/definitions.mjs` | El protocolo y las definiciones de las cuatro herramientas y del proveedor, como objetos planos | **Sí**, con un `exec` falso |
 | `index.js` | El adaptador Cordis: elige los puntos de extensión y registra. **~120 líneas** | No: importa `@deepseek-ai/dsh-tools` |
 | `client.js` | La pieza de interfaz del navegador (engranaje, píldora, idioma, estilos) | No: es un artefacto de navegador. Se comprueba su **forma**, no su dibujo |
@@ -64,9 +65,11 @@ hace improbable.
 2. El estado se pliega de **eventos existentes**. No añadas un tipo de evento propio: el registro de
    sesiones rechaza reabrirse con un evento desconocido sin marca `ignorable`, y esa marca no se puede
    poner al escribir.
-3. Si necesitas un dato nuevo del Host, amplía la vista de la proyección en `index.js` y **mantén la
-   vista en primitivos** (cadenas y números): el esquema que valida cada lectura es donde menos conviene
-   arriesgar.
+3. Si necesitas un dato nuevo del Host, amplía la vista de la proyección en `lib/projection.mjs` (estado y
+   esquema de vista) y el plegado en `lib/presentation.mjs`, y **mantén la vista en primitivos** (cadenas y
+   números): el esquema que valida cada lectura es donde menos conviene arriesgar. El esquema es **Zod**,
+   porque es lo que el registro del harness llama con `parse(...)`; `projectionContractProblems()` avisa en
+   cuanto deje de serlo.
 4. En el cliente: `ctx.locale.register` dentro de `ctx.effect`, estilos como elementos de React (al
    desmontar se van), y **un solo** `role="status"` atómico con la frase completa.
 5. Comprueba la forma del artefacto, que es lo que sí se puede comprobar sin navegador: carga por
@@ -79,7 +82,7 @@ hace improbable.
 
 ```sh
 npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
-npm test              # 124 pruebas
+npm test              # 132 pruebas
 npm run test:hermetic # las mismas + huella del almacén real antes y después
 ```
 
@@ -88,6 +91,13 @@ npm run test:hermetic # las mismas + huella del almacén real antes y después
   herramientas (con los parámetros que verá el modelo) y el proveedor. Nació de un fallo real: el respaldo
   de la inyección opcional podía lanzar dentro de `apply` y llevarse por delante la activación entera.
   Lo que no cubre: el contexto es un doble, así que valida el camino del plugin, no los servicios reales.
+  Esa carencia es justo lo que cubre la puerta siguiente.
+- `tests/projection-contract.test.mjs` — la puerta que faltaba, contra el **registro real** de proyecciones:
+  registra la unidad, proyecta una sesión (`snapshot`) y restaura desde un punto de control. Nació del
+  defecto de la 1.1.2: la unidad se registraba con esquemas de schemastery —que no tienen `parse`— y el
+  registro, que no valida lo que recibe, lo aceptaba; el fallo aparecía mucho después, al **leer** sesiones
+  (`def.wire.viewSchema.parse is not a function`). Aquí se prueban además puntos de control corruptos, filas
+  de otra versión, y que el guardián del contrato caza una unidad con esquemas que no validan.
 - `tests/compiler.test.mjs` — el núcleo.
 - `tests/definitions.test.mjs` — el protocolo y las definiciones ejecutadas con un `exec` falso.
 - `tests/harness-contracts.test.mjs` — los contratos con el harness, y la puerta que habría cazado el

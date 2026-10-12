@@ -112,7 +112,8 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | `propose` o `vendor` dice `conflict` | Ya existe ese id o ese tema | Mejora esa skill, o elige otro tema; si es una versión mejorada de la existente, se decide como actualización |
 | `check` falla en una propuesta que escribí a mano | Una edición posterior rompió el contrato | El propio `check` dice qué regla; edita y repite |
 | `upstream` dice que cambió y quiero la versión nueva | Nuestra versión está adaptada | Vendoriza otra vez con el mismo id: se propone como actualización y, al aprobar, la anterior se aparta en `superseded/` |
-| La píldora del feedback visual no aparece nunca | El perfil no resolvió `@deepseek-ai/schemastery`, o el servicio de proyección no está: el plugin renuncia al adorno antes que romper el trabajo | Mira el diagnóstico de la fila del bundle; con las herramientas funcionando, es un adorno ausente, no una avería |
+| La píldora del feedback visual no aparece nunca | El perfil no resolvió `zod`, o el servicio de proyección no está, o la unidad no cumplió el contrato (entonces **no se registra**) | `node bin/skill-compiler.mjs doctor`: dice si la proyección cumple el contrato y si el registro real proyecta. Con las herramientas funcionando, es un adorno ausente, no una avería |
+| **El historial de sesiones no carga**, con `Failed to load history: failed to project session … def.wire.viewSchema.parse is not a function` | Una unidad de proyección registrada con esquemas que **no validan** (no son Zod). El registro no valida lo que recibe, así que el fallo aparece al leer sesiones | Es el defecto que cerró la 1.1.2: no puede volver desde este plugin, porque la unidad se comprueba antes de registrarse. Si reaparece, **otro** bundle está registrando una unidad con esquemas que no validan: `node bin/skill-compiler.mjs doctor` y revisa el `wire.viewSchema` del bundle sospechoso |
 | La píldora se queda en «Analizando…» | Una llamada quedó sin resultado (cancelada). Un `turn/end` la cierra; si no, el siguiente prompt humano la retira | Es el estado real de la traza, no un fallo de dibujo |
 
 ## Revertir
@@ -125,7 +126,7 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 ## Comprobaciones de salud
 
 ```sh
-npm test                # 115 pruebas automáticas, en caja de arena
+npm test                # 132 pruebas automáticas, en caja de arena
 npm run test:hermetic   # las mismas + huella del almacén real antes y después
 node tests/vendor-real.e2e.mjs   # la cadena completa contra la red real (necesita internet)
 ```

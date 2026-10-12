@@ -128,18 +128,21 @@ El plugin **no se instala solo**: escribirlo en el perfil es cosa del gestor de 
 
 ### Si la fila falla al activarse
 
-El paquete importa `@deepseek-ai/dsh-tools`, que se resuelve desde la instalación de dsh y **no** se
-declara como dependencia (así lo documenta la guía de plugins para bundles instalables). Si esa
-resolución fallara en este perfil, el síntoma es concreto: la fila `skill-compiler` aparece como
-`failed` y las herramientas no existen. Diagnóstico, desde el directorio del perfil:
+El paquete declara sus dependencias del harness (`@deepseek-ai/dsh-tools`, `zod` y el cierre que ambas
+necesitan), así que se resuelven desde la carpeta del plugin, que es la que el perfil enlaza. Si algo no
+está en su sitio, el síntoma es concreto: la fila `skill-compiler` aparece como `failed` y las herramientas
+no existen. Diagnóstico, desde la carpeta del plugin:
 
 ```sh
-node -e "import('@deepseek-ai/dsh-tools').then(()=>console.log('resuelve'),e=>console.log('NO resuelve:',e.code))"
+node bin/skill-compiler.mjs doctor
 ```
 
-Si no resuelve, la solución es declarar esa dependencia en `package.json` y reinstalar. No se ha añadido
-un plan B silencioso a propósito: un plugin que activa con una herramienta a medio construir es peor que
-uno que falla y lo dice.
+Dice qué falta —dependencia sin declarar, sin instalar, que no carga, o una proyección que no cumple el
+contrato— y con qué comando se arregla. El motivo completo, en [`docs/DEPENDENCIAS.md`](docs/DEPENDENCIAS.md).
+
+Para el caso en que se instale por **nombre** en vez de por ruta, el cierre va declarado, así que el gestor
+lo instala al añadir el paquete. No se ha añadido un plan B silencioso a propósito: un plugin que activa
+con una herramienta a medio construir es peor que uno que falla y lo dice.
 
 ## Uso
 
@@ -234,8 +237,9 @@ npm run test:hermetic # las 50 pruebas + huella del store real antes y después
   rojo. Ahora `sandbox()` redirige `DSH_HOME`, y esta puerta **mide** que el store real no cambió.
 
 **Lo que las pruebas no cubren, dicho claro**: `index.js` no se puede importar fuera del harness, así
-que es el único fichero sin cobertura directa. Por eso es deliberadamente fino (~40 líneas: registrar
-una sección, dos herramientas y un proveedor) y todo lo que decide algo vive en `lib/`.
+que es el único fichero sin cobertura directa. Por eso es deliberadamente fino —registrar la sección, las
+cuatro herramientas, el proveedor y el adorno, y elegir bien qué hacer cuando el adorno no puede estar— y
+todo lo que decide algo vive en `lib/`.
 
 ## Límites conocidos
 

@@ -28,6 +28,8 @@ const read = (rel) => readFileSync(join(PACKAGE_ROOT, rel), 'utf8');
 const client = read('client.js');
 const manifest = JSON.parse(read('package.json'));
 const host = read('index.js');
+/** La clave vive con la unidad, en `lib/projection.mjs`; el Host la re-exporta. Las dos cosas se comprueban. */
+const projection = read('lib/projection.mjs');
 
 /** El literal de una constante exportada, leído del fuente (no se puede importar `index.js` aquí). */
 const literal = (source, name) => new RegExp(`${name}\\s*=\\s*'([^']+)'`).exec(source)?.[1];
@@ -48,10 +50,13 @@ describe('artefacto de interfaz', () => {
   });
 
   it('pide la proyección con la misma clave que declara el Host', () => {
-    const declared = literal(host, 'LEARNING_KEY');
+    const declared = literal(projection, 'LEARNING_KEY');
     const asked = literal(client, 'PROJECTION_KEY');
     assert.equal(declared, 'skillCompiler');
     assert.equal(asked, declared, 'cliente y Host tienen que coincidir en la clave de la proyección');
+    // El Host la re-exporta: es parte de su identidad pública, y así sigue estando a la vista en el
+    // fichero que lee quien instala el plugin.
+    assert.match(host, /export \{ LEARNING_KEY \} from '\.\/lib\/projection\.mjs'/);
     assert.match(client, /useProjection\(PROJECTION_KEY\)/);
   });
 

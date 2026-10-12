@@ -104,8 +104,13 @@ antes se retiró: no existe en la identidad.
 
 ## Resiliencia: un adorno no puede estropear el trabajo
 
-- Si el perfil no resuelve la biblioteca de esquemas, **la proyección no se registra** y el plugin
-  conserva las herramientas: se pierde el adorno, no el trabajo.
+- Si el perfil no resuelve `zod`, **la proyección no se registra** y el plugin conserva las herramientas:
+  se pierde el adorno, no el trabajo.
+- Si la unidad no cumple el contrato del registro —esquemas que no validan, plegado que devuelve un objeto
+  nuevo por evento, vista que devuelve una promesa— **no se registra**, y se pierde lo mismo: el adorno.
+  Esto no es celo: el registro de proyecciones **no** valida los esquemas que recibe, y una unidad con
+  esquemas que no validan deja el **historial de sesiones** sin cargar. Ocurrió aquí (1.1.2), y por eso la
+  comprobación va antes de registrar y hay pruebas contra el registro real.
 - Si el servicio de proyección no está, la pieza **no pinta nada** en lugar de fallar.
 - Si el servicio de idioma falla o no tiene nuestras claves, se usan los textos de reserva. **Nunca** se
   enseña una clave cruda.
@@ -114,7 +119,8 @@ antes se retiró: no existe en la identidad.
 
 ## Límites, dichos en voz alta
 
-- **El dibujo no está verificado visualmente.** El estado que lo alimenta (115 pruebas) y la forma del
+- **El dibujo no está verificado visualmente.** El estado que lo alimenta (132 pruebas, incluido el
+  contrato contra el registro real de proyecciones) y la forma del
   artefacto (carga, slot, idioma, movimiento reducido, ausencia de emoji) sí; **cómo se ve** solo se
   comprueba instalando el plugin y mirando la interfaz. No hay control de navegador en este puesto, así
   que sería deshonesto decir «se ve premium»: lo que está verificado es que está construido según las

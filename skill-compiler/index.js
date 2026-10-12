@@ -5,7 +5,7 @@
  * instalar (importa `@deepseek-ai/dsh-tools`, que solo existe dentro del harness). Todo lo que decide
  * algo vive en `lib/`, donde sí hay pruebas. Aquí solo se elige el punto de extensión y se registra.
  *
- * Los tres puntos de extensión, y por qué cada uno:
+ * Los cuatro puntos de extensión, y por qué cada uno:
  *   1. `ctx.systemPrompt.section(...)` — el protocolo, ESTÁTICO y ordenado. No se usa
  *      `system-prompt/assemble`: la guía de DSH lo prohíbe expresamente para añadir texto, y una
  *      sección estática es además lo que protege el prompt caching.
@@ -14,15 +14,15 @@
  *      auto-aprobarse y la revisión humana sería decorativa. Aprobar vive en `bin/`.
  *   3. `ctx.skills.registerProvider(...)` — sirve **solo** las skills aprobadas del proyecto actual.
  *   4. `ctx.sessionProjections.register(...)` — el estado que alimenta el feedback visual, plegado de
- *      eventos que YA existen. Es **opcional y a prueba de fallos**: si el registro de proyecciones o su
- *      biblioteca de esquemas no están en este perfil, el plugin pierde el adorno y conserva el trabajo.
+ *      eventos que YA existen y definido en `lib/projection.mjs`. Es **opcional y a prueba de fallos**:
+ *      si el registro de proyecciones o la biblioteca de esquemas no están en este perfil, el plugin
+ *      pierde el adorno y conserva el trabajo.
  */
 
 import { defineTool } from '@deepseek-ai/dsh-tools';
 
 import { defaultRoot } from './lib/compiler.mjs';
 import { PROTOCOL, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
-import { applyLearning, initialLearning, learningView } from './lib/presentation.mjs';
 
 /** Identidad del Loader. */
 export const name = 'skill-compiler';
@@ -33,54 +33,26 @@ export const inject = ['tools', 'skills', 'systemPrompt'];
 /** Orden de la sección estática: después de la guía del harness y antes del sufijo de personalidad. */
 const SECTION_ORDER = 9000;
 
-/** La clave de la proyección. El cliente la lee con `useProjection('skillCompiler')`: no puede cambiar
- *  sin cambiar también `client.js`, y por eso está aquí arriba, a la vista. */
-export const LEARNING_KEY = 'skillCompiler';
+/** La clave de la proyección vive con la unidad, donde está probada; se re-exporta aquí porque es parte
+ *  de la identidad pública del plugin (el cliente la pide con `useProjection('skillCompiler')`). */
+export { LEARNING_KEY } from './lib/projection.mjs';
 
 /**
- * Se importa la biblioteca de esquemas de forma **tolerante**: si este perfil no la resuelve, se pierde
- * el feedback visual y nada más. Una proyección que no se puede validar no se registra, en vez de
- * reventar la activación del plugin entero —que se llevaría por delante las herramientas—.
+ * La unidad de proyección se carga de forma **tolerante**: si este perfil no resolviera `zod` —la
+ * biblioteca de esquemas que exige el contrato del registro—, el plugin pierde el feedback visual y
+ * conserva las herramientas.
+ *
+ * Lo que NO se hace, y es la lección de un incidente real, es registrar una unidad sin comprobar antes
+ * que cumple el contrato. El registro de proyecciones **no** valida los esquemas que recibe: acepta
+ * cualquier cosa con la forma esperada y la llama `parse` más tarde, al leer sesiones. Una unidad con un
+ * esquema que no valida no estropea un adorno: deja el historial de sesiones sin cargar. Por eso aquí
+ * hay dos guardas —la carga tolerante y la comprobación del contrato— y no una.
  */
-let schemastery = null;
+let projection = null;
 try {
-  schemastery = (await import('@deepseek-ai/schemastery')).default;
+  projection = await import('./lib/projection.mjs');
 } catch {
-  schemastery = null;
-}
-
-/** El estado y la vista, con el esquema más simple posible: cadenas, números y una lista de cadenas. */
-function learningDefinition(z) {
-  return {
-    key: LEARNING_KEY,
-    stateVersion: 1,
-    stateSchema: z.object({
-      phase: z.string(),
-      outcome: z.string(),
-      id: z.string(),
-      pending: z.array(z.string()),
-      created: z.number(),
-      updated: z.number(),
-      at: z.number(),
-      turn: z.number(),
-      seq: z.number(),
-    }),
-    init: () => initialLearning(),
-    apply: (state, event) => applyLearning(state, event),
-    wire: {
-      viewSchema: z.object({
-        phase: z.string(),
-        outcome: z.string(),
-        id: z.string(),
-        analyzers: z.number(),
-        created: z.number(),
-        updated: z.number(),
-        at: z.number(),
-        turn: z.number(),
-      }),
-      view: (state) => learningView(state),
-    },
-  };
+  projection = null;
 }
 
 export function apply(ctx, config = {}) {
@@ -103,19 +75,23 @@ export function apply(ctx, config = {}) {
   // Inyección opcional: el callback recibe un contexto hijo con el servicio disponible (firma
   // verificada en el código que se envía); el respaldo por cierre cubre la otra firma posible.
   //
-  // Y las dos guardas que siguen no son ceremonia: sin ellas, un perfil donde el servicio no esté
-  // disponible —o donde el registro rechace el esquema— lanzaba DENTRO de `apply` y se llevaba por
-  // delante la activación entera, incluidas las herramientas. El adorno visual nunca puede costar el
-  // trabajo; si no se puede registrar la proyección, se pierde el adorno y nada más.
-  if (schemastery !== null) {
+  // Las guardas que siguen no son ceremonia: sin ellas, un perfil donde el servicio no esté disponible
+  // —o donde la unidad no cumpla el contrato— llevaba el fallo al camino de LECTURA de sesiones, no
+  // solo al arranque. El adorno visual nunca puede costar el trabajo.
+  if (projection !== null) {
     ctx.inject(['sessionProjections'], (scoped) => {
       const registry = scoped?.sessionProjections ?? ctx.sessionProjections;
       if (registry === undefined || typeof registry.register !== 'function') return;
+      const definition = projection.learningProjection();
+      // Si la unidad no cumple el contrato del registro, no se registra: sin adorno, con el historial
+      // intacto. Es la comprobación que faltaba cuando se registró una unidad con esquemas que no
+      // validaban, y el coste de no tenerla no fue un adorno ausente: fueron sesiones que no abrían.
+      if (projection.projectionContractProblems(definition).length > 0) return;
       try {
-        registry.register(learningDefinition(schemastery));
+        registry.register(definition);
       } catch {
-        // El registro de proyecciones no aceptó la unidad (versión, esquema o clave ocupada): el
-        // feedback visual no estará, las herramientas sí.
+        // El registro no aceptó la unidad (versión incompatible, clave ocupada): el feedback visual no
+        // estará, las herramientas sí.
       }
     });
   }

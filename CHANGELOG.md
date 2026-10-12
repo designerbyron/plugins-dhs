@@ -4,6 +4,61 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.1.2] — 2026-10-12
+
+**El adorno visual dejaba el historial de sesiones sin cargar.** El harness respondía, al abrir el
+historial de cualquier sesión:
+
+```
+Failed to load history: failed to project session "session-031083a5-…":
+def.wire.viewSchema.parse is not a function
+```
+
+Es decir: no se podía abrir ninguna sesión. La causa no era el dibujo, sino **con qué esquemas se había
+registrado la unidad de proyección**.
+
+### Corregido — los esquemas del registro tienen que validar
+
+- El plugin registraba su proyección con esquemas de **`@deepseek-ai/schemastery`**. Un esquema de
+  schemastery **existe** y se resuelve llamándolo como función —`schema(valor)`—, pero **no tiene
+  `parse`**. El contrato del registro de proyecciones es `ZodType`: la unidad declara `stateSchema` y
+  `wire.viewSchema` y el harness los llama con `.parse(...)`.
+- Lo que hizo el defecto silencioso y tardío: **`register()` no valida los esquemas que recibe.** Aceptó
+  la unidad sin una queja, el plugin se activaba, las herramientas funcionaban y el fallo solo aparecía
+  al **leer** una sesión —el camino que proyecta estado para el cliente—, donde ya no hay adorno que
+  perder: se pierde el historial.
+- Los esquemas son ahora **Zod**, y `zod` sustituye a `@deepseek-ai/schemastery` en `dependencies`
+  (`^4.4.3`, el rango que declara el propio paquete del harness). Declarar la dependencia correcta no
+  bastaba por sí solo; ver el punto siguiente.
+- La unidad se muda de `index.js` a **`lib/projection.mjs`**, que sí se puede probar sin el harness: es
+  la misma regla que gobierna el resto del plugin —lo que decide algo, en `lib/`—, y aquí decide los
+  esquemas y el contrato de lectura.
+- Se midió con el **registro real** y un punto de control real de la sesión que falló: antes,
+  `restore(...)` lanzaba `def.wire.viewSchema.parse is not a function`; ahora proyecta.
+
+### Añadido — la guarda que el registro no pone
+
+- `projectionContractProblems()`: comprueba el contrato **antes** de registrar y, si la unidad no lo
+  cumple, **no se registra**. Se pierde el adorno, nunca la lectura de sesiones. Comprueba que los
+  esquemas validan con `parse`, que el estado inicial pasa su esquema, que un punto de control corrupto
+  no lanza, que `apply` es síncrono y conserva la referencia para eventos ajenos, y que la vista es
+  síncrona y valida incluso con un estado corrupto.
+- El **estado** se repara (`.catch` por campo y una red final): viene del disco y `restore()` lo analiza
+  sin red de seguridad, así que un dato raro se normaliza en vez de impedir abrir la sesión. La **vista**
+  se exige estricta: la calcula el plugin, y un fallo ahí es un defecto que debe verse en las pruebas.
+
+### Añadido — puertas y diagnóstico
+
+- `tests/projection-contract.test.mjs` (8 pruebas), contra el **registro real** de proyecciones, no contra
+  un doble: registra la unidad, proyecta una sesión, restaura desde un punto de control, prueba puntos de
+  control corruptos y filas de otra versión, y comprueba que el guardián caza una unidad con esquemas que
+  no validan. Es la puerta que habría cazado este defecto.
+- `doctor` comprueba ahora **la proyección contra el registro real**: monta el registro, registra la unidad
+  y proyecta (`snapshot` y lectura en frío). Antes solo compilaba las herramientas, y por eso decía `ok`
+  con la proyección rota.
+- `docs/DEPENDENCIAS.md` recoge la lección —«declarar no basta: el contrato»— y `docs/OPERACION.md` tiene
+  una fila de diagnóstico para el síntoma exacto del historial sin cargar. Total: **132 pruebas**.
+
 ## [1.1.1] — 2026-10-12
 
 **El plugin no se activaba al instalarlo.** Se instalaba bien —ficha, título, icono y versión correctos—

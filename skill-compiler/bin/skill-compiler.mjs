@@ -261,13 +261,18 @@ switch (command) {
       `npm install   (faltan: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? '…' : ''})`);
 
     // No basta con que la carpeta exista: lo que importa es que el módulo se pueda CARGAR.
-    for (const name of ['@deepseek-ai/dsh-tools', '@deepseek-ai/schemastery']) {
+    for (const name of ['@deepseek-ai/dsh-tools', 'zod']) {
       try {
         const loaded = await import(name);
         const version = JSON.parse(fs.readFileSync(join(packageRoot, 'node_modules', name, 'package.json'), 'utf8')).version;
         line(true, `${name} se carga (${version}${declared[name] && declared[name] !== version ? `, declarada ${declared[name]}` : ''})`);
         if (name === '@deepseek-ai/dsh-tools' && typeof loaded.defineTool !== 'function') {
           line(false, 'dsh-tools no exporta defineTool', 'la versión declarada no es la del runtime del harness');
+        }
+        // Zod tiene que ser Zod: el registro de proyecciones valida con `schema.parse(...)`, y una
+        // biblioteca de esquemas que se resuelve llamándola como función (schemastery) no sirve.
+        if (name === 'zod' && typeof loaded.z?.object !== 'function') {
+          line(false, 'zod no expone `z.object`', 'la biblioteca de esquemas no es la que espera el contrato del harness');
         }
       } catch (error) {
         line(false, `${name} NO se carga: ${error.code ?? error.message}`,
@@ -289,6 +294,37 @@ switch (command) {
       }
     } catch (error) {
       line(false, `no se pudieron comprobar las herramientas: ${error.message}`, 'npm install');
+    }
+
+    // ── La proyección, contra el registro REAL ────────────────────────────────────────────────────
+    //
+    // Esto faltaba, y su ausencia costó caro: el registro de proyecciones **no** valida los esquemas
+    // que recibe, así que una unidad con esquemas que no validan se registra sin queja y revienta al
+    // LEER sesiones (`Failed to load history: … def.wire.viewSchema.parse is not a function`). Un
+    // adorno visual dejando el historial sin cargar. Aquí se comprueba el contrato y se proyecta de
+    // verdad —snapshot y lectura en frío—, para que eso se vea antes de instalar y no después.
+    try {
+      const { learningProjection, projectionContractProblems } = await import(pathToFileURL(join(packageRoot, 'lib', 'projection.mjs')).href);
+      const definition = learningProjection();
+      const problems = projectionContractProblems(definition);
+      line(problems.length === 0, `la proyección cumple el contrato del registro (clave ${definition.key})`,
+        problems.join(' · ') || 'la unidad no se registraría: revisa lib/projection.mjs');
+
+      const { Context } = await import('@deepseek-ai/cordis');
+      const { default: SessionProjectionRegistry } = await import('@deepseek-ai/dsh-session-projection');
+      const ctx = new Context();
+      ctx.plugin(SessionProjectionRegistry);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      ctx.sessionProjections.register(definition);
+      const session = { seq: 0, header: {}, inheritedEventCount: 0, snapshotEvents: () => [], eventAt: () => undefined };
+      const live = ctx.sessionProjections.snapshot(session, [definition.key]);
+      const cold = ctx.sessionProjections.restore({}, [], 0, {}, 0);
+      const served = live.values[definition.key] ?? cold.snapshot.values[definition.key];
+      line(served !== undefined, 'el registro real proyecta la unidad sin lanzar (snapshot y lectura en frío)',
+        'es el camino que rompía el historial de sesiones: revisa lib/projection.mjs');
+    } catch (error) {
+      line(false, `la proyección falla al proyectar: ${error.message}`,
+        'con esto la lectura de sesiones se rompe: revisa lib/projection.mjs y su dependencia zod');
     }
 
     process.stdout.write(bad === 0

@@ -16,14 +16,14 @@
  *      que valida cada lectura se queda en lo más simple posible, que es donde menos puede fallar.
  */
 
-/** Fases visibles. `idle` no pinta nada. */
-export const PHASES = ['idle', 'analyzing', 'done'];
+/** Fases visibles. `idle` no pinta nada. Congeladas: son la fuente de verdad del esquema de la vista. */
+export const PHASES = Object.freeze(['idle', 'analyzing', 'done']);
 
 /**
  * Resultados posibles. La cadena vacía significa «todavía no hay resultado», que es distinto de
  * `none`: `none` es un turno que se cerró sin que hubiera nada que aprender, y se sabe al final.
  */
-export const OUTCOMES = ['', 'created', 'updated', 'none', 'rejected', 'blocked'];
+export const OUTCOMES = Object.freeze(['', 'created', 'updated', 'none', 'rejected', 'blocked']);
 
 /** Las herramientas de este plugin, por nombre, y qué hace cada una. */
 export const TOOLS = { skill_propose: 'propose', skill_vendor: 'vendor' };
@@ -79,23 +79,56 @@ function resultText(event) {
 }
 
 /**
- * Pliega un evento sobre el estado. **Síncrono y puro.**
+ * Pliega un evento sobre el estado. **Síncrono, puro y a prueba de excepciones.**
  *
  * Devuelve la MISMA referencia cuando el evento no le concierne: es el contrato del registro de
  * proyecciones, y lo que hace que un evento ajeno no cueste nada aguas abajo.
+ *
+ * Y no lanza nunca, ni con un estado restaurado de una forma inesperada: esto vive en el camino de
+ * lectura de las sesiones, así que una excepción aquí no estropearía un adorno —estropearía abrir una
+ * sesión—. Ante cualquier duda, se devuelve el estado tal cual.
  */
 export function applyLearning(state, event) {
+  try {
+    return fold(state, event);
+  } catch {
+    return state;
+  }
+}
+
+/** Normaliza un estado que venga de un punto de control: si un campo falta o viene raro, se rellena. */
+function normalize(state) {
+  const base = initialLearning();
+  if (state === null || typeof state !== 'object') return base;
+  return {
+    phase: typeof state.phase === 'string' ? state.phase : base.phase,
+    outcome: typeof state.outcome === 'string' ? state.outcome : base.outcome,
+    id: typeof state.id === 'string' ? state.id : base.id,
+    pending: Array.isArray(state.pending) ? state.pending.filter((x) => typeof x === 'string') : base.pending,
+    created: Number.isFinite(state.created) ? state.created : base.created,
+    updated: Number.isFinite(state.updated) ? state.updated : base.updated,
+    at: Number.isFinite(state.at) ? state.at : base.at,
+    turn: Number.isFinite(state.turn) ? state.turn : base.turn,
+    seq: Number.isFinite(state.seq) ? state.seq : base.seq,
+  };
+}
+
+function fold(rawState, event) {
   const type = event?.type;
 
-  if (type === 'tool/call' && TOOLS[event?.data?.name] !== undefined) {
+  if (type === 'tool/call') {
+    if (TOOLS[event?.data?.name] === undefined) return rawState;
+    const state = normalize(rawState);
     const callId = event?.data?.callId ?? '';
-    if (callId === '' || state.pending.includes(callId)) return state;
+    if (callId === '' || state.pending.includes(callId)) return rawState;
     return { ...state, phase: 'analyzing', pending: [...state.pending, callId], at: event.time ?? state.at, seq: event.seq ?? state.seq };
   }
 
   if (type === 'tool/result') {
-    const callId = event?.data?.message?.source?.callId ?? '';
-    if (callId === '' || !state.pending.includes(callId)) return state;
+    if (typeof event?.data?.message?.source?.callId !== 'string') return rawState;
+    const callId = event.data.message.source.callId;
+    const state = normalize(rawState);
+    if (callId === '' || !state.pending.includes(callId)) return rawState;
     const pending = state.pending.filter((id) => id !== callId);
     const marker = parseMarker(resultText(event));
     // Sin marcador no se atribuye nada: es más honesto no decir de qué skill se trata que adivinarlo.
@@ -117,18 +150,20 @@ export function applyLearning(state, event) {
   // Un turno que se cierra sin que nadie aprendiera nada también es un resultado: es lo que el usuario
   // quiere saber cuando la respuesta fue «no hay skill nueva».
   if (type === 'turn/end') {
-    if (pendingCount(state.pending) > 0 || state.phase === 'done') return state;
+    const state = normalize(rawState);
+    if (state.pending.length > 0 || state.phase === 'done') return rawState;
     return { ...state, phase: 'done', outcome: state.outcome === '' ? 'none' : state.outcome, seq: event.seq ?? state.seq };
   }
 
   // Un prompt humano abre trabajo nuevo: el resultado anterior deja de estar vigente. Los contadores
   // de la sesión NO se reinician: son el acumulado, y eso es lo que los hace útiles.
   if (type === 'user/message' && event?.data?.source?.kind === 'user') {
-    if (state.phase === 'idle' && state.outcome === '' && state.id === '') return state;
+    const state = normalize(rawState);
+    if (state.phase === 'idle' && state.outcome === '' && state.id === '') return rawState;
     return { ...state, phase: 'idle', outcome: '', id: '', at: 0, seq: event.seq ?? state.seq };
   }
 
-  return state;
+  return rawState;
 }
 
 /**
@@ -140,20 +175,30 @@ export function applyLearning(state, event) {
  */
 const viewCache = new WeakMap();
 
-export function learningView(state) {
-  const cached = viewCache.get(state);
-  if (cached !== undefined) return cached;
+/** Un número que el esquema de la vista acepte, siempre. `undefined` no es un número. */
+const count = (value) => (Number.isFinite(value) ? value : 0);
+
+export function learningView(rawState) {
+  // La caché va por la referencia que ENTRA, no por la normalizada: es la que el registro repite
+  // mientras el estado no cambie, y comparar vistas con `Object.is` es lo que evita publicar cambios
+  // que no existen. Normalizar crea un objeto nuevo, así que se hace solo cuando hay que proyectar.
+  const cacheable = rawState !== null && typeof rawState === 'object';
+  if (cacheable) {
+    const cached = viewCache.get(rawState);
+    if (cached !== undefined) return cached;
+  }
+  const state = normalize(rawState);
   const view = {
     phase: PHASES.includes(state.phase) ? state.phase : 'idle',
     outcome: OUTCOMES.includes(state.outcome) ? state.outcome : '',
-    id: typeof state.id === 'string' ? state.id : '',
-    analyzers: pendingCount(state.pending),
-    created: state.created ?? 0,
-    updated: state.updated ?? 0,
-    at: state.at ?? 0,
-    turn: state.turn ?? 0,
+    id: state.id,
+    analyzers: count(state.pending.length),
+    created: count(state.created),
+    updated: count(state.updated),
+    at: count(state.at),
+    turn: count(state.turn),
   };
-  viewCache.set(state, view);
+  if (cacheable) viewCache.set(rawState, view);
   return view;
 }
 

@@ -51,12 +51,13 @@ Las tres que el plugin usa **directamente** son:
 | Paquete | Para qué | Versión |
 |---|---|---|
 | `@deepseek-ai/dsh-tools` | `defineTool`: convierte la declaración de una herramienta en el esquema que ve el modelo y en su validador de argumentos | `0.2.0-rc.2` |
-| `@deepseek-ai/schemastery` | Los esquemas del estado y de la vista de la proyección que alimenta el feedback visual | `3.18.4` |
+| `zod` | Los esquemas del estado y de la vista de la proyección que alimenta el feedback visual. **Es Zod y no otra biblioteca de esquemas**, porque el registro de proyecciones del harness valida con `schema.parse(...)` y su contrato es `ZodType` | `^4.4.3` |
 | `@deepseek-ai/cordis` | La base del propio `dsh-tools`; sin ella no se puede cargar | `4.0.4` |
 
-Las otras 17 llegan como cierre de esas tres. Todas van **clavadas a la versión exacta del runtime**
-(`0.2.0-rc.2` para la familia `dsh-*`), porque mezclar dos versiones del mismo runtime es peor que
-quedarse atrás.
+Las otras 17 llegan como cierre de esas tres. Todas las de la familia `dsh-*` van **clavadas a la versión
+exacta del runtime** (`0.2.0-rc.2`), porque mezclar dos versiones del mismo runtime es peor que quedarse
+atrás. `zod` sigue el rango que declara el paquete del harness (`^4.4.3`), no una versión propia: es un
+contrato ajeno, y fijarlo por nuestra cuenta solo serviría para divergir de él.
 
 ### Por qué no se evita la dependencia
 
@@ -78,7 +79,7 @@ Se evaluó, y se descartó con motivo:
 ```sh
 cd C:\xampp\htdocs\plugins-dhs\skill-compiler
 npm install      # instala el cierre declarado en node_modules/
-node bin/skill-compiler.mjs doctor   # comprueba que todo carga y que las herramientas compilan
+node bin/skill-compiler.mjs doctor   # comprueba que todo carga, que las herramientas compilan y que la proyección proyecta
 ```
 
 **Ese `npm install` es obligatorio antes de instalar el bundle por ruta**: el perfil enlaza esta carpeta,
@@ -89,13 +90,42 @@ así que el plugin carga sus dependencias **de aquí**.
 El cierre va declarado, así que el gestor del perfil las instala al añadir el paquete. Si el perfil tuviera
 `autoInstallPeers: false` no importa: aquí no hay peers, son dependencias.
 
+## Declarar no basta: el contrato
+
+Hay un segundo defecto, más silencioso que el de la declaración, que también se midió en un perfil real:
+
+> Una dependencia **declarada, instalada y que se carga** puede seguir siendo la equivocada.
+
+El plugin tenía declarado `@deepseek-ai/schemastery` y lo usaba para los esquemas de su proyección. Todo
+parecía correcto: el paquete cargaba, `doctor` decía `ok`, el plugin se activaba y las herramientas
+funcionaban. Pero el registro de proyecciones de DSH valida con **`schema.parse(...)`** —su contrato es
+`ZodType`, y `@deepseek-ai/dsh-session-projection` declara `zod` como dependencia—, y un esquema de
+schemastery **no tiene `parse`**: se resuelve llamándolo como función, `schema(valor)`.
+
+Lo grave es dónde aparecía el fallo. `register()` **no** valida los esquemas que recibe: acepta la unidad
+sin queja. La llamada que faltaba ocurría mucho después, al **leer** sesiones:
+
+```
+Failed to load history: failed to project session "session-…":
+def.wire.viewSchema.parse is not a function
+```
+
+Es decir: el adorno visual del plugin dejaba el historial de sesiones sin cargar. De ahí las tres cosas
+que ahora lo cierran, y que van más allá de declarar la dependencia correcta:
+
+| Pieza | Qué cierra |
+|---|---|
+| Los esquemas de `lib/projection.mjs` son **Zod** | La dependencia correcta, declarada (`zod`) y usada como el contrato manda |
+| `projectionContractProblems()`, ejecutado **antes** de `register()` | Una unidad que no cumple el contrato **no se registra**: se pierde el adorno, nunca la lectura de sesiones. El registro no valida lo que le dan; quien registra sí tiene que hacerlo |
+| `tests/projection-contract.test.mjs` y `doctor` | Se ejecutan contra el **registro real** del harness (`snapshot` y lectura en frío), no contra un doble: con los esquemas equivocados se ponen rojos |
+
 ## Cuando el harness se actualice
 
 Las versiones están clavadas a `0.2.0-rc.2` (el runtime verificado). Si el harness sube de versión:
 
 ```sh
 cd C:\xampp\htdocs\plugins-dhs\skill-compiler
-npm install @deepseek-ai/dsh-tools@<nueva> @deepseek-ai/schemastery@<nueva> @deepseek-ai/cordis@<nueva>
+npm install @deepseek-ai/dsh-tools@<nueva> @deepseek-ai/cordis@<nueva> zod@<la que declare el harness>
 npm install
 npm test                          # incluye las puertas de contrato con el harness
 node bin/skill-compiler.mjs doctor
@@ -103,15 +133,25 @@ node bin/skill-compiler.mjs doctor
 
 y se suben las versiones del resto del cierre a la misma. `tests/harness-contracts.test.mjs` comprueba que
 **la familia `dsh-*` comparta una sola versión**, para que un cierre a medio actualizar no pase inadvertido.
+La versión de `zod` que pide el harness se lee de su propio paquete:
 
-## Las dos puertas que lo protegen
+```sh
+node -e "console.log(require('./node_modules/@deepseek-ai/dsh-session-projection/package.json').dependencies)"
+```
+
+## Las puertas que lo protegen
 
 - **`tests/harness-contracts.test.mjs`** — comprueba que (1) las cuatro herramientas compilan con el
   compilador **real** del harness, con los parámetros que el modelo debe ver; (2) **toda importación de
   paquete está declarada**; (3) la familia `dsh-*` comparte versión; (4) el cierre está instalado.
   La regla (2) es exactamente la que faltaba: cierra el defecto por construcción.
+- **`tests/projection-contract.test.mjs`** — monta el **registro real** de proyecciones y proyecta la
+  unidad de verdad (`snapshot`, restauración desde un punto de control, punto de control corrupto y fila
+  de otra versión). Es la puerta que habría cazado el segundo defecto: una unidad con esquemas que no
+  validan se registra sin queja y solo revienta al leer sesiones.
 - **`node bin/skill-compiler.mjs doctor`** — dice qué falta y con qué comando se arregla, sin instalar
-  nada a ciegas. Distingue «no está instalado» de «no se puede cargar», que son problemas distintos.
+  nada a ciegas. Distingue «no está instalado» de «no se puede cargar» y de «se carga pero no cumple el
+  contrato de la proyección», que son tres problemas distintos.
 
 ## Lo que queda fuera del alcance, y se dice
 
