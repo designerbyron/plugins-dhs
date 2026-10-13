@@ -27,7 +27,7 @@ algo tiene que poder probarse sin el harness**.
 |---|---|---|
 | `ctx.systemPrompt.section` | El protocolo de aprendizaje | Sección **estática**: la guía del harness prohíbe `assemble` para añadir texto, y una sección fija protege el prompt caching |
 | `ctx.tools.register` | Las herramientas del modelo (`skill_propose`, `skill_vendor`, `skill_review`, `skill_upstream_check`) | El modelo propone y revisa; **no aprueba** |
-| `ctx.skills.registerProvider` | Sirve las skills aprobadas **del proyecto actual** | El `cwd` es el ámbito; el provider conserva la invalidación que el registro le entrega |
+| `ctx.skills.registerProvider` | Sirve las skills aprobadas **del proyecto actual** | El `cwd` es el ámbito; el provider conserva la invalidación que el registro le entrega, y la señal que la dispara observa **las dos capas** que componen el catálogo: el almacén propio y la biblioteca curada del harness (esta última sólo si existe) |
 | `ctx.sessionProjections.register` | El estado del feedback visual | **Opcional y a prueba de fallos**: si no cumple el contrato, no se registra y el historial sigue abriendo |
 | `ctx.inject(['commands'])` | Los comandos humanos | Opcional: en un perfil sin comandos, el plugin no se cae por una superficie |
 
@@ -41,7 +41,10 @@ $DSH_HOME/skill-compiler/…      ← nada más se escribe fuera del repositorio
 - La **clave de proyecto** sale de `projectKey(cwd)`: el nombre de la última carpeta más un hash corto del
   path completo, para que dos proyectos con el mismo nombre en sitios distintos no colisionen.
 - La biblioteca **curada** (`$DSH_HOME/skills`) es global por diseño, y sólo debería contener conocimiento
-  que aplica a cualquier proyecto. Lo aprendido para un proyecto vive en su carpeta de proyecto.
+  que aplica a cualquier proyecto. Lo aprendido para un proyecto vive en su carpeta de proyecto. El harness
+  la carga en **toda** sesión, con plugin o sin él: por eso una skill de proyecto colocada ahí se filtra a
+  repositorios que no son suyos (pasó, y está auditado en
+  [`AUDITORIA-2026-10-13-cruces-entre-repos.md`](AUDITORIA-2026-10-13-cruces-entre-repos.md)).
 - Nada de esto entra en el repositorio del usuario.
 
 ## El camino de una decisión

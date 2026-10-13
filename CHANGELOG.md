@@ -4,6 +4,38 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.5.1] — 2026-10-13
+
+**La frescura, también para la biblioteca curada.** El plugin observaba su propio almacén, pero no la capa
+global de skills del harness — que compone **el mismo** catálogo que ve el agente. Mover, editar o retirar
+algo de ahí dejaba a las sesiones abiertas con el catálogo anterior: la misma clase de defecto que la v1.3.0
+cerró para el almacén propio, en la otra capa.
+
+### Corregido
+
+- `createCatalogSignal` acepta raíces `also` (ajenas) y las observa **además** del almacén propio. Un aviso
+  por cualquiera de ellas invalida el catálogo del registro, que es lo que fuerza el re-snapshot completo.
+- Las raíces ajenas se observan **sólo si ya existen**: vigilar nunca crea un directorio que no es nuestro.
+  El almacén propio se sigue creando si falta, que es lo que hace que la primera aprobación por CLI no pase
+  inadvertida.
+- Una raíz que no se puede vigilar no impide vigilar las demás: la señal es tolerante por raíz.
+
+### Medido
+
+- `start()` dice si abrió alguna vigilancia; `roots()` dice cuáles (diagnóstico y pruebas).
+- 230 pruebas (antes 228). Las dos nuevas prueban que la capa ajena se vigila en cuanto existe, que **no** se
+  crea si no existe, que el almacén propio no se duplica en la lista, y que un aviso por la capa ajena
+  invalida el catálogo y avisa a los suscriptores.
+- **No es un rojo reproducido en vivo, y se dice**: el defecto se deduce del contrato del registro (el
+  catálogo lo compone él, con todas las raíces) y su efecto —«la sesión abierta ve lo de antes»— no se puede
+  reproducir sin una sesión del harness en marcha. Lo que sí está medido es el montaje completo, con el
+  registro real y el provider real: registro real, aviso entregado.
+
+### De dónde sale
+
+De la auditoría de cruces entre repositorios (2026-10-13). Al devolver cinco skills de proyecto a su ámbito,
+quedó al descubierto que retirarlas de la capa global no habría avisado a las sesiones abiertas.
+
 ## [1.5.0] — 2026-10-13
 
 **Decidir en lote, dentro del bloque que lo pide.** Con más de una pendiente, aprobar era de a una: se

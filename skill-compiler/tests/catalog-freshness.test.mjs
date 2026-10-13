@@ -21,6 +21,9 @@
  *   · la observada: la CLI (o una edición a mano) que muta fuera, detectada por la vigilancia del almacén.
  */
 import assert from 'node:assert/strict';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
 import { Context } from '@deepseek-ai/cordis';
@@ -131,5 +134,67 @@ describe('frescura del catálogo de skills', () => {
     assert.equal(catalog.start(), false, 'arrancar dos veces no abre una segunda vigilancia');
     catalog.stop();
     assert.equal(catalog.start(), false, 'una señal detenida no vuelve a arrancar');
+  });
+});
+
+/**
+ * La biblioteca curada también compone el catálogo del agente (la sirve el mismo registro), y no es
+ * nuestra: si el humano mueve algo de ahí, las sesiones abiertas tienen que enterarse. Pero observarla
+ * **no puede crear** un directorio ajeno que no exista.
+ */
+describe('las dos capas del catálogo, y cuál se puede crear', () => {
+  const doble = () => {
+    const vistos = [];
+    const impl = (raiz, _opciones, listener) => {
+      vistos.push({ raiz, listener });
+      return { close() {}, on() {}, unref() {} };
+    };
+    return { vistos, impl };
+  };
+
+  it('vigila el almacén propio (creándolo) y la capa ajena, sin duplicar ni crear lo ajeno', () => {
+    const base = mkdtempSync(join(tmpdir(), 'skc-senal-'));
+    const propio = join(base, 'almacen');
+    const ajena = join(base, 'biblioteca-curada');
+    const { vistos, impl } = doble();
+
+    const senal = createCatalogSignal({ root: propio, also: [ajena, propio], watchImpl: impl, debounceMs: 0 });
+    assert.equal(senal.start(), true, 'el almacén propio siempre se puede vigilar');
+    assert.deepEqual(senal.roots(), [propio], 'sólo se vigila lo que existe; y el propio no se duplica');
+    assert.equal(existsSync(propio), true, 'el almacén propio se crea para poder vigilarlo');
+    assert.equal(existsSync(ajena), false, 'vigilar una raíz ajena NO puede crearla');
+
+    mkdirSync(ajena, { recursive: true });
+    const segunda = createCatalogSignal({ root: propio, also: [ajena], watchImpl: impl, debounceMs: 0 });
+    assert.equal(segunda.start(), true);
+    assert.deepEqual(segunda.roots(), [propio, ajena], 'la capa ajena se vigila en cuanto existe');
+
+    senal.stop();
+    segunda.stop();
+    assert.deepEqual(segunda.roots(), [], 'detener la señal cierra todas las vigilancias');
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  it('un aviso por la capa ajena invalida el catálogo y avisa a los suscriptores', () => {
+    const base = mkdtempSync(join(tmpdir(), 'skc-senal-'));
+    const propio = join(base, 'almacen');
+    const ajena = join(base, 'biblioteca-curada');
+    mkdirSync(ajena, { recursive: true });
+    const { vistos, impl } = doble();
+
+    const senal = createCatalogSignal({ root: propio, also: [ajena], watchImpl: impl, debounceMs: 0 });
+    let invalidaciones = 0;
+    let suscriptores = 0;
+    senal.bind(() => { invalidaciones += 1; });
+    senal.onChange(() => { suscriptores += 1; });
+    senal.start();
+
+    const vigiaAjena = vistos.find((v) => v.raiz === ajena);
+    assert.ok(vigiaAjena, 'la capa ajena tiene que estar vigilada');
+    vigiaAjena.listener(); // el sistema de ficheros informa de un cambio en la biblioteca curada
+    assert.equal(invalidaciones, 1, 'el catálogo del agente se tiene que recomponer');
+    assert.equal(suscriptores, 1, 'y el plugin tiene que reaccionar: las filas del menú dependen de esto');
+    senal.stop();
+    rmSync(base, { recursive: true, force: true });
   });
 });

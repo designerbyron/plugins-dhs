@@ -23,7 +23,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 
 import { createCatalogSignal } from './lib/catalog-signal.mjs';
 import { skillCommands, targetCommands } from './lib/commands.mjs';
-import { defaultRoot } from './lib/compiler.mjs';
+import { curatedLibraryRoot, defaultRoot } from './lib/compiler.mjs';
 import { pendingRowsForAll } from './lib/pending-rows.mjs';
 import { PROTOCOL, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
 
@@ -63,7 +63,11 @@ export function apply(ctx, config = {}) {
   // La señal de catálogo se crea aquí y la comparten las piezas que mutan el almacén (herramientas y
   // comandos) y la que conserva la invalidación del registro. `config.catalog` existe para que las
   // pruebas puedan observar ese contrato sin montar el harness entero.
-  const catalog = config.catalog ?? createCatalogSignal({ root });
+  // La señal observa las DOS capas que componen el catálogo del agente: nuestro almacén (que se crea si
+  // falta) y la biblioteca curada ajena (que sólo se observa si ya existe). Sin la segunda, mover o
+  // editar algo en la capa global dejaría a las sesiones abiertas con el catálogo anterior: la misma
+  // clase de defecto que ya se cerró para el almacén propio.
+  const catalog = config.catalog ?? createCatalogSignal({ root, also: [curatedLibraryRoot()] });
 
   // ── Las filas de pendientes: la superficie de selección, no una nota de sintaxis ────────────────
   //

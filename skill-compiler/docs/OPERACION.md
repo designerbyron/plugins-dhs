@@ -97,6 +97,12 @@ incluía — 34 skills antes, 35 después, sin reiniciar el harness. Lo que no e
 del compositor, que cachea por sesión: escribir el nombre funciona igual, y la lista sugerida puede tardar
 hasta que la sesión cambie de preset o se reconecte.
 
+**Las dos capas que componen ese catálogo están observadas** (desde 1.5.1): el almacén del plugin —que es
+suyo y se crea si falta— y la **biblioteca curada** del harness (`$DSH_HOME/skills`), que es ajena: se
+observa sólo si ya existe, porque vigilar no puede crear un directorio que no es nuestro. Un cambio en
+cualquiera de las dos avisa al registro, que recompone el catálogo entero. Sin la segunda, mover o retirar
+una skill de la capa global dejaría a las sesiones abiertas con la lista anterior.
+
 ## CLI (la usas tú)
 
 ```sh
