@@ -9,7 +9,8 @@
 
 import { basename } from 'node:path';
 
-import { defaultRoot, listForProject, overview, projectKey, propose, readSkill } from './compiler.mjs';
+import { autoApproveFor } from './auto-approve.mjs';
+import { approve, checkProposal, defaultRoot, listForProject, overview, projectKey, propose, readSkill } from './compiler.mjs';
 import { markerLine } from './presentation.mjs';
 import { upstreamStatus, vendor } from './vendor.mjs';
 
@@ -60,6 +61,43 @@ const CLI_PATH = process.env.SKILL_COMPILER_CLI
 const approveHint = (id) => `node "${CLI_PATH}" approve ${id}`;
 
 /**
+ * Si el modo «aprobar automáticamente en esta sesión» está activo, activa la propuesta que se acaba de
+ * registrar. La puerta de validación se aplica igual: el modo delega la confirmación, nunca la puerta.
+ *
+ * Se exporta para poder probar el camino de fallo —una propuesta que no pasa la puerta con el modo
+ * activo—, que la herramienta no puede provocar por sí sola: `propose` valida antes de escribir.
+ *
+ * @returns `{ asked, approved, reason?, superseded? }` — lo justo para que el resumen lo cuente tal cual.
+ */
+export function autoApproveIfAsked({ exec, root, catalog, id, key }) {
+  if (!autoApproveFor(exec)) return { asked: false };
+  const check = checkProposal(id, key, { root });
+  if (!check.ok) return { asked: true, approved: false, reason: check.errors[0] };
+  const moved = approve(id, key, { root });
+  if (!moved.ok) return { asked: true, approved: false, reason: moved.reason };
+  // El catálogo acaba de cambiar: sin este aviso, la skill no llegaría al agente hasta reiniciar.
+  catalog?.notify();
+  return { asked: true, approved: true, superseded: moved.superseded, warnings: check.warnings };
+}
+
+/** Las líneas del resumen que cuentan qué pasó con la aprobación. La verdad, en los tres casos. */
+function autoApprovalLines(auto, id) {
+  if (!auto.asked) return ['NO está activa: espera aprobación humana. Para aprobarla:', `  ${approveHint(id)}`];
+  if (auto.approved) {
+    return [
+      'APROBADA AUTOMÁTICAMENTE: el modo «aprobar en esta sesión» está activo, así que ya está activa.',
+      'Se sirve al modelo solo en este proyecto. Desactívalo cuando quieras con `/skill-auto desactivar`.',
+      ...(auto.superseded ? [`La versión anterior quedó apartada en ${auto.superseded}.`] : []),
+    ];
+  }
+  return [
+    `El modo de aprobación automática está activo, pero esta propuesta NO se ha aprobado: ${auto.reason}`,
+    'Sigue pendiente de tu decisión:',
+    `  ${approveHint(id)}`,
+  ];
+}
+
+/**
  * El resultado, en una palabra, para el marcador y para la interfaz.
  *
  * `created` y `updated` son la distinción que el usuario quiere ver: su biblioteca creció, o se afinó
@@ -81,7 +119,7 @@ const renderWithMarker = (value) => [{
 }];
 
 /** Definición de `skill_propose`. Objeto plano: `index.js` lo pasa por `defineTool`. */
-export function skillPropose({ root = defaultRoot(), curated } = {}) {
+export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
   return {
     name: 'skill_propose',
     description: 'Propose a reusable skill distilled from the task just finished. Use it once, for genuinely reusable knowledge — a new architecture, a broad refactor, a hard bug — never for a simple query nor to restate what AGENTS.md and docs already say. The proposal is NOT active: it waits for human approval in the current project.',
@@ -104,7 +142,13 @@ export function skillPropose({ root = defaultRoot(), curated } = {}) {
           project: { type: 'string' },
           projectKey: { type: 'string' },
           path: { type: 'string' },
+          // Los dos campos que distinguen PROPONER de ACTUALIZAR. Van declarados porque `execute` los
+          // devuelve: el harness valida el valor contra este esquema con `additionalProperties: false`, y
+          // un campo que se devuelve sin declarar no es un detalle — rechaza el resultado entero y la
+          // propuesta (ya escrita en disco) llega al modelo como un error. Le pasó a `updatesProposal`.
+          updatesProposal: { type: 'boolean', description: 'True when this proposal patches a version that already existed instead of creating a new one.' },
           updatesApproved: { type: 'boolean', description: 'True when approving this proposal would replace an already approved skill.' },
+          autoApproved: { type: 'boolean', description: 'True when the session\'s auto-approve mode activated this proposal immediately; only present when that mode is on.' },
           conflicts: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, reason: { type: 'string' }, where: { type: 'string' } } } },
           relatedElsewhere: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, where: { type: 'string' } } } },
           warnings: { type: 'array', items: { type: 'string' } },
@@ -135,6 +179,7 @@ export function skillPropose({ root = defaultRoot(), curated } = {}) {
             ...(result.updatesApproved ? ['Si se aprueba, reemplazará una skill ya aprobada (la anterior queda apartada, no se borra).'] : []),
             ...(base.relatedElsewhere.length ? [`El mismo tema ya vive en otro proyecto: ${base.relatedElsewhere.map((c) => c.id).join(', ')}.`] : []),
           ];
+          const auto = autoApproveIfAsked({ exec, root, catalog, id: result.id, key: result.projectKey });
           return {
             ...base,
             warnings,
@@ -144,14 +189,14 @@ export function skillPropose({ root = defaultRoot(), curated } = {}) {
             path: result.path,
             updatesApproved: result.updatesApproved,
             updatesProposal: result.updatesProposal,
+            ...(auto.asked ? { autoApproved: auto.approved } : {}),
             // Los avisos van TAMBIÉN en el resumen: un aviso que no se lee no es un aviso, y el resumen
             // es lo único que el modelo ve del resultado.
             summary: [
               `Propuesta registrada: ${result.id}`,
               `Ámbito: ${result.project} [${result.projectKey}]`,
               `Archivo: ${result.path}`,
-              'NO está activa: espera aprobación humana. Para aprobarla:',
-              `  ${approveHint(result.id)}`,
+              ...autoApprovalLines(auto, result.id),
               ...(warnings.length ? ['', 'Avisos:', ...warnings.map((w) => `  · ${w}`)] : []),
             ].join('\n'),
           };
@@ -279,7 +324,7 @@ export function skillReview({ root = defaultRoot() } = {}) {
  * No hay parámetro para saltarse un bloqueo, y es la decisión de seguridad del diseño: el modelo no
  * debe poder desactivar la puerta que vigila contenido ajeno. Saltarla es un acto humano por CLI.
  */
-export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutMs } = {}) {
+export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutMs, catalog } = {}) {
   return {
     name: 'skill_vendor',
     description: 'Create this project\'s own version of a skill published in a repository the user linked. It downloads the upstream markdown, keeps the original verbatim as proof, records its provenance, and adapts it to this project. It installs nothing from the upstream and activates nothing: the result waits for human approval. Origin content containing secrets or instructions aimed at the agent is blocked by design.',
@@ -305,6 +350,7 @@ export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutM
           upstreamSha256: { type: 'string' },
           updatesProposal: { type: 'boolean', description: 'True when this vendoring patched a version that already existed instead of creating a new one.' },
           updatesApproved: { type: 'boolean', description: 'True when approving it would replace an already approved skill.' },
+          autoApproved: { type: 'boolean', description: 'True when the session\'s auto-approve mode activated this result immediately; only present when that mode is on.' },
           findings: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { file: { type: 'string' }, line: { type: 'integer' }, label: { type: 'string' } } } },
           dirs: { type: 'array', items: { type: 'string' } },
           warnings: { type: 'array', items: { type: 'string' } },
@@ -329,7 +375,8 @@ export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutM
       };
 
       switch (result.status) {
-        case 'proposed':
+        case 'proposed': {
+          const auto = autoApproveIfAsked({ exec, root, catalog, id: result.id, key: result.projectKey });
           return {
             ...base,
             id: result.id,
@@ -340,18 +387,19 @@ export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutM
             // Re-vendorizar el mismo id es un parche de lo que ya había, y el usuario quiere verlo así.
             updatesProposal: result.updatesProposal,
             updatesApproved: result.updatesApproved,
+            ...(auto.asked ? { autoApproved: auto.approved } : {}),
             summary: [
               `${result.updatesProposal || result.updatesApproved ? 'Nuestra versión ACTUALIZADA' : 'Nuestra versión creada'}: ${result.id}`,
               `Origen: ${result.provenance?.source?.url}${result.upstream?.ref ? ` (${result.upstream.ref})` : ''}`,
               `SHA-256 del original: ${result.upstream?.sha256} · guardado verbatim en upstream/`,
               `Ámbito: ${result.projectKey}`,
-              'NO está activa: espera aprobación humana. Para aprobarla:',
-              `  ${approveHint(result.id)}`,
+              ...autoApprovalLines(auto, result.id),
               ...(base.warnings.length ? ['', 'Avisos:', ...base.warnings.map((w) => `  · ${w}`)] : []),
               '',
               'Comprueba si el origen se movió más adelante con `skill_upstream_check`.',
             ].join('\n'),
           };
+        }
         case 'blocked':
           return {
             ...base,

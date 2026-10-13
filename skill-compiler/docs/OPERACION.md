@@ -14,6 +14,42 @@ Referencia de uso: herramientas, CLI, variables y qué hacer cuando algo no cuad
 El **ámbito no es un parámetro**: lo calcula el plugin desde el `cwd` de la sesión. Es lo que impide que
 una skill aterrice en el proyecto equivocado.
 
+## Comandos en el harness (los usas tú, dentro de la sesión)
+
+Aquí vive **aprobar** cuando no quieres salir del harness: son comandos del compositor, corren contra el
+agente **sin crear mensaje del modelo**, y su resultado se pinta en la interfaz sin entrar en el historial
+del modelo. El registro de la sesión guarda cada ejecución.
+
+```
+/skill-propuestas              qué espera tu aprobación y qué está activo, en este proyecto
+/skill-ver <id>                la propuesta entera (o la ya activa)
+/skill-aprobar <id> [--force]  activarla; exige que pase la misma puerta que la CLI
+/skill-rechazar <id>           apartarla sin borrarla
+/skill-auto [activar|desactivar]  aprobar automáticamente en ESTA sesión
+```
+
+Dos cosas que no se delegan nunca: **la puerta de validación** (una propuesta que no la pase no se activa,
+ni con el modo automático) y **el registro** (todo queda en el log de la sesión).
+
+### El modo de aprobación automática
+
+`/skill-auto activar` hace que las skills y los parches que se propongan en esa sesión se activen solos.
+El estado **no vive en memoria**: se pliega del log de la sesión (el `command/run` que deja el comando), así
+que sobrevive a recargar el plugin o reiniciar la app, y deja rastro de quién lo activó. Se para cuando
+quieras con `/skill-auto desactivar`.
+
+Con el modo activo, lo que **sí** se delega es la confirmación caso por caso. Lo que **no**: la validación,
+el anti-solapamiento (un conflicto no se aprueba), el bloqueo de orígenes con contenido peligroso y el
+registro. La herramienta lo dice en su propio resumen («APROBADA AUTOMÁTICAMENTE…» o «no se ha aprobado:
+…»), así que el modelo tampoco puede creerse otra cosa.
+
+### Disponible sin reiniciar
+
+Aprobar avisa al registro de skills, y el agente recibe el catálogo actualizado **en su siguiente paso**;
+`/nombre` carga la skill en la misma sesión. Lo que no está en manos del plugin es el **menú desplegable**
+del compositor, que cachea por sesión: escribir el nombre funciona igual, y la lista sugerida puede tardar
+hasta que la sesión cambie de preset o se reconecte.
+
 ## CLI (la usas tú)
 
 ```sh
@@ -33,7 +69,7 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 | `vendor <url>` | Nuestra versión de una skill externa | Bloqueado, conflicto, o el enlace pide elegir carpeta |
 | `upstream <id>` | ¿Se movió el origen? | No se pudo comprobar, o no es vendorizada |
 | `provenance <id>` | La procedencia guardada, entera | No es vendorizada |
-| `doctor` | Comprueba que las dependencias del harness están declaradas, instaladas y **se cargan**, y que las cuatro herramientas compilan | Algo falta o no carga |
+| `doctor` | Comprueba que las dependencias del harness están declaradas, instaladas y **se cargan**, que las cuatro herramientas compilan, que la proyección cumple el contrato y proyecta contra el registro real, que los comandos se declaran, y **ejecuta las puertas de contrato** de las herramientas, la proyección, el catálogo y el modo automático | Algo falta, no carga, o una puerta se pone roja |
 | `review [--port N]` | **Sirve una página local** con las pendientes, su validación y botones de aprobar y rechazar. Escucha solo en `127.0.0.1` y exige un token de un solo uso que se imprime al arrancar | El puerto está ocupado, o falta el token |
 | `where` | El ámbito de este directorio y dónde está el almacén | — |
 
@@ -114,6 +150,10 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | `check` falla en una propuesta que escribí a mano | Una edición posterior rompió el contrato | El propio `check` dice qué regla; edita y repite |
 | `upstream` dice que cambió y quiero la versión nueva | Nuestra versión está adaptada | Vendoriza otra vez con el mismo id: se propone como actualización y, al aprobar, la anterior se aparta en `superseded/` |
 | La píldora del feedback visual no aparece nunca | El perfil no resolvió `zod`, o el servicio de proyección no está, o la unidad no cumplió el contrato (entonces **no se registra**) | `node bin/skill-compiler.mjs doctor`: dice si la proyección cumple el contrato y si el registro real proyecta. Con las herramientas funcionando, es un adorno ausente, no una avería |
+| Los comandos `/skill-*` no aparecen en el compositor | El perfil no monta el registro de comandos (`dsh-commands`), o el plugin no se activó | `dsh --profile web --dump-config` debe listar `- id: commands`. Con el plugin activo y ese servicio presente, los comandos se registran; sin él, el plugin sigue sirviendo skills y herramientas |
+| Apruebo una skill y el agente no la ve | La invalidación del catálogo no llegó: el registro de skills **cachea y no tiene TTL** | Es lo que cubre 1.3.0 (aviso al aprobar + vigilancia del almacén). Si reaparece: `/skill-propuestas` dice qué está activo, y `doctor` ejecuta la puerta de frescura contra el registro real |
+| La skill recién aprobada no sale en el menú al escribir `/` | El **cliente** cachea el catálogo por sesión y su invalidación no está en manos de un plugin | Escribe `/nombre` a mano: la resolución la hace el host y funciona ya. El menú se refresca al cambiar de preset, reconectar o recargar la página |
+| Con `/skill-auto activar`, una propuesta no se aprobó | No pasó la puerta de validación, o es un conflicto | Lo dice el propio resultado de la herramienta, con el motivo. No es un fallo del modo: es la puerta funcionando |
 | **El historial de sesiones no carga**, con `Failed to load history: failed to project session … def.wire.viewSchema.parse is not a function` | Una unidad de proyección registrada con esquemas que **no validan** (no son Zod). El registro no valida lo que recibe, así que el fallo aparece al leer sesiones | Es el defecto que cerró la 1.1.2: no puede volver desde este plugin, porque la unidad se comprueba antes de registrarse. Si reaparece, **otro** bundle está registrando una unidad con esquemas que no validan: `node bin/skill-compiler.mjs doctor` y revisa el `wire.viewSchema` del bundle sospechoso |
 | La píldora se queda en «Analizando…» | Una llamada quedó sin resultado (cancelada). Un `turn/end` la cierra; si no, el siguiente prompt humano la retira | Es el estado real de la traza, no un fallo de dibujo |
 
@@ -127,7 +167,7 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 ## Comprobaciones de salud
 
 ```sh
-npm test                # 132 pruebas automáticas, en caja de arena
+npm test                # 196 pruebas automáticas, en caja de arena
 npm run test:hermetic   # las mismas + huella del almacén real antes y después
 node tests/vendor-real.e2e.mjs   # la cadena completa contra la red real (necesita internet)
 ```

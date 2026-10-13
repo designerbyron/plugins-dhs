@@ -1,6 +1,6 @@
 {
   "name": "@local/skill-compiler",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "LifeCode Skill-Compiler: compila el conocimiento reutilizable de una tarea en una skill propuesta, ligada a su proyecto y fuera de todo repositorio.",
@@ -65,5 +65,8 @@
         "@deepseek-ai/dsh-client-ui-conversation"
       ]
     }
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-skill": "^0.2.0-rc.2"
   }
 }

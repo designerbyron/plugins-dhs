@@ -419,6 +419,32 @@ function move(root, key, id, from, to) {
 export const approve = (id, key, opts = {}) => move(opts.root ?? defaultRoot(), key, id, 'proposed', 'approved');
 export const reject = (id, key, opts = {}) => move(opts.root ?? defaultRoot(), key, id, 'proposed', 'rejected');
 
+/**
+ * La puerta que hay que pasar ANTES de aprobar: válida la propuesta guardada, que es además lo que
+ * detecta una edición a mano posterior a la propuesta.
+ *
+ * Vive aquí, y no en la CLI, porque es una regla y no una superficie: la CLI, la página de revisión y
+ * los comandos del harness tienen que aplicar **la misma**. Cuando vivía sólo en `bin/`, cualquier otra
+ * vía de aprobación era, por construcción, una vía sin puerta.
+ *
+ * @param id - id de la propuesta.
+ * @param key - clave del proyecto.
+ * @param root - raíz del almacén.
+ * @returns `{ ok, errors, warnings, file }`; `ok` en falso significa que no se puede aprobar.
+ */
+export function checkProposal(id, key, { root = defaultRoot() } = {}) {
+  const file = join(root, 'projects', key, 'proposed', id, 'SKILL.md');
+  if (!existsSync(file)) return { ok: false, errors: [`no existe una propuesta ${id} en ${key}`], warnings: [] };
+  const { data, body } = parseFrontmatter(readFileSync(file, 'utf8'));
+  const result = validateInput({
+    id: data.name ?? id,
+    description: data.description ?? '',
+    whenToUse: data.whenToUse ?? '',
+    body: body.trim(),
+  });
+  return { ...result, file };
+}
+
 /** Propuestas pendientes de un proyecto. Solo lectura: no decide nada. */
 export function pending({ root = defaultRoot(), key }) {
   return scanTree(join(root, 'projects', key, 'proposed'), 'propuesto').map((s) => ({ id: s.id, description: s.description, path: s.path }));

@@ -148,6 +148,22 @@ con una herramienta a medio construir es peor que uno que falla y lo dice.
 
 El modelo propone; tú decides.
 
+### Desde el harness, sin salir de la sesión
+
+```
+/skill-propuestas                 qué espera tu decisión y qué está activo, en este proyecto
+/skill-ver <id>                   leer una propuesta entera antes de decidir
+/skill-aprobar <id> [--force]     activarla (exige la misma puerta que el terminal)
+/skill-rechazar <id>              apartarla sin borrarla
+/skill-auto activar|desactivar    aprobar automáticamente en ESTA sesión
+```
+
+Aprobar desde aquí deja la skill **disponible en el acto**: el agente la ve en su siguiente paso y
+`/nombre` la carga, sin reiniciar el harness. Y no cambia la regla de fondo: los comandos los escribe una
+persona, el modelo no puede invocarlos ni saltarse la validación.
+
+### Desde el terminal (la misma puerta)
+
 ```sh
 # ¿qué ámbito tiene este directorio?
 node "C:\xampp\htdocs\plugins-dhs\skill-compiler\bin\skill-compiler.mjs" where

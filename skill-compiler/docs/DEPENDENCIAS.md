@@ -139,6 +139,16 @@ La versión de `zod` que pide el harness se lee de su propio paquete:
 node -e "console.log(require('./node_modules/@deepseek-ai/dsh-session-projection/package.json').dependencies)"
 ```
 
+## Dependencias de desarrollo
+
+Una sola, y por un motivo concreto: **`@deepseek-ai/dsh-skill`** (el registro de skills del harness) entra
+como `devDependency` porque la puerta de la frescura tiene que medirse contra el registro **real**, no contra
+un doble. Un doble habría dicho que todo iba bien: el defecto era precisamente que el registro **cachea** y
+sólo se limpia cuando el provider llama a la invalidación que él mismo entrega al registrarse.
+
+No es una dependencia de ejecución: el plugin nunca la importa en producción —usa el servicio inyectado
+(`ctx.skills`)— y por eso no figura en `dependencies`.
+
 ## Las puertas que lo protegen
 
 - **`tests/harness-contracts.test.mjs`** — comprueba que (1) las cuatro herramientas compilan con el
@@ -149,6 +159,11 @@ node -e "console.log(require('./node_modules/@deepseek-ai/dsh-session-projection
   unidad de verdad (`snapshot`, restauración desde un punto de control, punto de control corrupto y fila
   de otra versión). Es la puerta que habría cazado el segundo defecto: una unidad con esquemas que no
   validan se registra sin queja y solo revienta al leer sesiones.
+- **`tests/output-contract.test.mjs`** — el valor de cada herramienta contra **su esquema declarado**, con el
+  validador del harness. Cierra la clase de defecto que dejó a `skill_propose` devolviendo un campo no
+  declarado: el resultado entero se rechazaba y la propuesta —ya escrita— llegaba al modelo como un error.
+- **`doctor`** — ejecuta esas puertas en vez de reimplementarlas, y comprueba además que los comandos se
+  declaran.
 - **`node bin/skill-compiler.mjs doctor`** — dice qué falta y con qué comando se arregla, sin instalar
   nada a ciegas. Distingue «no está instalado» de «no se puede cargar» y de «se carga pero no cumple el
   contrato de la proyección», que son tres problemas distintos.

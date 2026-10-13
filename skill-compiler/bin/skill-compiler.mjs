@@ -32,8 +32,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  approve, defaultRoot, listForProject, overview, parseFrontmatter, pending, projectKey, reject,
-  validateInput,
+  approve, checkProposal, defaultRoot, listForProject, overview, pending, projectKey, reject,
 } from '../lib/compiler.mjs';
 import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
 
@@ -76,18 +75,12 @@ function scope() {
   return key;
 }
 
-/** Valida una propuesta guardada: sirve para detectar una edición a mano posterior a la propuesta. */
+/**
+ * Valida una propuesta guardada. Se importa de `lib/` —donde está probada— porque la misma puerta la
+ * aplican la CLI, la página de revisión y los comandos del harness: una regla, una implementación.
+ */
 function checkSkill(id, key) {
-  const file = join(root, 'projects', key, 'proposed', id, 'SKILL.md');
-  if (!existsSync(file)) return { ok: false, errors: [`no existe una propuesta ${id} en ${key}`], warnings: [] };
-  const { data, body } = parseFrontmatter(readFileSync(file, 'utf8'));
-  const result = validateInput({
-    id: data.name ?? id,
-    description: data.description ?? '',
-    whenToUse: data.whenToUse ?? '',
-    body: body.trim(),
-  });
-  return { ...result, file };
+  return checkProposal(id, key, { root });
 }
 
 function printCheck(id, key, result) {
@@ -327,6 +320,40 @@ switch (command) {
     } catch (error) {
       line(false, `la proyección falla al proyectar: ${error.message}`,
         'con esto la lectura de sesiones se rompe: revisa lib/projection.mjs y su dependencia zod');
+    }
+
+    // ── Los comandos humanos, y las puertas del harness ──────────────────────────────────────────
+    try {
+      const { skillCommands } = await import(pathToFileURL(join(packageRoot, 'lib', 'commands.mjs')).href);
+      const declared = skillCommands({ root });
+      const names = declared.map((c) => c.name);
+      const malformed = declared.filter((c) => !/^[a-z][a-z0-9_-]*$/.test(c.name) || !c.description?.trim() || typeof c.handler !== 'function');
+      line(malformed.length === 0 && names.includes('skill-aprobar') && names.includes('skill-auto'),
+        `los comandos humanos se declaran (${names.join(', ')})`,
+        'un descriptor inválido no se registra en el harness y la superficie desaparece en silencio');
+    } catch (error) {
+      line(false, `no se pudieron comprobar los comandos: ${error.message}`, 'revisa lib/commands.mjs');
+    }
+
+    // Compilar las herramientas y proyectar la unidad cubre dos caminos; el resto de los contratos con el
+    // harness viven en pruebas que ya se ejecutan solas. Aquí se EJECUTAN, en vez de reimplementarlas: un
+    // diagnóstico que duplica la puerta acaba diciendo algo distinto que la puerta.
+    try {
+      const { spawnSync } = await import('node:child_process');
+      const gates = [
+        'tests/output-contract.test.mjs',      // el valor de cada herramienta contra el esquema que el harness valida
+        'tests/projection-contract.test.mjs',  // el registro de proyecciones real
+        'tests/catalog-freshness.test.mjs',    // la frescura del catálogo, sin reiniciar
+        'tests/auto-approve.test.mjs',         // el modo de aprobación automática por sesión
+        'tests/commands.test.mjs',             // los comandos humanos, camino por camino
+      ];
+      const run = spawnSync(process.execPath, ['--test', ...gates], { cwd: packageRoot, encoding: 'utf8' });
+      const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
+      const failed = run.status !== 0 || /failing tests/.test(output);
+      line(!failed, 'las puertas de contrato con el harness pasan (salida, proyección, catálogo, modo automático, comandos)',
+        'ejecuta «npm test» y mira la primera prueba en rojo: dice qué contrato se rompió y con qué dato');
+    } catch (error) {
+      line(false, `no se pudieron ejecutar las puertas del harness: ${error.message}`, 'npm install');
     }
 
     process.stdout.write(bad === 0

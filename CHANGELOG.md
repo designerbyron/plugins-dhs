@@ -42,6 +42,68 @@ la aprobación no emite ningún evento de sesión. Queda razonado en `docs/FEEDB
 - Aprobada `dsh-skill-library-authoring` por orden explícita del usuario; queda activa solo en el ámbito de
   `saas-corporative`.
 
+## [1.3.0] — 2026-10-13
+
+**Proponer, revisar, aprobar y usar: entero, dentro del harness y sin reiniciar.** Tres defectos
+encadenados hacían que el último paso del flujo no existiera.
+
+### Corregido — el campo que no estaba declarado y una respuesta que mentía
+
+`skill_propose` devolvía `updatesProposal` en la rama `proposed`, y su esquema de salida no lo declaraba
+(con `additionalProperties: false`). El validador del harness rechazaba **el resultado entero**:
+
+```
+"value.updatesProposal" is not a declared property (additionalProperties: false)
+```
+
+Y aquí está lo que hacía el daño peor: la herramienta escribe la propuesta en disco **antes** de devolver
+el valor, así que el efecto sí ocurría y el modelo recibía un error — el usuario concluyó «no se ha creado
+nada» cuando la propuesta estaba entera en el almacén. `skill_vendor` sí declaraba el campo: era un
+esquema que se quedó atrás, no un error de concepto.
+
+### Corregido — una skill aprobada no se podía usar hasta reiniciar
+
+Registrábamos el proveedor de skills **ignorando la capacidad de invalidación que el registro entrega al
+registrarse**. El registro de skills del harness cachea catálogos y **no tiene TTL**: sólo se limpia
+cuando un provider llama a esa invalidación. Consecuencia: aprobar una skill no cambiaba nada hasta el
+siguiente arranque, y el agente seguía viendo el catálogo viejo.
+
+- El plugin **conserva esa capacidad** y avisa desde los dos sitios donde el catálogo puede cambiar: lo
+  que muta su propio proceso (aprobar, rechazar) y lo que muta **fuera** (la CLI, la página de revisión,
+  una edición a mano), que se detecta **vigilando el almacén** — el contrato del seam pide al provider su
+  propio mecanismo de observación, y sin él «no hace falta reiniciar» sería cierto sólo para una vía.
+- El agente recibe el catálogo de reemplazo en su **siguiente paso** y `/nombre` carga la skill en la
+  misma sesión. Límite medido y declarado: el **menú desplegable** del compositor cachea por sesión y su
+  invalidación no está en manos de un plugin; escribir el nombre funciona igual.
+
+### Añadido — decidir desde el harness
+
+- Cinco comandos humanos, que corren contra el agente **sin crear mensaje del modelo**:
+  `/skill-propuestas`, `/skill-ver <id>`, `/skill-aprobar <id> [--force]`, `/skill-rechazar <id>` y
+  `/skill-auto [activar|desactivar]`.
+- Aprobar por comando aplica **la misma puerta** que la CLI (`checkProposal`, ahora en `lib/` porque una
+  regla tiene que tener una sola implementación, y antes cualquier vía que no fuera la CLI era una vía sin
+  puerta).
+- **Modo de aprobación automática por sesión**: `/skill-auto activar` hace que las skills y los parches
+  que se propongan en esa sesión se activen solos. El estado **se pliega del log de la sesión**
+  (`command/run`), no de un flag en memoria: sobrevive a recargar el plugin o reiniciar la app, y deja
+  rastro de quién lo activó. **No se delega la puerta**: con el modo activo, una propuesta que no pase la
+  validación sigue pendiente, y un conflicto o un origen bloqueado no se aprueban.
+
+### Añadido — puertas y diagnóstico
+
+- `tests/output-contract.test.mjs` (23 pruebas): cada herramienta, **cada rama** de su `execute`, validada
+  con `validateJsonSchemaValue` — el validador **del harness** — contra el esquema **compilado** por
+  `defineTool`. Se demostró **roja** antes de arreglar: es la puerta que habría cazado el defecto.
+- `tests/catalog-freshness.test.mjs` (4): contra el registro de skills **real**, y la primera prueba
+  **demuestra el rojo** (sin aviso, el catálogo sigue cacheado).
+- `tests/commands.test.mjs` (15) y `tests/auto-approve.test.mjs` (13): descriptor del harness, cinco
+  caminos por comando, plegado del modo, y lo que no se delega.
+- `doctor`: ejecuta las puertas reales en vez de reimplementarlas, y comprueba que los comandos se
+  declaran. Total: **196 pruebas**.
+- `@deepseek-ai/dsh-skill` entra como **dependencia de desarrollo**: es el registro real contra el que se
+  mide la frescura.
+
 ## [1.1.2] — 2026-10-12
 
 **El adorno visual dejaba el historial de sesiones sin cargar.** El harness respondía, al abrir el

@@ -21,6 +21,8 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools';
 
+import { createCatalogSignal } from './lib/catalog-signal.mjs';
+import { skillCommands } from './lib/commands.mjs';
 import { defaultRoot } from './lib/compiler.mjs';
 import { PROTOCOL, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
 
@@ -57,6 +59,10 @@ try {
 
 export function apply(ctx, config = {}) {
   const root = config.root ?? defaultRoot();
+  // La señal de catálogo se crea aquí y la comparten las piezas que mutan el almacén (herramientas y
+  // comandos) y la que conserva la invalidación del registro. `config.catalog` existe para que las
+  // pruebas puedan observar ese contrato sin montar el harness entero.
+  const catalog = config.catalog ?? createCatalogSignal({ root });
 
   ctx.systemPrompt.section({
     name: 'skill-compiler:protocol',
@@ -65,12 +71,54 @@ export function apply(ctx, config = {}) {
     text: PROTOCOL,
   });
 
-  ctx.tools.register(defineTool(skillPropose({ root })));
-  ctx.tools.register(defineTool(skillVendor({ root })));
+  ctx.tools.register(defineTool(skillPropose({ root, catalog })));
+  ctx.tools.register(defineTool(skillVendor({ root, catalog })));
   ctx.tools.register(defineTool(skillReview({ root })));
   ctx.tools.register(defineTool(skillUpstreamCheck({ root })));
 
-  ctx.skills.registerProvider(() => skillProvider({ root }));
+  // ── El catálogo: servir, y saber cuándo cambió ─────────────────────────────────────────────────
+  //
+  // El registro de skills CACHEA los catálogos y no tiene TTL: sólo se limpia cuando un provider llama
+  // a la invalidación que el propio registro le entrega al registrarse. El plugin no la retenía, así que
+  // una skill recién aprobada no llegaba al agente hasta reiniciar el harness — el último paso del flujo,
+  // roto. Aquí se conserva esa capacidad (vía la señal) y se avisa desde los dos sitios donde el catálogo
+  // puede cambiar: lo que muta este proceso (los comandos) y lo que muta fuera (CLI, página, edición a
+  // mano), que la señal vigila. La promesa —«usable sin reiniciar»— depende de esto y sólo de esto.
+  ctx.skills.registerProvider((control) => {
+    catalog.bind(control?.invalidate);
+    return skillProvider({ root });
+  });
+  ctx.effect(() => {
+    catalog.start();
+    return () => catalog.stop();
+  });
+
+  // ── La superficie humana: aprobar y rechazar sin salir del harness ──────────────────────────────
+  //
+  // Opcional a propósito: en un perfil sin comandos (headless, sdk) el servicio no está y el plugin no
+  // puede caerse por una superficie. Y el registro se retira con el efecto, para que recargar el plugin
+  // no choque con «ese comando ya existe».
+  ctx.inject(['commands'], (scoped) => {
+    const registry = scoped?.commands ?? ctx.commands;
+    if (registry === undefined || typeof registry.register !== 'function') return;
+    ctx.effect(() => {
+      const disposers = [];
+      try {
+        for (const command of skillCommands({ root, catalog })) disposers.push(registry.register(command));
+      } catch {
+        // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.
+      }
+      return () => {
+        for (const dispose of disposers) {
+          try {
+            if (typeof dispose === 'function') dispose();
+          } catch {
+            /* ya retirado */
+          }
+        }
+      };
+    });
+  });
 
   // Inyección opcional: el callback recibe un contexto hijo con el servicio disponible (firma
   // verificada en el código que se envía); el respaldo por cierre cubre la otra firma posible.

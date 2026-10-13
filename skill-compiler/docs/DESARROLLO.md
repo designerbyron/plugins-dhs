@@ -10,6 +10,9 @@ Cómo está organizado, cómo se amplía sin romperlo, y qué reglas hacen que e
 | `lib/vendor.mjs` | El vendorizado: análisis del enlace, descarga, análisis del contenido ajeno, adaptación, procedencia, comprobación del origen | **Sí**, con `fetch` inyectado |
 | `lib/presentation.mjs` | El estado del feedback visual: el contrato del marcador y el plegado de eventos | **Sí**, es Node puro |
 | `lib/projection.mjs` | La unidad de proyección: los esquemas **Zod** del estado y de la vista, y la comprobación del contrato del registro antes de registrarla | **Sí**, y contra el registro **real** del harness |
+| `lib/catalog-signal.mjs` | La señal de catálogo: conserva la invalidación que el registro entrega al provider y la dispara por mutación propia **y** por observación del almacén | **Sí**, contra el registro real |
+| `lib/commands.mjs` | Los cinco comandos humanos: listar, leer, aprobar, rechazar y el modo automático. Sobre `lib/compiler.mjs`, sin decisiones propias | **Sí**, camino por camino |
+| `lib/auto-approve.mjs` | El pliegue del modo «aprobar en esta sesión» desde los `command/run` del log | **Sí**, es Node puro |
 | `lib/definitions.mjs` | El protocolo y las definiciones de las cuatro herramientas y del proveedor, como objetos planos | **Sí**, con un `exec` falso |
 | `index.js` | El adaptador Cordis: elige los puntos de extensión y registra. **~120 líneas** | No: importa `@deepseek-ai/dsh-tools` |
 | `client.js` | La pieza de interfaz del navegador (engranaje, píldora, idioma, estilos) | No: es un artefacto de navegador. Se comprueba su **forma**, no su dibujo |
@@ -82,10 +85,24 @@ hace improbable.
 
 ```sh
 npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
-npm test              # 132 pruebas
+npm test              # 196 pruebas
 npm run test:hermetic # las mismas + huella del almacén real antes y después
 ```
 
+- `tests/output-contract.test.mjs` — **el valor de cada herramienta contra el esquema que el harness
+  valida**, en todas las ramas de su `execute`, con `validateJsonSchemaValue` (el juez real) y el esquema
+  compilado por `defineTool`. Nació del defecto de la 1.3.0: `skill_propose` devolvía un campo no declarado y
+  el harness rechazaba el resultado entero —con la propuesta ya escrita en disco—; la prueba se demostró
+  **roja** antes de arreglarlo.
+- `tests/commands.test.mjs` — los cinco comandos humanos: descriptor que el registro acepta, y los cinco
+  caminos de cada uno (sin argumento, id inexistente, propuesta que no pasa la puerta, aprobación, rechazo),
+  más que ningún camino raro lanza.
+- `tests/auto-approve.test.mjs` — el modo «aprobar en esta sesión»: plegado desde el log (incluidos los
+  eventos que no deben cambiar nada y un log corrupto), el comando, la delegación real en las dos vías
+  (skill nueva y parche) y **lo que no se delega** (la puerta y el anti-solapamiento).
+- `tests/catalog-freshness.test.mjs` — contra el registro de skills **real**: la primera prueba demuestra el
+  rojo (sin aviso, el catálogo sigue cacheado), y las demás cubren el aviso explícito y la vigilancia del
+  almacén para lo que muta fuera del proceso.
 - `tests/activation.test.mjs` — **ejecuta la activación de verdad**: importa `index.js` y llama a
   `apply(ctx)` con un contexto doble, y comprueba que no lanza y que registra la sección, las cuatro
   herramientas (con los parámetros que verá el modelo) y el proveedor. Nació de un fallo real: el respaldo
