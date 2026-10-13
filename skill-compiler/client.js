@@ -68,10 +68,18 @@ window.__ModuleLoader__.load({
      * una decisión posterior — eso lo sabe el log, y por eso viaja en la proyección.
      */
     const LIST_COMMANDS = ['skill-propuestas', 'skill-ver'];
-    /** Dónde se recuerda un resultado cerrado: la sesión de la página, que muere con ella. */
+    /**
+     * Dónde se recuerda un resultado cerrado.
+     *
+     * No es `sessionStorage`, y eso costó un defecto reportado: con `sessionStorage` el cierre vivía lo que
+     * durara la pestaña, así que al cerrar y reabrir la aplicación los bloques cerrados volvían a aparecer.
+     * `localStorage` persiste entre arranques, y aquí es fiable porque el cliente de escritorio se sirve
+     * desde un origen **estable** (`dsh-app://app`, medido en el contrato del shell) y no desde un puerto
+     * efímero: la clave del almacén no cambia de un arranque al siguiente.
+     */
     const CLOSED_KEY = 'skc-closed';
-    /** Tope de la lista de cerrados, para que no crezca sin fin en una sesión larga. */
-    const CLOSED_MAX = 200;
+    /** Tope de la lista de cerrados: poda los más viejos, para que no crezca sin fin. */
+    const CLOSED_MAX = 500;
 
     /** Textos. Se registran en el servicio de idioma del anfitrión; abajo hay reserva por si falla. */
     const DICTIONARIES = {
@@ -98,6 +106,29 @@ window.__ModuleLoader__.load({
         card_unreadable: 'No se pudo leer el resultado: esta versión del anfitrión no entrega el comando a la tarjeta',
         card_stale_approved: 'Aprobaste algo después de esta lista: vuelve a ejecutar /skill-propuestas para verla al día',
         card_stale_rejected: 'Apartaste algo después de esta lista: vuelve a ejecutar /skill-propuestas para verla al día',
+        bulk_title: 'Decidir aquí mismo',
+        bulk_single: 'Esta propuesta',
+        bulk_reading: 'Leyendo las pendientes…',
+        bulk_none: 'Ninguna pendiente: si acabas de aprobar, ya no queda nada que decidir.',
+        bulk_unreadable: 'No se pudieron leer las pendientes',
+        bulk_select_all: 'Marcar todas',
+        bulk_clear: 'Desmarcar',
+        bulk_approve: 'Aprobar las marcadas',
+        bulk_reject: 'Apartar las marcadas',
+        bulk_approve_one: 'Aprobar esta',
+        bulk_reject_one: 'Apartar esta',
+        bulk_confirm_approve: 'Sí, aprobar',
+        bulk_confirm_reject: 'Sí, apartar',
+        bulk_cancel: 'Cancelar',
+        bulk_running: 'Ejecutando…',
+        bulk_ask_approve: 'Vas a aprobar',
+        bulk_ask_reject: 'Vas a apartar',
+        bulk_ask_footer: 'Cada una pasa por la misma puerta que el comando, y queda registrado.',
+        bulk_ok_approve: 'aprobadas',
+        bulk_ok_reject: 'apartadas',
+        bulk_failed: 'con fallo',
+        bulk_remaining: 'Pendientes ahora',
+        bulk_again: 'Volver a marcar',
       },
       en: {
         analyzing: 'Analysing the work…',
@@ -122,6 +153,29 @@ window.__ModuleLoader__.load({
         card_unreadable: 'Could not read the result: this host version does not hand the command to the card',
         card_stale_approved: 'You approved something after this list: run /skill-propuestas again to see it current',
         card_stale_rejected: 'You set something aside after this list: run /skill-propuestas again to see it current',
+        bulk_title: 'Decide right here',
+        bulk_single: 'This proposal',
+        bulk_reading: 'Reading the pending ones…',
+        bulk_none: 'Nothing pending: if you just approved, there is nothing left to decide.',
+        bulk_unreadable: 'Could not read the pending ones',
+        bulk_select_all: 'Select all',
+        bulk_clear: 'Clear',
+        bulk_approve: 'Approve the selected',
+        bulk_reject: 'Set aside the selected',
+        bulk_approve_one: 'Approve this one',
+        bulk_reject_one: 'Set this one aside',
+        bulk_confirm_approve: 'Yes, approve',
+        bulk_confirm_reject: 'Yes, set aside',
+        bulk_cancel: 'Cancel',
+        bulk_running: 'Running…',
+        bulk_ask_approve: 'You are about to approve',
+        bulk_ask_reject: 'You are about to set aside',
+        bulk_ask_footer: 'Each one goes through the same gate as the command, and it is logged.',
+        bulk_ok_approve: 'approved',
+        bulk_ok_reject: 'set aside',
+        bulk_failed: 'failed',
+        bulk_remaining: 'Pending now',
+        bulk_again: 'Select again',
       },
     };
 
@@ -276,6 +330,44 @@ window.__ModuleLoader__.load({
 @media (forced-colors: active) {
   .skc-card { border-color: CanvasText; background: Canvas; }
 }
+
+/* ── el panel de decisiones ─────────────────────────────────────────────────────────────────────
+   La lista, marcable: cada pendiente con su casilla y una barra de acciones. Es la superficie que
+   pidio el usuario despues de ver que aprobar era de a una. Mismo criterio de color que el resto. */
+.skc-bulk {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, currentColor 14%, transparent);
+  background: color-mix(in oklab, currentColor 3%, transparent);
+}
+.skc-bulk-head { display: flex; align-items: center; gap: 8px; font-size: 11.5px; opacity: 0.7; }
+.skc-bulk-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.skc-bulk-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 4px; border-radius: 6px; }
+.skc-bulk-row:hover { background: color-mix(in oklab, currentColor 7%, transparent); }
+.skc-bulk-row input { flex: 0 0 auto; width: 14px; height: 14px; margin: 0; accent-color: currentColor; cursor: pointer; }
+.skc-bulk-row label {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px;
+}
+.skc-bulk-done { flex: 0 0 auto; margin-left: auto; font-size: 11px; opacity: 0.7; white-space: nowrap; }
+.skc-bulk-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.skc-bulk-button {
+  padding: 4px 10px; border-radius: 7px; cursor: pointer;
+  border: 1px solid color-mix(in oklab, currentColor 22%, transparent);
+  background: color-mix(in oklab, currentColor 8%, transparent);
+  color: inherit; font: 500 11.5px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.skc-bulk-button:hover:enabled { background: color-mix(in oklab, currentColor 15%, transparent); }
+.skc-bulk-button:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.skc-bulk-button:disabled { opacity: 0.45; cursor: default; }
+.skc-bulk-quiet { border-color: transparent; background: transparent; opacity: 0.7; }
+.skc-bulk-spacer { flex: 1 1 auto; }
+.skc-bulk-note { font-size: 11.5px; line-height: 1.4; }
+.skc-bulk-note[data-tone="error"] { color: color-mix(in oklab, currentColor 70%, #dc2626); }
+@media (forced-colors: active) {
+  .skc-bulk, .skc-bulk-button { border-color: CanvasText; }
+}
 `;
 
     /* ── la tarjeta de resultados: lo que el anfitrión no tiene, una X para cerrarla ─────────────── */
@@ -296,10 +388,10 @@ window.__ModuleLoader__.load({
       };
     }
 
-    /** Los resultados cerrados, tal como los recuerda esta pestaña. Nunca lanza. */
+    /** Los resultados cerrados, tal como los recuerda esta instalación. Nunca lanza. */
     function readClosed() {
       try {
-        const raw = window.sessionStorage.getItem(CLOSED_KEY);
+        const raw = window.localStorage.getItem(CLOSED_KEY);
         const list = raw === null ? [] : JSON.parse(raw);
         return Array.isArray(list) ? list.filter((entry) => typeof entry === 'string') : [];
       } catch {
@@ -309,7 +401,7 @@ window.__ModuleLoader__.load({
 
     function writeClosed(ids) {
       try {
-        window.sessionStorage.setItem(CLOSED_KEY, JSON.stringify(ids.slice(-CLOSED_MAX)));
+        window.localStorage.setItem(CLOSED_KEY, JSON.stringify(ids.slice(-CLOSED_MAX)));
       } catch { /* sin almacenamiento: se cierra igual, sólo que no se recuerda */ }
     }
 
@@ -345,6 +437,166 @@ window.__ModuleLoader__.load({
       return icon(open ? ['M6 15l6-6 6 6'] : ['M9 6l6 6-6 6']);
     }
 
+    /* ── decidir aquí mismo: la lista, marcable ──────────────────────────────────────────────────── */
+
+    /** El prefijo con el que el host anuncia cada pendiente: una fila `skill-aprobar-<id>` por skill. */
+    const PENDING_PREFIX = 'skill-aprobar-';
+
+    /** Los ids pendientes, tal y como los anuncia el catálogo del host. Una sola fuente: sus filas. */
+    function pendingIds(commands) {
+      const list = Array.isArray(commands) ? commands : (Array.isArray(commands?.commands) ? commands.commands : []);
+      const ids = [];
+      for (const command of list) {
+        const name = typeof command?.name === 'string' ? command.name : '';
+        if (!name.startsWith(PENDING_PREFIX)) continue;
+        const id = name.slice(PENDING_PREFIX.length);
+        if (id !== '' && !ids.includes(id)) ids.push(id);
+      }
+      return ids;
+    }
+
+    /**
+     * El panel de decisiones de una lista de pendientes —y de una propuesta leída con `/skill-ver`—.
+     *
+     * Lo que pidió el usuario, y cómo se resuelve sin inventarse nada:
+     *
+     *   · Las pendientes **no se adivinan del texto** del resultado: se leen del catálogo del host, donde
+     *     cada una ya tiene su fila (`skill-aprobar-<id>`). Es la única fuente estructurada, y es la misma
+     *     que alimenta el menú `/`.
+     *   · Ejecutar es **ejecutar el comando**, por el mismo remoto que usa el menú: el host aplica la misma
+     *     puerta, lo registra igual y el flujo pinta el nodo. Aquí no se aprueba nada por un atajo.
+     *   · **Paso a paso**: marcar, leer el resumen de lo que se va a hacer, y confirmar. Un clic no decide.
+     *   · Si el remoto no está disponible, se dice con el motivo: no hay un plan B silencioso, y aprobar
+     *     sigue siendo un acto humano.
+     */
+    function BulkActions(props) {
+      const { say, node, sessionId, runCommand, listCommands } = props;
+      const bulk = node?.name === 'skill-propuestas';
+      const reading = typeof node?.args === 'string' ? node.args.trim() : '';
+
+      const [ids, setIds] = React.useState(null);
+      const [failure, setFailure] = React.useState('');
+      const [picked, setPicked] = React.useState([]);
+      const [stage, setStage] = React.useState('pick');
+      const [verb, setVerb] = React.useState('aprobar');
+      const [report, setReport] = React.useState(null);
+      const [busy, setBusy] = React.useState(false);
+
+      React.useEffect(() => {
+        if (!bulk) {
+          setIds(reading === '' ? [] : [reading]);
+          return undefined;
+        }
+        let alive = true;
+        (async () => {
+          try {
+            const commands = await listCommands(sessionId);
+            if (alive) setIds(pendingIds(commands));
+          } catch (error) {
+            if (alive) {
+              setIds([]);
+              setFailure(String(error?.message ?? error));
+            }
+          }
+        })();
+        return () => { alive = false; };
+      }, [bulk, reading, sessionId]);
+
+      const rows = ids ?? [];
+      const toggle = (id) => setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+      const target = verb === 'aprobar' ? 'skill-aprobar' : 'skill-rechazar';
+
+      const run = async () => {
+        setBusy(true);
+        setStage('running');
+        const done = [];
+        const failed = [];
+        for (const id of picked) {
+          try {
+            const result = await runCommand(sessionId, `${target} ${id}`);
+            if (result !== null && result !== undefined && result.kind === 'error') failed.push({ id, reason: String(result.text ?? '') });
+            else done.push(id);
+          } catch (error) {
+            failed.push({ id, reason: String(error?.message ?? error) });
+          }
+        }
+        setReport({ done, failed });
+        // Lo que salió bien deja de ofrecerse: el estado de la lista se mueve con lo que se ejecutó.
+        setIds(rows.filter((id) => !done.includes(id)));
+        setPicked(failed.map((entry) => entry.id));
+        setBusy(false);
+        setStage('done');
+      };
+
+      const buttons = [];
+      const addButton = (key, text, onClick, { disabled = false, quiet = false } = {}) => {
+        buttons.push(h('button', {
+          key, type: 'button', disabled,
+          className: `skc-bulk-button${quiet ? ' skc-bulk-quiet' : ''}`,
+          onClick,
+        }, text));
+      };
+
+      if (stage === 'pick') {
+        if (picked.length > 0) {
+          addButton('go', `${say(verb === 'aprobar' ? 'bulk_approve' : 'bulk_reject')} (${picked.length})`, () => setStage('confirm'));
+          addButton('clear', say('bulk_clear'), () => setPicked([]), { quiet: true });
+        } else if (rows.length > 1) {
+          addButton('all', say('bulk_select_all'), () => setPicked(rows.slice()));
+        }
+      } else if (stage === 'confirm') {
+        addButton('yes', say(verb === 'aprobar' ? 'bulk_confirm_approve' : 'bulk_confirm_reject'), run);
+        addButton('no', say('bulk_cancel'), () => setStage('pick'), { quiet: true });
+      } else if (stage === 'done' && report !== null) {
+        addButton('again', say('bulk_again'), () => { setReport(null); setStage('pick'); }, { quiet: true });
+      }
+
+      return h('div', { className: 'skc-bulk' },
+        h('div', { className: 'skc-bulk-head' }, h('span', null, say(bulk ? 'bulk_title' : 'bulk_single'))),
+        failure === ''
+          ? null
+          : h('div', { className: 'skc-bulk-note', 'data-tone': 'error' }, `${say('bulk_unreadable')}: ${failure}`),
+        ids === null ? h('div', { className: 'skc-bulk-note' }, say('bulk_reading')) : null,
+        ids !== null && rows.length === 0 && report === null
+          ? h('div', { className: 'skc-bulk-note' }, say('bulk_none'))
+          : null,
+        rows.length === 0
+          ? null
+          : h('ul', { className: 'skc-bulk-list' },
+            rows.map((id) => {
+              const state = report === null ? '' : (report.done.includes(id) ? say('card_done') : (report.failed.some((entry) => entry.id === id) ? say('card_error') : ''));
+              return h('li', { key: id, className: 'skc-bulk-row' },
+                h('input', {
+                  id: `skc-pick-${id}`,
+                  type: 'checkbox',
+                  checked: picked.includes(id),
+                  disabled: stage === 'running' || stage === 'confirm',
+                  'aria-label': `${say(bulk ? 'bulk_title' : 'bulk_single')}: ${id}`,
+                  onChange: () => toggle(id),
+                }),
+                h('label', { htmlFor: `skc-pick-${id}`, title: id }, id),
+                state === '' ? null : h('span', { className: 'skc-bulk-done' }, state));
+            })),
+        stage === 'confirm'
+          ? h('div', null,
+            h('div', { className: 'skc-bulk-note' }, `${say(verb === 'aprobar' ? 'bulk_ask_approve' : 'bulk_ask_reject')} ${picked.length}: ${picked.join(', ')}`),
+            h('div', { className: 'skc-bulk-note' }, say('bulk_ask_footer')))
+          : null,
+        stage === 'running' ? h('div', { className: 'skc-bulk-note' }, say('bulk_running')) : null,
+        stage === 'done' && report !== null
+          ? h('div', null,
+            h('div', { className: 'skc-bulk-note' },
+              `${report.done.length} ${say(verb === 'aprobar' ? 'bulk_ok_approve' : 'bulk_ok_reject')} · ${report.failed.length} ${say('bulk_failed')}`),
+            h('div', { className: 'skc-bulk-note' }, `${say('bulk_remaining')}: ${ids === null ? '' : ids.length}`),
+            report.failed.length === 0
+              ? null
+              : h('ul', { className: 'skc-bulk-list' },
+                report.failed.map((entry) => h('li', { key: entry.id, className: 'skc-bulk-note', 'data-tone': 'error' },
+                  `${entry.id}: ${entry.reason.split('\n')[0]}`))))
+          : null,
+        buttons.length === 0 ? null : h('div', { className: 'skc-bulk-bar' }, buttons));
+    }
+
     /**
      * La tarjeta de un resultado de nuestros comandos.
      *
@@ -357,7 +609,7 @@ window.__ModuleLoader__.load({
      * colapsable; el cierre es aparte, porque colapsar no era lo que faltaba: faltaba poder quitarla.
      */
     function SkillCommandCard(props) {
-      const { node, t } = props;
+      const { node, t, sessionId, runCommand, listCommands } = props;
       const say = translator(t);
       const commandId = typeof node?.commandId === 'string' ? node.commandId : null;
       const text = typeof node?.outcome?.text === 'string' ? node.outcome.text : '';
@@ -419,6 +671,9 @@ window.__ModuleLoader__.load({
               h('span', null, say(decision.kind === 'rechazar' ? 'card_stale_rejected' : 'card_stale_approved')))
             : null,
           expanded && text !== '' ? h('pre', { className: 'skc-card-body' }, text) : null,
+          // Las acciones van fuera del cuerpo desplegable: una lista colapsada sigue ofreciendo decidir, y
+          // el panel lee el catálogo del host, así que vale también cuando el texto del bloque quedó atrás.
+          isList ? h(BulkActions, { say, node, sessionId, runCommand, listCommands }) : null,
         ));
     }
 
@@ -501,6 +756,28 @@ window.__ModuleLoader__.load({
           locale: NS,
         }, SkillCompilerBadge));
 
+        // Ejecutar un comando del host desde la tarjeta: es **el mismo remoto** que usa el menú `/` al
+        // elegir una fila, así que el comando entra por donde entraría tecleado —el host aplica la misma
+        // puerta, lo registra con `command/run`/`command/done` y el nodo aparece en el flujo de todas las
+        // pestañas—. Y el modelo no alcanza esta superficie: aprobar sigue siendo un acto humano, con un
+        // clic en vez de una línea.
+        //
+        // Se busca de forma tolerante: si este anfitrión no expone el remoto, el panel lo dirá con el
+        // motivo en vez de desaparecer en silencio, y la píldora sigue funcionando.
+        const remote = ctx.get?.('remote') ?? ctx.remote ?? null;
+        const runCommand = async (sessionId, line) => {
+          if (typeof remote?.commands?.execute !== 'function') throw new Error('este anfitrión no expone commands.execute a un plugin de cliente');
+          const result = await remote.commands.execute(sessionId, line, []);
+          if (result === null || result === undefined || result.ok !== true) throw new Error(String(result?.error?.message ?? 'command.execute failed'));
+          return result.value?.result ?? null;
+        };
+        const listCommands = async (sessionId) => {
+          if (typeof remote?.commands?.list !== 'function') throw new Error('este anfitrión no expone commands.list a un plugin de cliente');
+          const result = await remote.commands.list(sessionId);
+          if (result === null || result === undefined || result.ok !== true) throw new Error(String(result?.error?.message ?? 'commands.list failed'));
+          return result.value ?? [];
+        };
+
         // La tarjeta de los resultados de nuestros comandos: una entrada keyed por nombre. Si esta versión
         // del anfitrión no declarara ese slot, la pieza pierde la X y conserva la píldora —un adorno nunca
         // puede estropear el trabajo, y menos el flujo del chat.
@@ -510,7 +787,7 @@ window.__ModuleLoader__.load({
               name: COMMAND_VIEW_SLOT,
               key: command,
               locale: NS,
-            }, SkillCommandCard));
+            }, (props) => h(SkillCommandCard, { ...props, runCommand, listCommands })));
           }
         } catch { /* sin tarjeta propia: el resultado se lee en la del anfitrión, que no sabe cerrarse */ }
       },

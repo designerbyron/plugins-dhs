@@ -168,6 +168,14 @@ Aprobar algo que ya está aprobado no es un fallo: responde «Ya estaba activa»
 decisión termina con la lista de pendientes al día, así que no hace falta volver a pedirla. Si un bloque de
 `/skill-propuestas` quedó antes de una decisión, se marca como anterior y se pliega solo.
 
+### Decidir en lote, sin salir del bloque
+
+La tarjeta de `/skill-propuestas` **se puede marcar**: una casilla por pendiente, `marcar todas`, y una
+barra para `Aprobar las marcadas` o `Apartar las marcadas`. Con el paso de confirmación por medio, que dice
+qué se va a hacer antes de hacerlo. Tras el lote, la tarjeta informa del resultado y de cuántas quedan. La
+tarjeta de `/skill-ver` ofrece `Aprobar esta` / `Apartar esta` sobre la propuesta que estás leyendo. El
+análisis y las fases, en [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md).
+
 ### Cerrar un resultado
 
 Cada resultado de estos comandos se puede **cerrar**: la tarjeta lleva una **X** en la esquina derecha. Lo

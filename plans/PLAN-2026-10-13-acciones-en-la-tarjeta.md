@@ -1,8 +1,8 @@
 # Plan — acciones en la tarjeta del resultado, y decidir en lote
 
-**Estado: PENDIENTE.** Este documento es el análisis y el diseño de lo que falta, medido contra el
-contrato del harness el 2026-10-13. Lo que ya está hecho y publicado se dice al final; nada de aquí se ha
-implementado todavía.
+**Estado: F1–F3 IMPLEMENTADAS en v1.5.0.** Este documento conserva el análisis con el contrato medido y las
+fases; cada fase dice abajo si está hecha o pendiente. Lo que queda por verificar en vivo, y los candidatos
+de la Fase 4, siguen abiertos.
 
 ## Lo que se pidió
 
@@ -36,13 +36,14 @@ alcance, así que aprobar sigue siendo un acto humano, con un clic en vez de una
 
 ## Diseño propuesto
 
-### Fase 0 — el experimento que decide (media hora)
+### Fase 0 — el experimento que decide — **hecho, pendiente de la prueba en vivo**
 
-Un botón temporal en la tarjeta que ejecute `/skill-propuestas` por `ctx.remote.commands.execute`.
+El panel de la Fase 1 **es** el experimento: ejecuta por `ctx.remote.commands.execute` y, si ese remoto no
+estuviera disponible, lo dice con el motivo en la propia tarjeta en vez de fallar en silencio.
 
-**Criterio de cierre**: aparece un `command/run` nuevo en el log de la sesión. Si no aparece, el RPC no es
-alcanzable por un tercero y **las fases 1–3 se caen**: queda la vía del menú, que ya funciona, y este plan se
-cierra diciéndolo.
+**Criterio de cierre**: al aprobar en lote aparecen tantos `command/run` en el log de la sesión como
+marcadas había. Si no aparecen y el panel enseña el motivo, el RPC no es alcanzable por un tercero y las
+fases 1–3 se replantean sobre la vía del menú, que ya funciona.
 
 ### Fase 1 — seleccionar y decidir en lote, con paso a paso
 
@@ -113,4 +114,9 @@ cierra diciéndolo.
 - **Hecho y publicado**: v1.4.0 (una fila por pendiente en el menú `/`; tarjeta del resultado con X para
   cerrarla) y v1.4.1 (aprobar dos veces es idempotente y lo dice; el resultado de decidir trae la lista al
   día; una lista anterior a una decisión se marca y se pliega sola).
-- **Pendiente**: todo lo de arriba, empezando por la **Fase 0**.
+- **Implementado en v1.5.0**: F1 (casilla por pendiente, marcar todas, aprobar/apartar en lote, con
+  confirmación previa y resumen), F2 (las mismas acciones en `/skill-ver` sobre la propuesta leída) y F3
+  (`N aprobadas · M con fallo`, el motivo de cada fallo, y `Pendientes ahora`, restando lo ejecutado).
+  Además, el cierre de un bloque pasó a persistir entre arranques (era el otro defecto reportado).
+- **Pendiente**: la prueba en vivo de la Fase 0 (que el remoto sea alcanzable desde un plugin de cliente) y
+  los candidatos de la Fase 4.

@@ -4,6 +4,48 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.5.0] — 2026-10-13
+
+**Decidir en lote, dentro del bloque que lo pide.** Con más de una pendiente, aprobar era de a una: se
+marcan varias, se lee el resumen de lo que se va a hacer y se confirman. Y el cierre de un bloque ahora
+sobrevive al reinicio, que era el otro defecto reportado.
+
+### Corregido — lo cerrado volvía a aparecer al reabrir la aplicación
+
+- El cierre vivía en `sessionStorage`, que dura lo que dura la pestaña: cerró cuatro bloques, reinició y
+  estaban otra vez. Pasa a `localStorage`, que aquí es fiable porque **el cliente de escritorio se sirve
+  desde un origen estable** (`dsh-app://app`, medido en el contrato del shell) y no desde un puerto
+  efímero: la clave del almacén no cambia de un arranque al siguiente.
+
+### Añadido — el panel de decisiones en la tarjeta
+
+- **Una casilla por pendiente** y una barra de acciones: `Aprobar las marcadas (N)` / `Apartar las marcadas
+  (N)`, más `marcar todas` / `desmarcar`. Con cero marcadas no hay acción que pulsar.
+- **Paso a paso de verdad**: marcar → **confirmación con el resumen** (los ids y qué se va a hacer) →
+  ejecutar. Un clic no decide nada, y la confirmación dice que cada una pasa por la misma puerta que el
+  comando y que queda registrado.
+- **Las pendientes se leen del catálogo del host**, no se adivinan del texto del resultado: cada pendiente
+  ya tiene su fila `skill-aprobar-<id>`, que es la misma fuente que alimenta el menú `/`. Se leen por
+  `commands.list` y se ejecutan por `commands.execute` con el `sessionId` que entrega el kit de sesión.
+- **Ejecutar es ejecutar el comando**, por el mismo remoto que usa el menú al elegir una fila: el host
+  aplica la puerta, lo registra con `command/run`/`command/done` y el nodo aparece en el flujo de todas las
+  pestañas. No hay atajo, y el modelo no alcanza esta superficie: aprobar sigue siendo un acto humano.
+- Tras el lote: `N aprobadas · M con fallo`, el motivo de cada fallo, y `Pendientes ahora: M` — la lista de
+  la propia tarjeta se mueve con lo que se ejecutó.
+- En la tarjeta de `/skill-ver` (y de la fila `skill-ver-<id>`), el mismo panel ofrece `Aprobar esta` /
+  `Apartar esta` sobre la propuesta que acabas de leer.
+- Si el anfitrión no expusiera el remoto a un plugin de cliente, el panel lo dice **con el motivo** en vez
+  de desaparecer en silencio.
+
+### Medido
+
+- 228 pruebas (antes 223), suite hermética en verde y `doctor` verde.
+- `commands.list` devuelve un array de descriptores (nombre + descripción), ordenado por nombre: es el
+  contrato del que el panel saca las pendientes.
+- **Por verificar en vivo**: que este anfitrión exponga `commands.execute` a un plugin de cliente. El
+  cliente de comandos lo usa (`dsh-client-ui-commands` → `ctx.remote.commands.execute`), pero que sea
+  alcanzable desde un tercero se comprueba en la primera ejecución del panel: si no lo fuera, lo dirá.
+
 ## [1.4.1] — 2026-10-13
 
 **Aprobar dos veces no es un fallo, y una lista no puede quedarse mintiendo.** Los dos defectos salieron de

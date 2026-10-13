@@ -51,6 +51,21 @@ cierra. Colapsar y cerrar son cosas distintas —colapsar lo deja a un clic, cer
 mientras dure la pestaña— y ninguna de las dos toca el log de la sesión ni el almacén del plugin. Dos
 ejecuciones del mismo comando dejan dos bloques y se cierran por separado: cerrar uno no cierra el otro.
 
+### Decidir en lote, desde la lista
+
+La tarjeta de `/skill-propuestas` ofrece la lista **marcable**: una casilla por pendiente y una barra con
+`Aprobar las marcadas (N)` / `Apartar las marcadas (N)`, más `marcar todas`. Marcar no decide: después hay
+un **paso de confirmación** con el resumen de lo que se va a hacer (los ids, y que cada una pasa por la
+misma puerta y queda registrado), y sólo entonces se ejecuta. Tras el lote, la tarjeta dice
+`N aprobadas · M con fallo` —con el motivo de cada fallo— y cuántas pendientes quedan.
+
+Las pendientes se leen del **catálogo del host**, donde cada una tiene su fila `skill-aprobar-<id>`, y cada
+decisión se ejecuta **como el comando**, por el mismo camino que si lo tecleases: la misma puerta, el mismo
+registro y el nodo en el flujo de la sesión. Si el anfitrión no dejara ejecutar comandos desde la pieza de
+interfaz, la tarjeta lo dice con el motivo; entonces la vía es el menú `/` o el terminal, que funcionan
+igual. La tarjeta de `/skill-ver` ofrece lo mismo sobre la propuesta que acabas de leer: `Aprobar esta` /
+`Apartar esta`.
+
 ### Una lista que quedó atrás
 
 El resultado de un comando es el registro de lo que pasó **cuando se ejecutó**, y no se reescribe. Por eso,
@@ -183,6 +198,7 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | `upstream` dice que cambió y quiero la versión nueva | Nuestra versión está adaptada | Vendoriza otra vez con el mismo id: se propone como actualización y, al aprobar, la anterior se aparta en `superseded/` |
 | La píldora del feedback visual no aparece nunca | El perfil no resolvió `zod`, o el servicio de proyección no está, o la unidad no cumplió el contrato (entonces **no se registra**) | `node bin/skill-compiler.mjs doctor`: dice si la proyección cumple el contrato y si el registro real proyecta. Con las herramientas funcionando, es un adorno ausente, no una avería |
 | Veo la lista de pendientes pero no encuentro cómo elegir una | El comando con argumentos hay que escribirlo entero, y el compositor no ofrece lista pulsable para los argumentos de un comando del host | Escribe `/` y elige la fila `skill-aprobar-<id>` (o `skill-ver-…`, `skill-rechazar-…`). `/skill-propuestas` las anuncia por su nombre exacto. Si no aparecen en el menú, ejecútalo: es lo que las arma |
+| La tarjeta dice que no pudo leer las pendientes | El anfitrión no expone `commands.list` a la pieza de interfaz, o la sesión no está abierta | El motivo exacto lo dice el propio panel. La vía es el menú `/` o el terminal: la aprobación funciona igual y pasa por la misma puerta |
 | Apruebo algo y sigue apareciendo como pendiente | El bloque que tienes delante se pintó antes de la decisión: su texto es lo que había entonces | El bloque de la decisión trae la lista al día al final. Si el bloque viejo no se marcó como anterior, es que la decisión llegó por una vía que no pasa por el log de la sesión (el CLI en otra terminal, o una aprobación automática): vuelve a ejecutar `/skill-propuestas` |
 | Aprobar dos veces dice que ya está activa | No es un fallo: es idempotente a propósito | Nada que hacer. El mensaje dice también cómo queda la lista |
 | El resultado de un comando no tiene la X para cerrarlo | El anfitrión no declara el slot `conversation.chat.commandview`, o la pieza de cliente no se recargó | Recarga la página (F5). Si sigue sin X, esa versión del harness pinta la tarjeta sin cierre —el resultado se lee igual— y `doctor` confirma que la pieza declara sus dos dependencias de cliente |

@@ -150,6 +150,7 @@ Decisiones de la tarjeta, y de dónde salen:
 | El resultado se pinta como texto (`pre`, sin `dangerouslySetInnerHTML`) | Lo escribe el Host, pero la regla no cambia: nunca HTML |
 | El registro va en su propio `try`, después del de la píldora | Si el anfitrión no declara ese slot, la pieza pierde la X y conserva la píldora |
 | `@deepseek-ai/dsh-client-ui-chat` declarado en `dsh.client.inject` | Es quien declara el slot; sin eso, el registro podría llegar antes que la declaración |
+| **Un panel de decisiones** en la tarjeta de la lista (casilla por pendiente, lote, confirmación) | Aprobar de a una era el gesto que el usuario señaló: con varias pendientes se repetía. Las pendientes salen del **catálogo del host** —no del texto del resultado, que duplicaría el formato— y cada decisión se ejecuta por el remoto que usa el menú, así que la puerta y el registro son los mismos. Marcar no decide: hay confirmación, y con cero marcadas no hay acción |
 | Una lista anterior a una decisión se marca y se pliega sola | El texto de un resultado es el registro de lo que pasó y no se reescribe; lo que sí se puede afirmar es que hubo una decisión **posterior**, y eso lo sabe el log (`decisionSeq`). Marcar sin mentir, y plegar para que no ocupe media pantalla |
 
 **Lo que esta pieza no puede hacer**: cerrar los bloques de las **filas de pendientes**

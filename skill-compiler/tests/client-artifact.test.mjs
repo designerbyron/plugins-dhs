@@ -137,9 +137,13 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.match(client, /\.skc-card-icon:focus-visible \{ outline:/);
   });
 
-  it('el cierre se recuerda en la sesión de la página y no crece sin fin', () => {
-    assert.match(client, /window\.sessionStorage\.getItem\(CLOSED_KEY\)/);
-    assert.match(client, /window\.sessionStorage\.setItem\(CLOSED_KEY/);
+  it('el cierre se recuerda entre arranques, y no crece sin fin', () => {
+    // Defecto reportado: con `sessionStorage` el cierre moría con la pestaña, así que al cerrar y reabrir
+    // la aplicación los bloques cerrados volvían. Persiste en `localStorage`, que aquí es fiable porque el
+    // cliente de escritorio se sirve desde un origen estable (`dsh-app://app`), no desde un puerto efímero.
+    assert.match(client, /window\.localStorage\.getItem\(CLOSED_KEY\)/);
+    assert.match(client, /window\.localStorage\.setItem\(CLOSED_KEY/);
+    assert.equal(/window\.sessionStorage/.test(client), false, 'el almacén de sesión no sobrevive al cierre de la app');
     assert.match(client, /ids\.slice\(-CLOSED_MAX\)/);
     assert.equal(client.includes("'skc-closed'"), true);
     // Cerrar es por ejecución, no por comando: dos `/skill-propuestas` son dos bloques distintos.
@@ -157,7 +161,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
 
   it('un fallo al registrar la tarjeta no puede llevarse el registro de la píldora', () => {
     const pill = client.indexOf('}, SkillCompilerBadge));');
-    const card = client.indexOf('}, SkillCommandCard));');
+    const card = client.indexOf('}, (props) => h(SkillCommandCard');
     assert.equal(pill > 0 && card > pill, true, 'la píldora se registra primero');
     assert.match(client, /try \{\s*\n\s*for \(const command of COMMAND_NAMES\)/, 'el registro de la tarjeta va protegido');
   });
@@ -181,5 +185,48 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.match(client, /const expanded = touched \? open : open && !stale/);
     // La banda va fuera del cuerpo desplegable: se lee aunque la tarjeta esté colapsada.
     assert.match(client, /role: 'note'/);
+  });
+  it('la lista se puede marcar, y decidir en lote va paso a paso', () => {
+    // Lo pedido: con más de una pendiente, marcar varias y aprobarlas a la vez, con un paso de
+    // confirmación por medio —un clic no decide—.
+    assert.match(client, /function BulkActions\(props\)/);
+    assert.match(client, /type: 'checkbox'/, 'cada pendiente se marca con su casilla');
+    assert.match(client, /'aria-label': `\$\{say\(bulk \? 'bulk_title' : 'bulk_single'\)\}: \$\{id\}`/);
+    assert.match(client, /stage === 'confirm'/, 'hay un paso de confirmación antes de ejecutar');
+    assert.match(client, /bulk_ask_footer/, 'la confirmación dice que cada una pasa por la misma puerta');
+    assert.match(client, /setStage\('confirm'\)/);
+    assert.match(client, /disabled: stage === 'running' \|\| stage === 'confirm'/);
+  });
+
+  it('las pendientes salen del catálogo del host, no de parsear el texto del resultado', () => {
+    // La única fuente estructurada: cada pendiente ya tiene su fila `skill-aprobar-<id>` en el catálogo,
+    // que es también la que alimenta el menú `/`. Parsear el texto duplicaría el formato en dos sitios.
+    assert.match(client, /function pendingIds\(commands\)/);
+    assert.match(client, /const PENDING_PREFIX = 'skill-aprobar-'/);
+    assert.match(client, /listCommands\(sessionId\)/);
+    assert.equal(/outcome\?\.text[^\n]*split/.test(client), false, 'el texto del resultado no se parsea');
+  });
+
+  it('ejecutar es ejecutar el comando, por el mismo remoto que el menú', () => {
+    assert.match(client, /remote\.commands\.execute\(sessionId, line, \[\]\)/);
+    assert.match(client, /remote\.commands\.list\(sessionId\)/);
+    assert.match(client, /const remote = ctx\.get\?\.\('remote'\) \?\? ctx\.remote \?\? null/);
+    // Se busca tolerante y se falla diciendo el motivo: nada de un plan B silencioso.
+    assert.match(client, /este anfitrión no expone commands\.execute/);
+    assert.match(client, /'data-tone': 'error'/);
+    // El ámbito entra por las props del kit de sesión, no se adivina.
+    assert.match(client, /const \{ node, t, sessionId, runCommand, listCommands \} = props;/);
+  });
+
+  it('tras el lote, el estado de la lista se mueve con lo ejecutado', () => {
+    assert.match(client, /setIds\(rows\.filter\(\(id\) => !done\.includes\(id\)\)\)/);
+    assert.match(client, /bulk_remaining/);
+    assert.match(client, /report\.failed\.length === 0/);
+  });
+
+  it('la tarjeta de una propuesta leída ofrece decidir sobre ella', () => {
+    assert.match(client, /const bulk = node\?\.name === 'skill-propuestas'/);
+    assert.match(client, /const reading = typeof node\?\.args === 'string' \? node\.args\.trim\(\) : ''/);
+    assert.match(client, /bulk_approve_one|bulk_reject_one/);
   });
 });
