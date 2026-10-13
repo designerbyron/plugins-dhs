@@ -122,7 +122,8 @@ su hash y su fecha, para que nadie tenga que creerse nada de memoria.
 - Licencia **MIT** (ver arriba), con la referencia al repositorio como petición destacada.
 - Identidad de autor configurada **solo en este repositorio** (`git config user.name/user.email`), no en
   el global de la máquina: así no condiciona otros proyectos.
-- Sin publicar todavía: el primer `git push` es un acto explícito.
+- **Publicado** en `https://github.com/designerbyron/plugins-dhs` (rama `main`), con el remoto y el local
+  sincronizados. El push sigue siendo un acto declarado: un commit se decide, y el envío se dice.
 
 ## Publicar en GitHub
 
