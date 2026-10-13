@@ -14,6 +14,12 @@
  *      herramienta y este plegado—, y hay una prueba que lo congela contra el `render` real.
  *   3. **La vista solo usa primitivos** (cadenas y números, sin nulos ni objetos anidados): el esquema
  *      que valida cada lectura se queda en lo más simple posible, que es donde menos puede fallar.
+ *   4. **Una lista de pendientes se quedó obsoleta cuando alguien decide.** Medido con el usuario
+ *      delante: aprobó una skill, el bloque de `/skill-propuestas` que tenía delante siguió enseñándola
+ *      como pendiente, y él volvió a aprobarla. El resultado de un comando es el registro de lo que pasó
+ *      —no se reescribe—, así que lo que se marca aquí es que hubo una decisión POSTERIOR: eso lo puede
+ *      decir el log, y es lo que la interfaz necesita para no mentir. Se pliegan `command/run` y
+ *      `command/done`, que ya existen: la guía de DSH prohíbe añadir tipos de evento propios.
  */
 
 /** Fases visibles. `idle` no pinta nada. Congeladas: son la fuente de verdad del esquema de la vista. */
@@ -27,6 +33,25 @@ export const OUTCOMES = Object.freeze(['', 'created', 'updated', 'none', 'reject
 
 /** Las herramientas de este plugin, por nombre, y qué hace cada una. */
 export const TOOLS = { skill_propose: 'propose', skill_vendor: 'vendor' };
+
+/**
+ * Los comandos humanos que **cambian el almacén**, por prefijo de nombre. El prefijo cubre las dos
+ * formas de invocarlos, porque son el mismo acto: `skill-aprobar` (con argumento) y `skill-aprobar-<id>`
+ * (la fila del menú, sin argumentos).
+ */
+export const DECISION_COMMANDS = Object.freeze([
+  Object.freeze({ prefix: 'skill-aprobar', kind: 'aprobar' }),
+  Object.freeze({ prefix: 'skill-rechazar', kind: 'rechazar' }),
+]);
+
+/** El verbo de decisión de un comando: `aprobar`, `rechazar`, o `''` si ese comando no decide nada. */
+export function decisionKindOf(name) {
+  const clean = String(name ?? '');
+  for (const entry of DECISION_COMMANDS) {
+    if (clean === entry.prefix || clean.startsWith(`${entry.prefix}-`)) return entry.kind;
+  }
+  return '';
+}
 
 /** El marcador que abre el resultado de una herramienta. Contrato congelado por prueba. */
 export const MARKER_PREFIX = '[skill-compiler]';
@@ -62,6 +87,11 @@ export function initialLearning() {
     at: 0,
     turn: 0,
     seq: -1,
+    // La última decisión humana sobre el almacén. `decisionCommand` sólo está puesto entre el
+    // `command/run` y su `command/done`: es el emparejamiento, y `command/done` no trae el nombre.
+    decisionCommand: '',
+    decisionKind: '',
+    decisionSeq: -1,
   };
 }
 
@@ -96,6 +126,9 @@ export function applyLearning(state, event) {
   }
 }
 
+/** Los verbos de decisión válidos; la vista de la proyección deriva su enum de aquí, como PHASES. */
+export const DECISION_KINDS = Object.freeze(['', ...DECISION_COMMANDS.map((entry) => entry.kind)]);
+
 /** Normaliza un estado que venga de un punto de control: si un campo falta o viene raro, se rellena. */
 function normalize(state) {
   const base = initialLearning();
@@ -110,6 +143,9 @@ function normalize(state) {
     at: Number.isFinite(state.at) ? state.at : base.at,
     turn: Number.isFinite(state.turn) ? state.turn : base.turn,
     seq: Number.isFinite(state.seq) ? state.seq : base.seq,
+    decisionCommand: typeof state.decisionCommand === 'string' ? state.decisionCommand : base.decisionCommand,
+    decisionKind: DECISION_KINDS.includes(state.decisionKind) ? state.decisionKind : base.decisionKind,
+    decisionSeq: Number.isFinite(state.decisionSeq) ? state.decisionSeq : base.decisionSeq,
   };
 }
 
@@ -145,6 +181,28 @@ function fold(rawState, event) {
       at: event.time ?? state.at,
       seq: event.seq ?? state.seq,
     };
+  }
+
+  // Una decisión humana se anota cuando TERMINA BIEN: `command/run` abre el emparejamiento y
+  // `command/done` lo cierra. Un `done` con error significa que no se movió nada, así que no marca.
+  if (type === 'command/run') {
+    const kind = decisionKindOf(event?.data?.name);
+    if (kind === '') return rawState;
+    const commandId = typeof event?.data?.commandId === 'string' ? event.data.commandId : '';
+    if (commandId === '') return rawState;
+    const state = normalize(rawState);
+    if (state.decisionCommand === commandId) return rawState;
+    return { ...state, decisionCommand: commandId, decisionKind: kind };
+  }
+
+  if (type === 'command/done') {
+    const commandId = typeof event?.data?.commandId === 'string' ? event.data.commandId : '';
+    const state = normalize(rawState);
+    if (commandId === '' || commandId !== state.decisionCommand) return rawState;
+    // El verbo se conserva para que la interfaz pueda decir qué se hizo; el emparejamiento se suelta.
+    if (event?.data?.kind !== 'success') return { ...state, decisionCommand: '' };
+    const seq = Number.isFinite(event.seq) ? event.seq : state.decisionSeq;
+    return { ...state, decisionCommand: '', decisionSeq: seq };
   }
 
   // Un turno que se cierra sin que nadie aprendiera nada también es un resultado: es lo que el usuario
@@ -197,6 +255,9 @@ export function learningView(rawState) {
     updated: count(state.updated),
     at: count(state.at),
     turn: count(state.turn),
+    // `-1` es "ninguna decisión": la interfaz compara esto con el `seq` del bloque que está pintando.
+    decisionKind: DECISION_KINDS.includes(state.decisionKind) ? state.decisionKind : '',
+    decisionSeq: Number.isFinite(state.decisionSeq) ? state.decisionSeq : -1,
   };
   if (cacheable) viewCache.set(rawState, view);
   return view;

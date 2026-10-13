@@ -36,14 +36,14 @@
  */
 import { z } from 'zod';
 
-import { OUTCOMES, PHASES, applyLearning, initialLearning, learningView } from './presentation.mjs';
+import { DECISION_KINDS, OUTCOMES, PHASES, applyLearning, initialLearning, learningView } from './presentation.mjs';
 
 /** La clave de la proyección. El cliente la lee con `useProjection('skillCompiler')`: no puede cambiar
  *  sin cambiar también `client.js`, y por eso está aquí arriba, a la vista. */
 export const LEARNING_KEY = 'skillCompiler';
 
 /** Sube solo cuando cambian los campos del estado o la semántica del plegado, y no al tocar la vista. */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 /**
  * El estado que se pliega y se persiste. Cada campo se repara por separado (`.catch`) y el objeto
@@ -61,6 +61,10 @@ export const learningStateSchema = z
     at: z.number().catch(0),
     turn: z.number().catch(0),
     seq: z.number().catch(-1),
+    // La última decisión humana, para que una lista pintada antes pueda marcarse como anterior a ella.
+    decisionCommand: z.string().catch(''),
+    decisionKind: z.string().catch(''),
+    decisionSeq: z.number().catch(-1),
   })
   .catch(() => initialLearning());
 
@@ -77,6 +81,9 @@ export const learningViewSchema = z.object({
   updated: z.number().int().nonnegative(),
   at: z.number().int().nonnegative(),
   turn: z.number().int().nonnegative(),
+  // `-1` es «ninguna decisión todavía»: es un centinela, no un valor negativo de verdad.
+  decisionKind: z.enum(DECISION_KINDS),
+  decisionSeq: z.number().int().gte(-1),
 });
 
 /** La unidad, tal y como la espera `ctx.sessionProjections.register(...)`. */

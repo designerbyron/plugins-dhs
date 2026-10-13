@@ -25,6 +25,7 @@ import { SessionProjectionRegistry } from '@deepseek-ai/dsh-session-projection';
 
 import {
   LEARNING_KEY,
+  STATE_VERSION,
   learningProjection,
   learningStateSchema,
   learningViewSchema,
@@ -105,6 +106,8 @@ describe('contrato de la proyección con el registro real', () => {
       updated: 0,
       at: 1_001,
       turn: 0,
+      decisionKind: '',
+      decisionSeq: -1,
     });
   });
 
@@ -115,7 +118,9 @@ describe('contrato de la proyección con el registro real', () => {
     // Un punto de control con la forma exacta que se encontró en disco para la sesión del incidente.
     const checkpoint = {
       [LEARNING_KEY]: {
-        ver: 1,
+        // La versión VIVA: con otra, el registro descarta la fila (y la reconstruye de los eventos, que es
+        // lo correcto — pero entonces esta prueba mediría otra cosa).
+        ver: STATE_VERSION,
         seq: 4_025,
         val: { phase: 'idle', outcome: '', id: '', pending: [], created: 0, updated: 0, at: 0, turn: 0, seq: 3_959 },
       },
@@ -132,9 +137,11 @@ describe('contrato de la proyección con el registro real', () => {
       updated: 0,
       at: 0,
       turn: 0,
+      decisionKind: '',
+      decisionSeq: -1,
     });
     // Y la fila refrescada conserva la versión del estado para el siguiente ciclo.
-    assert.equal(restored.checkpoint[LEARNING_KEY].ver, 1);
+    assert.equal(restored.checkpoint[LEARNING_KEY].ver, STATE_VERSION);
   });
 
   it('un punto de control ilegible no impide leer la sesión', async () => {
@@ -143,7 +150,7 @@ describe('contrato de la proyección con el registro real', () => {
 
     const corruptos = [42, 'texto', null, [], {}, { pending: 'no', created: 'muchos' }, { phase: 7, outcome: {}, id: [] }];
     for (const val of corruptos) {
-      const checkpoint = { [LEARNING_KEY]: { ver: 1, seq: 0, val } };
+      const checkpoint = { [LEARNING_KEY]: { ver: STATE_VERSION, seq: 0, val } };
       // Ninguna de las tres lecturas puede lanzar: el estado se repara, no se rechaza.
       const restored = registry.restore(checkpoint, [], 0, {}, 0);
       const checkpointValues = registry.viewCheckpoint(checkpoint, [LEARNING_KEY]);
@@ -160,7 +167,7 @@ describe('contrato de la proyección con el registro real', () => {
     registry.register(learningProjection());
     const checkpoint = { [LEARNING_KEY]: { ver: 99, seq: 0, val: { phase: 'idle' } } };
     const restored = registry.restore(checkpoint, [], 0, {}, 0);
-    assert.equal(restored.checkpoint[LEARNING_KEY].ver, 1, 'se reindexa con la versión viva');
+    assert.equal(restored.checkpoint[LEARNING_KEY].ver, STATE_VERSION, 'se reindexa con la versión viva');
     assert.equal(typeof restored.snapshot.values[LEARNING_KEY].phase, 'string');
   });
 

@@ -203,7 +203,42 @@ describe('plegado del estado', () => {
     for (const [key, value] of Object.entries(view)) {
       assert.equal(['string', 'number'].includes(typeof value), true, `${key} debería ser primitivo, es ${typeof value}`);
     }
-    assert.deepEqual(Object.keys(view).sort(), ['analyzers', 'at', 'created', 'id', 'outcome', 'phase', 'turn', 'updated']);
+    assert.deepEqual(Object.keys(view).sort(),
+      ['analyzers', 'at', 'created', 'decisionKind', 'decisionSeq', 'id', 'outcome', 'phase', 'turn', 'updated']);
+  });
+
+  it('una decisión humana deja marca, y solo si termina bien', () => {
+    const run = (name, commandId = 'cmd-1') => ({ type: 'command/run', seq: 10, data: { commandId, name } });
+    const done = (kind, commandId = 'cmd-1') => ({ type: 'command/done', seq: 11, data: { commandId, kind } });
+
+    // El nombre del comando se reconoce en sus DOS formas: el comando con argumento y la fila del menú,
+    // que lleva el id detrás. Son el mismo acto y tienen que dejar la misma marca.
+    for (const name of ['skill-aprobar', 'skill-aprobar-shell-and-source-editing-traps', 'skill-rechazar-x']) {
+      const marked = applyLearning(applyLearning(initialLearning(), run(name)), done('success'));
+      assert.equal(Number.isFinite(marked.decisionSeq), true);
+      assert.equal(marked.decisionSeq, 11, 'la marca es el seq del `command/done`: cualquier listado anterior es menor');
+      assert.equal(['aprobar', 'rechazar'].includes(marked.decisionKind), true);
+    }
+
+    // Un `command/done` con error significa que NO se movió nada: marcar ahí sería mentir.
+    const failed = applyLearning(applyLearning(initialLearning(), run('skill-aprobar')), done('error'));
+    assert.equal(failed.decisionSeq, -1);
+    assert.equal(failed.decisionCommand, '', 'el emparejamiento se suelta también cuando falla');
+
+    // Y un comando que no decide nada no toca el estado: la misma referencia, que es el contrato del registro.
+    const state = initialLearning();
+    assert.equal(applyLearning(state, run('skill-propuestas')), state);
+    assert.equal(applyLearning(state, done('success')), state);
+    assert.equal(applyLearning(state, { type: 'tool/call', data: { name: 'otra', callId: 'x' } }), state);
+  });
+
+  it('la marca de la decisión sobrevive a un estado restaurado sin esos campos', () => {
+    // Un punto de control de la versión anterior no tiene los campos: se rellenan y la vista sale válida.
+    const old = { phase: 'done', outcome: 'none', id: '', pending: [], created: 1, updated: 0, at: 5, turn: 2, seq: 9 };
+    const view = learningView(old);
+    assert.equal(view.decisionSeq, -1);
+    assert.equal(view.decisionKind, '');
+    assert.equal(view.created, 1, 'lo que sí traía el punto de control se conserva');
   });
 
   it('una fase o un resultado desconocidos no llegan a la interfaz', () => {

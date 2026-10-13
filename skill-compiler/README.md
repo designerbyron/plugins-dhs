@@ -163,6 +163,10 @@ argumentos que escribir: `skill-ver-<id>`, `skill-aprobar-<id>`, `skill-rechazar
 la decisión completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila
 desaparece del menú: una pendiente que ya no lo está no se sigue ofreciendo.
 
+Aprobar algo que ya está aprobado no es un fallo: responde «Ya estaba activa» y no mueve nada. Y cada
+decisión termina con la lista de pendientes al día, así que no hace falta volver a pedirla. Si un bloque de
+`/skill-propuestas` quedó antes de una decisión, se marca como anterior y se pliega solo.
+
 ### Cerrar un resultado
 
 Cada resultado de estos comandos se puede **cerrar**: la tarjeta lleva una **X** en la esquina derecha. Lo

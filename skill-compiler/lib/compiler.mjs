@@ -445,6 +445,20 @@ export function checkProposal(id, key, { root = defaultRoot() } = {}) {
   return { ...result, file };
 }
 
+/**
+ * Dónde está una skill AHORA: `proposed`, `approved`, `rejected`, o `null` si no existe.
+ *
+ * Existe por un defecto medido: aprobar dos veces respondía «no existe una propuesta X» y el usuario leía
+ * un fallo donde había un acto ya hecho. Saber en qué carpeta está convierte ese error en un mensaje que
+ * dice la verdad, sin que el estado deje de ser el mismo.
+ */
+export function locate(id, key, { root = defaultRoot() } = {}) {
+  for (const where of ['proposed', 'approved', 'rejected']) {
+    if (existsSync(join(root, 'projects', key, where, id, 'SKILL.md'))) return where;
+  }
+  return null;
+}
+
 /** Propuestas pendientes de un proyecto. Solo lectura: no decide nada. */
 export function pending({ root = defaultRoot(), key }) {
   return scanTree(join(root, 'projects', key, 'proposed'), 'propuesto').map((s) => ({ id: s.id, description: s.description, path: s.path }));

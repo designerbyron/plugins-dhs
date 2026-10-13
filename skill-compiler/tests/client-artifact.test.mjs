@@ -166,4 +166,20 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     const card = client.slice(client.indexOf('function SkillCommandCard'));
     assert.match(card, /h\('style', null, STYLES\)/, 'el CSS vive en el árbol, y cada pieza lo lleva consigo');
   });
+  it('una lista anterior a una decisión se marca, y no se adivina nada', () => {
+    // Medido con el usuario delante: aprobó una skill y el bloque que tenía debajo siguió enseñándola
+    // como pendiente. El texto de un resultado es el registro de lo que pasó, así que lo que se puede
+    // decir es que hubo una decisión POSTERIOR, y eso viaja en la proyección (plegada del log).
+    assert.match(client, /const LIST_COMMANDS = \['skill-propuestas', 'skill-ver'\]/);
+    assert.match(client, /view\.decisionSeq/, 'el dato viene de la proyección, no de inventarlo');
+    assert.match(client, /decision\.seq > seq/, 'la comparación es contra el seq del propio bloque');
+    assert.match(client, /Number\.isFinite\(node\?\.seq\)/, 'sin seq en el nodo no se compara');
+    assert.match(client, /className: 'skc-card-stale'/);
+    assert.match(client, /card_stale_approved/);
+    assert.match(client, /card_stale_rejected/);
+    // Y se pliega sola: una lista que ya no describe el almacén no ocupa media pantalla, pero sigue ahí.
+    assert.match(client, /const expanded = touched \? open : open && !stale/);
+    // La banda va fuera del cuerpo desplegable: se lee aunque la tarjeta esté colapsada.
+    assert.match(client, /role: 'note'/);
+  });
 });

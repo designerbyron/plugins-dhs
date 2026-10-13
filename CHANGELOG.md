@@ -4,6 +4,47 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.4.1] — 2026-10-13
+
+**Aprobar dos veces no es un fallo, y una lista no puede quedarse mintiendo.** Los dos defectos salieron de
+usar el flujo: aprobó una skill con el bloque de `/skill-propuestas` delante, lo vio seguir ahí, volvió a
+intentarlo y leyó `failed`.
+
+### Corregido — el segundo intento decía «failed» donde había un acto ya hecho
+
+- Aprobar algo que **ya está aprobado** responde `Ya estaba activa: <id>` y no mueve nada, en vez de
+  «no existe una propuesta» (que el cliente pintaba como un fallo). Igual al revés: apartar algo ya
+  apartado dice `Ya estaba apartada`.
+- Y cuando lo que se intenta no encaja con el estado real, se dice cuál es: aprobar algo en `rejected/`, o
+  apartar algo activo, explican qué pasa y por qué esa vía no se aplica.
+- La misma corrección en las **dos superficies humanas**: los comandos del harness y el CLI. Una regla, una
+  implementación: `locate(id, key, { root })` dice dónde está una skill ahora, y las dos la consultan.
+
+### Añadido — el resultado de decidir trae la lista al día
+
+- Aprobar o apartar termina con `Pendientes de tu aprobación (N)` y la lista (o «ninguna»). Así el humano ve
+  el efecto de lo que acaba de hacer sin volver a ejecutar `/skill-propuestas` — que era exactamente lo que
+  faltaba cuando el bloque de arriba seguía enseñando lo de antes.
+
+### Añadido — una lista anterior a una decisión se marca, y no engaña
+
+- El texto de un resultado es el registro de lo que pasó: no se reescribe. Lo que sí se puede saber —y es lo
+  que la interfaz necesita— es que **hubo una decisión posterior**. La proyección pliega ahora `command/run`
+  y `command/done` (emparejados por `commandId`, que es lo único que llevan en común) y expone
+  `decisionKind` + `decisionSeq`.
+- La tarjeta de `/skill-propuestas` y `/skill-ver` compara ese `seq` con el de su propio bloque: si la
+  decisión es posterior, muestra una banda («Aprobaste algo después de esta lista…») y se **pliega sola**
+  —sigue ahí, desplegable, pero no ocupa media pantalla describiendo un estado que ya no es—.
+- `STATE_VERSION` sube a **2**. Los puntos de control de la versión anterior se descartan, y eso no pierde
+  nada visible: el estado se recalcula de los eventos del log, así que la marca aparece también en las
+  sesiones ya existentes.
+
+### Medido
+
+- 223 pruebas (antes 217), suite hermética en verde y `doctor` verde.
+- El caso completo, reproducido contra el CLI real en una arena: la segunda aprobación responde «Ya estaba
+  activa» con exit 0 y el estado no se mueve; `reject` sobre algo activo explica que esa vía no se aplica.
+
 ## [1.4.0] — 2026-10-13
 
 **Decidir es elegir, no recordar sintaxis.** Medido con el usuario delante: `/skill-propuestas` enseñaba la

@@ -32,7 +32,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  approve, checkProposal, defaultRoot, listForProject, overview, pending, projectKey, reject,
+  approve, checkProposal, defaultRoot, listForProject, locate, overview, pending, projectKey, reject,
 } from '../lib/compiler.mjs';
 import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
 
@@ -137,6 +137,12 @@ switch (command) {
     const id = positional[0];
     if (!id) usage(2);
     const key = scope();
+    // Aprobar algo ya aprobado no es un fallo: es un acto que ya ocurrió. Medido con el usuario delante:
+    // volvió a aprobar al ver la skill todavía en la lista, y aquí leería «no existe una propuesta».
+    if (locate(id, key, { root }) === 'approved') {
+      process.stdout.write(`Ya estaba activa: ${id} en ${key}\n  No se ha cambiado nada.\n`);
+      break;
+    }
     const result = checkSkill(id, key);
     if (!result.ok) {
       process.stderr.write(`Aprobación RECHAZADA: la propuesta no pasa la puerta.\n`);
@@ -160,6 +166,15 @@ switch (command) {
     const id = positional[0];
     if (!id) usage(2);
     const key = scope();
+    const where = locate(id, key, { root });
+    if (where === 'rejected') {
+      process.stdout.write(`Ya estaba apartada: ${id} en ${key}\n  No se ha cambiado nada.\n`);
+      break;
+    }
+    if (where === 'approved') {
+      process.stderr.write(`«${id}» ya está activa en ${key}: reject solo se aplica a las propuestas pendientes.\n`);
+      process.exit(1);
+    }
     const moved = reject(id, key, { root });
     if (!moved.ok) { process.stderr.write(`No se pudo rechazar: ${moved.reason}\n`); process.exit(1); }
     process.stdout.write(`Rechazada ${id} (apartada en ${moved.path.replace(/[\\/]SKILL\.md$/, '')}).\n`);

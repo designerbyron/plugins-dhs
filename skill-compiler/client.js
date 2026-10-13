@@ -61,6 +61,13 @@ window.__ModuleLoader__.load({
      * línea y usan la tarjeta del host, que para eso basta.
      */
     const COMMAND_NAMES = ['skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar'];
+    /**
+     * Los comandos cuyo resultado es una LISTA que una decisión posterior deja atrás. Medido con el usuario
+     * delante: aprobó una skill y el bloque que tenía debajo siguió enseñándola como pendiente. El texto de
+     * un resultado es el registro de lo que pasó y no se reescribe, así que lo que se hace es decir que hay
+     * una decisión posterior — eso lo sabe el log, y por eso viaja en la proyección.
+     */
+    const LIST_COMMANDS = ['skill-propuestas', 'skill-ver'];
     /** Dónde se recuerda un resultado cerrado: la sesión de la página, que muere con ella. */
     const CLOSED_KEY = 'skc-closed';
     /** Tope de la lista de cerrados, para que no crezca sin fin en una sesión larga. */
@@ -89,6 +96,8 @@ window.__ModuleLoader__.load({
         card_error: 'falló',
         card_title: 'comando',
         card_unreadable: 'No se pudo leer el resultado: esta versión del anfitrión no entrega el comando a la tarjeta',
+        card_stale_approved: 'Aprobaste algo después de esta lista: vuelve a ejecutar /skill-propuestas para verla al día',
+        card_stale_rejected: 'Apartaste algo después de esta lista: vuelve a ejecutar /skill-propuestas para verla al día',
       },
       en: {
         analyzing: 'Analysing the work…',
@@ -111,6 +120,8 @@ window.__ModuleLoader__.load({
         card_error: 'failed',
         card_title: 'command',
         card_unreadable: 'Could not read the result: this host version does not hand the command to the card',
+        card_stale_approved: 'You approved something after this list: run /skill-propuestas again to see it current',
+        card_stale_rejected: 'You set something aside after this list: run /skill-propuestas again to see it current',
       },
     };
 
@@ -252,6 +263,16 @@ window.__ModuleLoader__.load({
   font: 400 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: pre-wrap; word-break: break-word;
 }
+/* La banda de una lista anterior a la última decisión. No es un error: es un aviso de que ese bloque ya
+   no describe el almacén, y va fuera del cuerpo desplegable para que se lea aunque esté colapsada. */
+.skc-card-stale {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: color-mix(in oklab, currentColor 10%, transparent);
+  font-size: 11.5px; line-height: 1.35;
+}
+.skc-card-stale svg { flex: 0 0 auto; opacity: 0.8; }
 @media (forced-colors: active) {
   .skc-card { border-color: CanvasText; background: Canvas; }
 }
@@ -303,6 +324,23 @@ window.__ModuleLoader__.load({
       return icon(['M18 6 6 18', 'M6 6l12 12']);
     }
 
+    function NoticeMark() {
+      return icon(['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z', 'M12 8v5', 'M12 16.5h.01']);
+    }
+
+    /**
+     * La última decisión humana, tal como la sirve la proyección: `{ kind, seq }`, o `null` si el
+     * anfitrión no ofrece ese servicio. No se adivina nada: sin dato, la tarjeta pinta como siempre.
+     */
+    function useDecision(useProjection) {
+      const view = typeof useProjection === 'function' ? useProjection(PROJECTION_KEY) : null;
+      if (!view || typeof view !== 'object') return null;
+      return {
+        kind: typeof view.decisionKind === 'string' ? view.decisionKind : '',
+        seq: Number.isFinite(view.decisionSeq) ? view.decisionSeq : -1,
+      };
+    }
+
     function ChevronMark({ open }) {
       return icon(open ? ['M6 15l6-6 6 6'] : ['M9 6l6 6-6 6']);
     }
@@ -323,8 +361,19 @@ window.__ModuleLoader__.load({
       const say = translator(t);
       const commandId = typeof node?.commandId === 'string' ? node.commandId : null;
       const text = typeof node?.outcome?.text === 'string' ? node.outcome.text : '';
+      const decision = useDecision(props.useProjection);
       const [closed, setClosed] = React.useState(() => commandId !== null && readClosed().includes(commandId));
       const [open, setOpen] = React.useState(() => text.includes('\n'));
+      const [touched, setTouched] = React.useState(false);
+
+      // Una lista es anterior a una decisión si el `seq` de esa decisión es mayor que el de su propio
+      // evento. Sin `seq` en el nodo no se compara: mejor no marcar que marcar por casualidad.
+      const isList = LIST_COMMANDS.includes(String(node?.name ?? ''));
+      const seq = Number.isFinite(node?.seq) ? node.seq : null;
+      const stale = isList && decision !== null && decision.seq > -1 && seq !== null && decision.seq > seq;
+      // Una lista obsoleta se pliega sola —ya no es la información que se pidió— y se despliega si el
+      // humano la pide. Marcar y colapsar es lo honesto: el bloque sigue ahí, pero no engaña a primera vista.
+      const expanded = touched ? open : open && !stale;
 
       // Las hojas de estilo se llevan en el árbol, como la de la píldora: desmontar la tarjeta las retira,
       // y cada una puede montarse sin la otra.
@@ -337,7 +386,7 @@ window.__ModuleLoader__.load({
 
       const state = node.outcome === null ? 'running' : (node.outcome.kind === 'error' ? 'error' : 'done');
       const name = typeof node.name === 'string' && node.name.length > 0 ? node.name : say('card_title');
-      const toggle = say(open ? 'card_collapse' : 'card_expand');
+      const toggle = say(expanded ? 'card_collapse' : 'card_expand');
 
       return h(React.Fragment, null,
         h('style', null, STYLES),
@@ -346,10 +395,13 @@ window.__ModuleLoader__.load({
             text === ''
               ? null
               : h('button', {
-                type: 'button', className: 'skc-card-icon', 'aria-expanded': open,
+                type: 'button', className: 'skc-card-icon', 'aria-expanded': expanded,
                 'aria-label': toggle, title: toggle,
-                onClick: () => setOpen((value) => !value),
-              }, h(ChevronMark, { open })),
+                onClick: () => {
+                  setTouched(true);
+                  setOpen(!expanded);
+                },
+              }, h(ChevronMark, { open: expanded })),
             h('span', { className: 'skc-card-name', title: name }, name),
             h('span', { className: 'skc-card-summary' }, say(`card_${state}`)),
             h('button', {
@@ -361,7 +413,12 @@ window.__ModuleLoader__.load({
               },
             }, h(CloseMark)),
           ),
-          open && text !== '' ? h('pre', { className: 'skc-card-body' }, text) : null,
+          stale
+            ? h('div', { className: 'skc-card-stale', role: 'note' },
+              h(NoticeMark),
+              h('span', null, say(decision.kind === 'rechazar' ? 'card_stale_rejected' : 'card_stale_approved')))
+            : null,
+          expanded && text !== '' ? h('pre', { className: 'skc-card-body' }, text) : null,
         ));
     }
 

@@ -51,6 +51,16 @@ cierra. Colapsar y cerrar son cosas distintas —colapsar lo deja a un clic, cer
 mientras dure la pestaña— y ninguna de las dos toca el log de la sesión ni el almacén del plugin. Dos
 ejecuciones del mismo comando dejan dos bloques y se cierran por separado: cerrar uno no cierra el otro.
 
+### Una lista que quedó atrás
+
+El resultado de un comando es el registro de lo que pasó **cuando se ejecutó**, y no se reescribe. Por eso,
+si después de una lista apruebas o apartas algo, ese bloque se marca: enseña una banda («Aprobaste algo
+después de esta lista…») y se pliega solo, para que no siga describiendo un almacén que ya cambió. Sigue
+ahí, desplegable, porque es lo que pasó; lo que no hace es fingir que sigue vigente.
+
+El estado al día lo tienes en el bloque de la decisión, que termina siempre con `Pendientes de tu aprobación
+(N)` y la lista.
+
 ### El modo de aprobación automática
 
 `/skill-auto activar` hace que las skills y los parches que se propongan en esa sesión se activen solos.
@@ -171,6 +181,8 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | `upstream` dice que cambió y quiero la versión nueva | Nuestra versión está adaptada | Vendoriza otra vez con el mismo id: se propone como actualización y, al aprobar, la anterior se aparta en `superseded/` |
 | La píldora del feedback visual no aparece nunca | El perfil no resolvió `zod`, o el servicio de proyección no está, o la unidad no cumplió el contrato (entonces **no se registra**) | `node bin/skill-compiler.mjs doctor`: dice si la proyección cumple el contrato y si el registro real proyecta. Con las herramientas funcionando, es un adorno ausente, no una avería |
 | Veo la lista de pendientes pero no encuentro cómo elegir una | El comando con argumentos hay que escribirlo entero, y el compositor no ofrece lista pulsable para los argumentos de un comando del host | Escribe `/` y elige la fila `skill-aprobar-<id>` (o `skill-ver-…`, `skill-rechazar-…`). `/skill-propuestas` las anuncia por su nombre exacto. Si no aparecen en el menú, ejecútalo: es lo que las arma |
+| Apruebo algo y sigue apareciendo como pendiente | El bloque que tienes delante se pintó antes de la decisión: su texto es lo que había entonces | El bloque de la decisión trae la lista al día al final. Si el bloque viejo no se marcó como anterior, es que la decisión llegó por una vía que no pasa por el log de la sesión (el CLI en otra terminal, o una aprobación automática): vuelve a ejecutar `/skill-propuestas` |
+| Aprobar dos veces dice que ya está activa | No es un fallo: es idempotente a propósito | Nada que hacer. El mensaje dice también cómo queda la lista |
 | El resultado de un comando no tiene la X para cerrarlo | El anfitrión no declara el slot `conversation.chat.commandview`, o la pieza de cliente no se recargó | Recarga la página (F5). Si sigue sin X, esa versión del harness pinta la tarjeta sin cierre —el resultado se lee igual— y `doctor` confirma que la pieza declara sus dos dependencias de cliente |
 | Los comandos `/skill-*` no aparecen en el compositor | El perfil no monta el registro de comandos (`dsh-commands`), o el plugin no se activó | `dsh --profile web --dump-config` debe listar `- id: commands`. Con el plugin activo y ese servicio presente, los comandos se registran; sin él, el plugin sigue sirviendo skills y herramientas |
 | Apruebo una skill y el agente no la ve | La invalidación del catálogo no llegó: el registro de skills **cachea y no tiene TTL** | Es lo que cubre 1.3.0 (aviso al aprobar + vigilancia del almacén). Si reaparece: `/skill-propuestas` dice qué está activo, y `doctor` ejecuta la puerta de frescura contra el registro real |

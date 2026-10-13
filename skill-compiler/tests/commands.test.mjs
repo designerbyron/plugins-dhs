@@ -139,7 +139,8 @@ describe('comandos · /skill-aprobar', () => {
     const { byName } = commands(s.root);
     const result = byName['skill-aprobar'].handler({ agent, rawInput: 'no-existe' });
     assert.equal(result.kind, 'error');
-    assert.match(result.text, /no existe una propuesta/);
+    assert.match(result.text, /No hay ninguna propuesta/);
+    assert.match(result.text, /skill-propuestas/, 'dice dónde mirar, en vez de solo que no existe');
   });
 
   it('respeta la puerta: una propuesta que no la pasa no se aprueba, y nada se mueve', () => {
@@ -296,6 +297,61 @@ describe('comandos · filas de pendientes', () => {
     assert.match(result.text, /Aprobarla con estos avisos exige decirlo/);
     // Y el contenido entero, para poder leer antes de decidir.
     assert.match(result.text, /## When to Use/);
+  });
+
+  it('aprobar dos veces no es un fallo: la segunda dice que ya estaba activa', () => {
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    const catalog = fakeCatalog();
+    // La fila se captura UNA vez: es la misma acción, y aprobar la retira del conjunto de pendientes.
+    const fila = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) })
+      .find((row) => row.name === 'skill-aprobar-measured-decision-check');
+
+    const primera = fila.handler({ agent });
+    assert.equal(primera.kind, 'success');
+    // Medido con el usuario delante: el segundo intento respondía «failed» — un mensaje que parecía decir
+    // que la primera aprobación no había servido. Ahora dice lo que pasó, sin mover nada.
+    const segunda = fila.handler({ agent });
+    assert.equal(segunda.kind, 'success', 'aprobar algo ya aprobado no es un error');
+    assert.match(segunda.text, /Ya estaba activa/);
+    assert.match(segunda.text, /No se ha cambiado nada/);
+    assert.equal(catalog.count(), 1, 'la segunda vez no vuelve a avisar al catálogo: no cambió nada');
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check', 'SKILL.md')), true);
+  });
+
+  it('el resultado de decidir trae la lista al día, para no tener que volver a pedirla', () => {
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    propose(goodInput({ id: 'otro-tema-distinto', description: 'Otra cosa sin relación con lo anterior.', whenToUse: 'Cuando haga falta otra cosa.' }),
+      { root: s.root, curated: s.curated, cwd: CWD });
+    const { byName } = commands(s.root);
+
+    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'measured-decision-check' });
+    assert.equal(result.kind, 'success');
+    assert.match(result.text, /Pendientes de tu aprobación \(1\):/);
+    assert.match(result.text, /otro-tema-distinto/);
+    assert.equal(result.text.includes('measured-decision-check — ') && /Pendientes[\s\S]*measured-decision-check — /.test(result.text), false,
+      'la recién aprobada no puede seguir apareciendo como pendiente');
+
+    // Y cuando no queda nada, se dice sin rodeos.
+    const ultima = byName['skill-aprobar'].handler({ agent, rawInput: 'otro-tema-distinto' });
+    assert.match(ultima.text, /Pendientes de tu aprobación \(0\):[\s\S]*ninguna/);
+  });
+
+  it('aprobar algo apartado, o apartar algo activo, lo dice con el estado real', () => {
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    const { byName } = commands(s.root);
+    byName['skill-rechazar'].handler({ agent, rawInput: 'measured-decision-check' });
+
+    const apartada = byName['skill-aprobar'].handler({ agent, rawInput: 'measured-decision-check' });
+    assert.equal(apartada.kind, 'error');
+    assert.match(apartada.text, /está apartada/);
+    assert.match(apartada.text, /rejected/);
+
+    const deNuevo = byName['skill-rechazar'].handler({ agent, rawInput: 'measured-decision-check' });
+    assert.equal(deNuevo.kind, 'success', 'apartar algo ya apartado tampoco es un fallo');
+    assert.match(deNuevo.text, /Ya estaba apartada/);
   });
 
   it('apartar desde la fila no borra nada', () => {

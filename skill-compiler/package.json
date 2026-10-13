@@ -1,6 +1,6 @@
 {
   "name": "@local/skill-compiler",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "description": "LifeCode Skill-Compiler: compila el conocimiento reutilizable de una tarea en una skill propuesta, ligada a su proyecto y fuera de todo repositorio.",

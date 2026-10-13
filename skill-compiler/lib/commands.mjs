@@ -30,7 +30,7 @@
 import { readFileSync } from 'node:fs';
 
 import { AUTO_COMMAND, autoApproveFromEvents, parseAutoCommand } from './auto-approve.mjs';
-import { approve, checkProposal, defaultRoot, listForProject, pending, projectKey, reject } from './compiler.mjs';
+import { approve, checkProposal, defaultRoot, listForProject, locate, pending, projectKey, reject } from './compiler.mjs';
 import { scopeOf } from './definitions.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
 
@@ -49,6 +49,20 @@ const guarded = (run) => (invocation) => {
 const bullet = (rows) => rows.map((row) => `  · ${row.id} — ${row.description ?? '(sin descripción)'}`).join('\n');
 
 const NO_SCOPE = 'Sin ámbito: esta sesión no tiene un directorio de trabajo utilizable.';
+
+/**
+ * El estado de la lista, pegado al resultado de decidir: así el humano ve el efecto de lo que acaba de
+ * hacer sin volver a ejecutar `/skill-propuestas`. Medido con el usuario delante: aprobó una skill, su
+ * bloque de propuestas siguió enseñándola como pendiente y volvió a intentarlo.
+ */
+const remaining = (root, key) => {
+  const waiting = pending({ root, key });
+  return [
+    '',
+    `Pendientes de tu aprobación (${waiting.length}):`,
+    waiting.length ? bullet(waiting) : '  · ninguna',
+  ];
+};
 
 /** El ámbito sale del cwd de la sesión, igual que en las herramientas: el humano no lo declara. */
 export function scopeOfAgent(agent) {
@@ -100,6 +114,24 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   const wanted = String(id ?? '').trim();
   if (wanted === '') return bad('Falta el id. Uso: /skill-aprobar <id> [--force]');
 
+  // Aprobar algo que ya está aprobado no es un fallo: es un acto que ya ocurrió. Decirlo con esas
+  // palabras evita el «failed» que hacía pensar que la primera aprobación no había servido.
+  const where = locate(wanted, key, { root });
+  if (where === 'approved') {
+    return ok([
+      `Ya estaba activa: ${wanted} [${key}]`,
+      'No se ha cambiado nada.',
+      ...remaining(root, key),
+    ].join('\n'));
+  }
+  if (where === 'rejected') {
+    return bad([
+      `«${wanted}» está apartada en ${key}, no pendiente de aprobación.`,
+      'Su copia sigue en rejected/: recuperarla es un acto manual, y a propósito.',
+    ].join('\n'));
+  }
+  if (where === null) return bad(`No hay ninguna propuesta «${wanted}» en ${key}. Míralas con /skill-propuestas.`);
+
   // La misma puerta que la CLI: sin ella, esta vía sería una vía de aprobación sin validación.
   const check = checkProposal(wanted, key, { root });
   if (!check.ok) {
@@ -132,6 +164,7 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     '',
     'Ya la sirve el catálogo de este proyecto: el agente la ve en su siguiente paso, sin reiniciar.',
     `Invocarla tú: /${wanted}`,
+    ...remaining(root, key),
   ].join('\n'));
 }
 
@@ -140,6 +173,18 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
   if (wanted === '') return bad('Falta el id. Uso: /skill-rechazar <id>');
+
+  const where = locate(wanted, key, { root });
+  if (where === 'rejected') {
+    return ok([`Ya estaba apartada: ${wanted} [${key}]`, 'No se ha cambiado nada.', ...remaining(root, key)].join('\n'));
+  }
+  if (where === 'approved') {
+    return bad([
+      `«${wanted}» ya está activa en ${key}: rechazar sólo se aplica a las propuestas pendientes.`,
+      'Lo aprendido y aprobado se aparta a mano, y a propósito: no hay un comando que lo deshaga sin querer.',
+    ].join('\n'));
+  }
+  if (where === null) return bad(`No hay ninguna propuesta «${wanted}» en ${key}. Míralas con /skill-propuestas.`);
 
   const moved = reject(wanted, key, { root });
   if (!moved.ok) return bad(`No se pudo apartar ${wanted}: ${moved.reason}`);
@@ -151,6 +196,7 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
     `  ${moved.path.replace(/[\\/]SKILL\.md$/, '')}`,
     '',
     'No se ha borrado nada: sigue en el almacén por si quieres recuperarla.',
+    ...remaining(root, key),
   ].join('\n'));
 }
 
