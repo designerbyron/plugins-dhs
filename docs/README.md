@@ -24,6 +24,12 @@
 |---|---|
 | `skill-compiler` | [`README.md`](../skill-compiler/README.md) · [`docs/`](../skill-compiler/docs/) (operación, dependencias, desarrollo, feedback visual, confianza) |
 
+## Auditorías
+
+| Documento | Qué resuelve |
+|---|---|
+| [`AUDITORIA-2026-10-13-cruces-entre-repos.md`](AUDITORIA-2026-10-13-cruces-entre-repos.md) | Qué se cruzó entre repositorios tras el desarrollo y las pruebas, con la evidencia, lo ya resuelto y el procedimiento pendiente para la biblioteca global |
+
 ## Planes de trabajo
 
 - [`plans/`](../plans/) — planes con su análisis, sus fases y su estado. Los autorizados llevan su `.sha256`.
