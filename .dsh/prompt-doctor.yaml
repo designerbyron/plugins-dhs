@@ -1,0 +1,52 @@
+# prompt-doctor — configuración de ESTE repositorio
+#
+# Declara los pilares con el diseño real de este repositorio, para que el panel de gobernanza audite lo que
+# de verdad hay aquí y no un convenio ajeno. Un config de workspace sustituye entero al fallback global.
+
+source_of_truth: AGENTS.md + docs/ (la gobernanza de esta colección)
+
+protocol:
+  - entiende la necesidad real antes de tocar código; si hay ambigüedad de bajo riesgo, decide y di qué asumiste
+  - solución robusta y definitiva antes que parche; si algo es temporal, decláralo como temporal
+  - nada se activa solo — lo que el modelo lee se propone y espera aprobación humana
+  - mide antes de afirmar; "terminado" va con la evidencia que lo sostiene
+  - valida con `npm test`, la suite hermética y `doctor` antes de dar nada por terminado
+
+min_lines: 15
+pillars:
+  - id: governing_rules
+    label: governing rules
+    paths:
+      - AGENTS.md
+      - docs/01-governing-rules.md
+  - id: master_vision
+    label: master vision
+    paths:
+      - docs/02-master-vision.md
+  - id: architecture
+    label: architecture
+    paths:
+      - docs/03-architecture.md
+  - id: golden_rules
+    label: golden rules
+    paths:
+      - docs/05-golden-rules.md
+  - id: design_system
+    label: design system
+    paths:
+      - docs/design-system.md
+  - id: memory
+    label: MEMORY.md
+    paths:
+      - MEMORY.md
+  - id: doc_index
+    label: docs index
+    paths:
+      - docs/README.md
+
+never:
+  - escribir estado dentro del repositorio del usuario (lo aprendido vive en $DSH_HOME, por proyecto)
+  - hacer que un modelo pueda aprobar lo que él mismo propuso
+  - tocar datos, publicar o cambiar la biblioteca compartida (~/.dsh/) sin OK explícito
+  - dejar artefactos de prueba en el almacén real o en el repositorio
+  - duplicar una regla que ya vive en lib/ en una superficie nueva
