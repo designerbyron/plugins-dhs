@@ -179,11 +179,16 @@ No son olvidos; son decisiones, y cada una tiene su motivo:
 | `git clone` del origen | Ejecuta hooks y trae código. Se descarga markdown por HTTPS y nada más |
 | Fusionar automáticamente cuando el origen cambie | Nuestra versión está adaptada a propósito: una fusión automática destruiría la adaptación |
 | Aprobar desde una herramienta del modelo | Si el modelo pudiera auto-aprobarse, la revisión humana sería decorativa |
-| Interfaz gráfica | La CLI y las herramientas cubren el flujo; una UI añadiría superficie sin resolver nada que hoy duela |
+| Una bandeja con estado propio dentro de la aplicación | Una proyección es un plegado puro de eventos y no puede leer el almacén; un remoto exigiría una cadena de compilación de cliente. Lo que sí existe, desde 1.4.0, es la decisión **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjeta propia para el resultado. El análisis completo está en [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md) |
 | Consolidar skills solapadas automáticamente | Reescribir prosa sin pruebas y sin humano delante es cómo se pierde conocimiento |
 
 ## Estado conocido
 
+- **Pendiente, con plan escrito**: las acciones dentro de la tarjeta del resultado —checkbox por pendiente,
+  aprobar en lote con paso a paso, y las mismas acciones en `/skill-ver`—. El análisis con el contrato
+  medido (qué superficie admite qué), las fases y el experimento que decide están en
+  [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md).
+  Nada de eso está implementado: lo que hay hoy es la fila por pendiente en el menú y la tarjeta con su X.
 - `index.js` no tiene cobertura directa (no se puede importar fuera del harness). Es la razón de que sea
   fino; su verificación es la instalación real y el arranque del perfil.
 - Las pruebas no cubren el comportamiento del **harness** (que la sección entre en el prompt, que el

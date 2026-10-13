@@ -26,6 +26,7 @@ skill es **nueva** o si se **actualizó** una existente.
 | [`docs/OPERACION.md`](docs/OPERACION.md) | Referencia de uso: herramientas, CLI, variables, qué se ve en la interfaz, y qué hacer cuando algo no cuadra |
 | [`docs/DESARROLLO.md`](docs/DESARROLLO.md) | Cómo ampliarlo sin romperlo: mapa de ficheros, cómo añadir reglas, herramientas y piezas de interfaz, pruebas, versionado |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Historial de versiones |
+| [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md) | **Trabajo pendiente**: acciones en la tarjeta del resultado y decidir en lote (checkbox, paso a paso), con el contrato medido y las fases. Sin implementar |
 
 ## Las dos vías, y en qué se diferencian
 
