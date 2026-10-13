@@ -28,7 +28,7 @@
 
 | Documento | Qué resuelve |
 |---|---|
-| [`AUDITORIA-2026-10-13-cruces-entre-repos.md`](AUDITORIA-2026-10-13-cruces-entre-repos.md) | Qué se cruzó entre repositorios tras el desarrollo y las pruebas, con la evidencia, lo ya resuelto y el procedimiento pendiente para la biblioteca global |
+| [`AUDITORIA-2026-10-13-cruces-entre-repos.md`](AUDITORIA-2026-10-13-cruces-entre-repos.md) | Qué se cruzó entre repositorios tras el desarrollo y las pruebas: ocho hallazgos con su evidencia, la limpieza ejecutada (cinco skills de proyecto devueltas a su ámbito) y el procedimiento, reutilizable, para mover conocimiento entre capas |
 
 ## Planes de trabajo
 

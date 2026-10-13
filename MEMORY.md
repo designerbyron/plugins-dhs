@@ -23,8 +23,8 @@ Memoria durable del repositorio. No es el historial de una sesión: es lo que ha
 | Tema | Estado |
 |---|---|
 | Probar en vivo el **panel de decisiones en lote** (casillas + confirmación) en la tarjeta | Implementado en v1.5.0; falta el clic real. Si el anfitrión no expusiera `commands.execute` a un plugin de cliente, la tarjeta lo dirá con el motivo |
-| **Adiciones a tres skills de la biblioteca global** (tenants) | Contenido redactado, **sin aplicar**: toca `~/.dsh/skills` (compartida) y espera OK explícito |
-| **Cruces entre repos** | Auditados el 2026-10-13: el cruce está en la biblioteca global (`~/.dsh/skills`) y en el README de `prompt-doctor`, no en el store del plugin. Ver [`docs/`](docs/README.md) y el plan de limpieza |
+| **Adiciones a tres skills de tenants** (`hostinger-tenant-release`, `tenant-onboarding-provision`, `tenant-maintenance-update`) | Contenido redactado, **sin aplicar**. Las tres viven ahora en `approved/` del proyecto `saas-corporative`, así que las adiciones se aplican **ahí** (ámbito del proyecto), no en la biblioteca compartida |
+| **Cruces entre repos** | **Resuelto el 2026-10-13.** El cruce estaba fuera del plugin: cinco skills de proyecto en la biblioteca global y una nota del README de `prompt-doctor` que citaba la ruta de un proyecto. Ambas fuentes cerradas; evidencia en [`docs/AUDITORIA-2026-10-13-cruces-entre-repos.md`](docs/AUDITORIA-2026-10-13-cruces-entre-repos.md) |
 | Capturas y tarjetas del menú `/` no admiten decoración por fila | Medido y cerrado: no se reintenta |
 
 ## Decisiones que no se vuelven a discutir

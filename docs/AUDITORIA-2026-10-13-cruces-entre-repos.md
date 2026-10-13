@@ -44,11 +44,44 @@ store está bien y el `cwd` decide correctamente—. El cruce tenía dos fuentes
 | 7 | Nota del README global reescrita **sin la ruta del proyecto**: el procedimiento interactivo vive en el `.dsh/skills/prompt-doctor` **del propio workspace**, si lo trae, y **no es global** | Un agente que lea ese README ya no aprende la ruta de otro repositorio |
 | — | Defecto colateral encontrado al verificar: el panel imprimía `[object Object]` porque el parser YAML del hook (subconjunto: `clave: valor`) leía un ítem del protocolo con dos puntos internos como si fuera un mapa | Reformulado con raya; verificado en la salida del panel |
 
-## Pendiente, y por qué no se hizo aquí
+## Ejecutado el mismo día (con OK explícito): las cinco skills, a su ámbito
 
-**Mover las 5 skills de proyecto fuera de la biblioteca global** (hallazgo 6). Es un cambio en la biblioteca
-**compartida** del home, y por la regla 7 de [`01-governing-rules.md`](01-governing-rules.md) requiere OK
-explícito y respaldo previo. Procedimiento propuesto, en este orden:
+Autorizado por el autor del plugin («sí, muévelas al ámbito del proyecto saas-corporative, con respaldo y
+verificación antes de retirar nada»), se ejecutó el procedimiento en dos fases, cada una con su medición:
+
+| Paso | Qué se hizo | Verificación |
+|---|---|---|
+| A1 | Huella SHA-256 de cada una de las 5 carpetas (fichero a fichero) | — |
+| A2 | Copia al ámbito del proyecto: `~/.dsh/skill-compiler/projects/saas-corporative-a3c393fa/approved/<id>/`, con su `meta.json` compuesto a partir del frontmatter | Huella de la copia **idéntica** al original en las cinco |
+| A3 | Catálogo del proyecto dueño, leído con el **mismo `skillProvider`** que usa el harness | **17 skills** (12 + las 5): las cinco, presentes |
+| B1 | Apartadas de la biblioteca global a `~/.dsh/backups/skills-retiradas-2026-10-13/` (**renombradas, nunca borradas**), sólo tras comprobar que la copia era idéntica | Huella idéntica al store en las cinco; `approved/` nunca se tocó |
+| B2 | Biblioteca global | **20 skills** visibles (+`.system`); 20 + 5 apartadas = las 25 de antes: **no falta ninguna otra** |
+| B3 | El plugin, ya con las skills en su ámbito | `doctor`: «todo en su sitio, el plugin puede activarse»; 228 pruebas en verde |
+
+### Corrección del diagnóstico, medida al ejecutar
+
+La capa que propagaba el cruce **no** era el provider del plugin: al leer el catálogo con `skillProvider`,
+el proyecto `plugins-dhs` devolvía **0 skills** —el provider sirve exclusivamente las aprobadas del proyecto
+actual—. Las cinco llegaban al agente por la **biblioteca global del harness** (`~/.dsh/skills`), que se
+carga en toda sesión, con plugin o sin él. Es decir: el mecanismo del plugin nunca estuvo cruzado, y la
+limpieza correcta era exactamente la que se hizo: vaciar de la capa global lo que es de un proyecto, y
+dejarlo en el ámbito que el plugin sirve sólo a su dueño.
+
+### Efecto sobre el trabajo pendiente
+
+Las tres skills de tenants que esperaban adiciones (`hostinger-tenant-release`,
+`tenant-onboarding-provision`, `tenant-maintenance-update`) **ya no están en la biblioteca compartida**:
+viven en `approved/` del proyecto `saas-corporative`. Las adiciones, cuando se apliquen, van ahí — ámbito
+del proyecto, fuera del repositorio, y sin tocar la capa que ven todos los proyectos.
+
+## Lo que no se hizo: mover `prompt-doctor`
+
+Decisión del autor: la skill interactiva `prompt-doctor` **se queda por proyecto** (hoy, en el repositorio de
+`saas-corporative`). No se copia a la biblioteca global.
+
+## Procedimiento que se siguió (queda escrito para reutilizarlo)
+
+Por si hay que mover más conocimiento entre capas, éste fue el orden, y el porqué:
 
 1. **Respaldo** de las cinco carpetas con su hash.
 2. **Copia** a `~/.dsh/skill-compiler/projects/saas-corporative-a3c393fa/approved/<id>/` — el sitio que el
@@ -61,8 +94,5 @@ explícito y respaldo previo. Procedimiento propuesto, en este orden:
 5. Dejar en la biblioteca global **sólo** lo que aplica a cualquier proyecto (`data-backup-and-restore`,
    `live-host-release`, `windows-git-bash-commands`, las de sesiones y hashes, `deepseek-*`, …).
 
-Queda también, como decisión aparte: la skill interactiva `prompt-doctor` vive **sólo** en el repositorio de
-`saas-corporative`. En `plugins-dhs` el panel funciona (mitad automática, es el hook global) pero los modos
-interactivos (`audit`, `init`, `doctor`, `todo`, `export`) no están disponibles. Si se quieren en toda la
-máquina, lo correcto es una decisión explícita: copiarla a `~/.dsh/skills/` (global de verdad, porque
-gobierna cualquier proyecto) o dejarla por proyecto.
+La verificación se hace **con el provider del plugin**, no reimplementando el descubrimiento: es la misma
+implementación que le sirve el catálogo al agente.
