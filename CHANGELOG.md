@@ -29,6 +29,20 @@ host: el flujo de autorización existía, pero su superficie era una nota al pie
 - `/skill-ver` (y la fila de leer) enseña el **veredicto de la puerta**: los fallos que impiden aprobar y los
   avisos que exigirán `--force`. Antes eso sólo se descubría al intentar aprobar.
 
+### Añadido — un resultado se puede cerrar
+
+- **La tarjeta del resultado, con una X en la esquina derecha.** Medido con el usuario delante: los bloques
+  de `/skill-propuestas` y `/skill-ver` se podían colapsar, no cerrar, y se apilaban. Se registra una
+  entrada **keyed** en `conversation.chat.commandview` —el slot que el nodo `command` del chat declara por
+  nombre de comando—, que es la forma soportada por el contrato del cliente: sin reclamar el nodo entero
+  (una clave tiene un solo ocupante) y sin tocar el DOM de nadie.
+- El cierre es por **`commandId`** —dos ejecuciones del mismo comando se cierran por separado— y se
+  recuerda en la sesión de la pestaña: es una preferencia de vista, no un dato, y no toca el log ni el
+  almacén.
+- La tarjeta es accesible: botón de verdad con `aria-label` y `title`, visible al puntero y al foco, con el
+  foco dibujado; el resultado se pinta como texto, nunca como HTML.
+- `@deepseek-ai/dsh-client-ui-chat` se declara en `dsh.client.inject`: es el paquete que declara el slot.
+
 ### Cambiado
 
 - Las tres acciones (`viewProposal`, `approveProposal`, `rejectProposal`) viven en `lib/commands.mjs` y las
@@ -41,7 +55,9 @@ host: el flujo de autorización existía, pero su superficie era una nota al pie
 
 ### Medido
 
-- 209 pruebas (antes 196), con la suite hermética en verde.
+- 217 pruebas (antes 196), con la suite hermética en verde: las 8 del artefacto de interfaz cubren la
+  tarjeta —registro keyed, accesibilidad de la X, memoria del cierre, texto y no HTML, y que su fallo no
+  puede llevarse el registro de la píldora—, y `doctor` sigue verde con 14 comprobaciones.
 - El registro de comandos devuelve el disposer exacto de cada alta y emite `commands/change` al registrar y
   al retirar: comprobado en el código que se envía y cubierto en `tests/activation.test.mjs` con un registro
   en miniatura que honra el disposer (las filas aparecen al pedir el catálogo, se retiran al aprobar, y se

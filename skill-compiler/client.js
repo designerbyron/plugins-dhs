@@ -8,6 +8,11 @@
  *   · **Al terminar** — qué pasó de verdad: skill **nueva**, **actualizada**, sin cambios, rechazada o
  *     bloqueada, con el nombre de la skill. El resultado se lee del estado, no de que una animación
  *     acabe: si la transición se interrumpe, el estado semántico ya es el correcto.
+ *   · **Cada resultado de nuestros comandos, con una X para cerrarlo.** Medido con el usuario delante:
+ *     `/skill-propuestas` deja bloques largos en el flujo y sólo se podían colapsar. Se registra una
+ *     entrada keyed en `conversation.chat.commandview` —el slot que el nodo `command` del chat declara
+ *     por nombre de comando—, así que la tarjeta es nuestra: se lee igual y se cierra. Lo cerrado se
+ *     recuerda en la sesión de la página: es una preferencia de vista, no un dato del plugin.
  *
  * Decisiones que vienen de la guía de UI/UX, no del gusto:
  *
@@ -44,6 +49,22 @@ window.__ModuleLoader__.load({
     const PROJECTION_KEY = 'skillCompiler';
     /** El slot que la guía de plugins recomienda: tiene espacio asignado y no invade controles. */
     const SLOT = 'conversation.composer.dock';
+    /**
+     * El slot keyed que el nodo `command` del chat declara por nombre de comando. El host despacha por
+     * `entryKey` contra la `key` del registro y cae a su propia tarjeta si ninguna coincide: registrar
+     * aquí es la forma soportada de decidir cómo se pinta un resultado, y la única que permite cerrarlo.
+     */
+    const COMMAND_VIEW_SLOT = 'conversation.chat.commandview';
+    /**
+     * Los comandos nuestros que dejan un bloque en el flujo. Se registra una entrada por nombre porque el
+     * despacho del slot es por nombre exacto; las filas de pendientes (`skill-aprobar-<id>`) escriben una
+     * línea y usan la tarjeta del host, que para eso basta.
+     */
+    const COMMAND_NAMES = ['skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar'];
+    /** Dónde se recuerda un resultado cerrado: la sesión de la página, que muere con ella. */
+    const CLOSED_KEY = 'skc-closed';
+    /** Tope de la lista de cerrados, para que no crezca sin fin en una sesión larga. */
+    const CLOSED_MAX = 200;
 
     /** Textos. Se registran en el servicio de idioma del anfitrión; abajo hay reserva por si falla. */
     const DICTIONARIES = {
@@ -60,6 +81,14 @@ window.__ModuleLoader__.load({
         rejected_full: 'No se creó ninguna skill',
         blocked_full: 'Bloqueado: el origen traía contenido peligroso',
         total: 'En esta sesión',
+        card_close: 'Cerrar este resultado',
+        card_expand: 'Mostrar el resultado',
+        card_collapse: 'Ocultar el resultado',
+        card_running: 'en curso',
+        card_done: 'hecho',
+        card_error: 'falló',
+        card_title: 'comando',
+        card_unreadable: 'No se pudo leer el resultado: esta versión del anfitrión no entrega el comando a la tarjeta',
       },
       en: {
         analyzing: 'Analysing the work…',
@@ -74,6 +103,14 @@ window.__ModuleLoader__.load({
         rejected_full: 'No skill was created',
         blocked_full: 'Blocked: the origin carried dangerous content',
         total: 'This session',
+        card_close: 'Close this result',
+        card_expand: 'Show the result',
+        card_collapse: 'Hide the result',
+        card_running: 'running',
+        card_done: 'done',
+        card_error: 'failed',
+        card_title: 'command',
+        card_unreadable: 'Could not read the result: this host version does not hand the command to the card',
       },
     };
 
@@ -175,7 +212,158 @@ window.__ModuleLoader__.load({
 @media (forced-colors: active) {
   .skc-pill { border-color: CanvasText; background: Canvas; color: CanvasText; }
 }
+
+/* ── la tarjeta de un resultado de comando ──────────────────────────────────────────────────────
+   Mismo criterio de color que la píldora: el texto hereda del anfitrión y todo se deriva de
+   currentColor, así que funciona en los dos temas sin fijar ni un token. La X vive en la esquina
+   derecha y no desaparece: en el borde del bloque se ve al pasar el puntero o al enfocarla, que es
+   justo cuando se busca. */
+.skc-card {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 2px 0; padding: 7px 9px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, currentColor 16%, transparent);
+  background: color-mix(in oklab, currentColor 4%, transparent);
+  color: inherit;
+  font: 500 12.5px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.skc-card-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.skc-card-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;
+}
+.skc-card-summary { opacity: 0.65; font-size: 11.5px; white-space: nowrap; }
+.skc-card-close { margin-left: auto; }
+.skc-card-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0;
+  border: 0; border-radius: 6px; background: transparent; color: inherit;
+  opacity: 0.55; cursor: pointer;
+  transition: opacity 160ms ease, background 160ms ease;
+}
+.skc-card-icon:hover, .skc-card-icon:focus-visible {
+  opacity: 1; background: color-mix(in oklab, currentColor 12%, transparent);
+}
+.skc-card-icon:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.skc-card-body {
+  margin: 0; padding: 8px 10px; max-height: 340px; overflow: auto;
+  border-radius: 8px;
+  background: color-mix(in oklab, currentColor 5%, transparent);
+  font: 400 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
+@media (forced-colors: active) {
+  .skc-card { border-color: CanvasText; background: Canvas; }
+}
 `;
+
+    /* ── la tarjeta de resultados: lo que el anfitrión no tiene, una X para cerrarla ─────────────── */
+
+    /**
+     * Traduce una clave nuestra, con reserva. El idioma puede no estar registrado —o el anfitrión puede no
+     * pasarnos `t`—, así que nunca se enseña una clave cruda.
+     */
+    function translator(t) {
+      return (key) => {
+        if (typeof t === 'function') {
+          try {
+            const value = t(key);
+            if (typeof value === 'string' && value.length > 0 && value !== key) return value;
+          } catch { /* el anfitrión decide; aquí sólo se evita romper */ }
+        }
+        return FALLBACK[key] ?? key;
+      };
+    }
+
+    /** Los resultados cerrados, tal como los recuerda esta pestaña. Nunca lanza. */
+    function readClosed() {
+      try {
+        const raw = window.sessionStorage.getItem(CLOSED_KEY);
+        const list = raw === null ? [] : JSON.parse(raw);
+        return Array.isArray(list) ? list.filter((entry) => typeof entry === 'string') : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function writeClosed(ids) {
+      try {
+        window.sessionStorage.setItem(CLOSED_KEY, JSON.stringify(ids.slice(-CLOSED_MAX)));
+      } catch { /* sin almacenamiento: se cierra igual, sólo que no se recuerda */ }
+    }
+
+    /** Cerrar es por `commandId`: identifica esa ejecución y sólo esa, así que cerrar una no cierra las demás. */
+    function closeCommand(commandId) {
+      if (commandId === null) return;
+      const ids = readClosed();
+      if (!ids.includes(commandId)) writeClosed([...ids, commandId]);
+    }
+
+    function CloseMark() {
+      return icon(['M18 6 6 18', 'M6 6l12 12']);
+    }
+
+    function ChevronMark({ open }) {
+      return icon(open ? ['M6 15l6-6 6 6'] : ['M9 6l6 6-6 6']);
+    }
+
+    /**
+     * La tarjeta de un resultado de nuestros comandos.
+     *
+     * El contrato lo manda el slot: llegan el nodo del comando —`commandId`, `name`, `outcome`— y la `t`
+     * de nuestro espacio de nombres, y el anfitrión envuelve la vista en su frontera de error, así que un
+     * fallo aquí no puede tumbar el chat. Si el nodo no llegara (otra versión del anfitrión), se dice: un
+     * resultado que desaparece en silencio es peor que un aviso.
+     *
+     * Desplegada por defecto cuando el resultado ocupa varias líneas —es la información que se pidió—, y
+     * colapsable; el cierre es aparte, porque colapsar no era lo que faltaba: faltaba poder quitarla.
+     */
+    function SkillCommandCard(props) {
+      const { node, t } = props;
+      const say = translator(t);
+      const commandId = typeof node?.commandId === 'string' ? node.commandId : null;
+      const text = typeof node?.outcome?.text === 'string' ? node.outcome.text : '';
+      const [closed, setClosed] = React.useState(() => commandId !== null && readClosed().includes(commandId));
+      const [open, setOpen] = React.useState(() => text.includes('\n'));
+
+      // Las hojas de estilo se llevan en el árbol, como la de la píldora: desmontar la tarjeta las retira,
+      // y cada una puede montarse sin la otra.
+      if (node === undefined || node === null) {
+        return h(React.Fragment, null,
+          h('style', null, STYLES),
+          h('div', { className: 'skc-card', 'data-state': 'unknown' }, say('card_unreadable')));
+      }
+      if (closed) return null;
+
+      const state = node.outcome === null ? 'running' : (node.outcome.kind === 'error' ? 'error' : 'done');
+      const name = typeof node.name === 'string' && node.name.length > 0 ? node.name : say('card_title');
+      const toggle = say(open ? 'card_collapse' : 'card_expand');
+
+      return h(React.Fragment, null,
+        h('style', null, STYLES),
+        h('div', { className: 'skc-card', 'data-state': state },
+          h('div', { className: 'skc-card-head' },
+            text === ''
+              ? null
+              : h('button', {
+                type: 'button', className: 'skc-card-icon', 'aria-expanded': open,
+                'aria-label': toggle, title: toggle,
+                onClick: () => setOpen((value) => !value),
+              }, h(ChevronMark, { open })),
+            h('span', { className: 'skc-card-name', title: name }, name),
+            h('span', { className: 'skc-card-summary' }, say(`card_${state}`)),
+            h('button', {
+              type: 'button', className: 'skc-card-icon skc-card-close',
+              'aria-label': say('card_close'), title: say('card_close'),
+              onClick: () => {
+                closeCommand(commandId);
+                setClosed(true);
+              },
+            }, h(CloseMark)),
+          ),
+          open && text !== '' ? h('pre', { className: 'skc-card-body' }, text) : null,
+        ));
+    }
 
     /* ── el componente ───────────────────────────────────────────────────────────────────────────── */
 
@@ -194,15 +382,7 @@ window.__ModuleLoader__.load({
 
       // El idioma puede no estar registrado: se usa el texto del anfitrión si lo da, y si no, el de
       // reserva. Nunca se enseña una clave cruda.
-      const say = (key) => {
-        if (typeof t === 'function') {
-          try {
-            const value = t(key);
-            if (typeof value === 'string' && value.length > 0 && value !== key) return value;
-          } catch { /* el anfitrión decide; aquí solo se evita romper */ }
-        }
-        return FALLBACK[key] ?? key;
-      };
+      const say = translator(t);
 
       const shown = analyzing ? 'analyzing' : outcome;
       const Icon = ICONS[shown] ?? ICONS.none;
@@ -263,6 +443,19 @@ window.__ModuleLoader__.load({
           // Con esto el anfitrión pasa a la pieza una `t` ya atada a nuestro espacio de nombres.
           locale: NS,
         }, SkillCompilerBadge));
+
+        // La tarjeta de los resultados de nuestros comandos: una entrada keyed por nombre. Si esta versión
+        // del anfitrión no declarara ese slot, la pieza pierde la X y conserva la píldora —un adorno nunca
+        // puede estropear el trabajo, y menos el flujo del chat.
+        try {
+          for (const command of COMMAND_NAMES) {
+            ctx.slots.inject(COMMAND_VIEW_SLOT, () => ctx.slots.register({
+              name: COMMAND_VIEW_SLOT,
+              key: command,
+              locale: NS,
+            }, SkillCommandCard));
+          }
+        } catch { /* sin tarjeta propia: el resultado se lee en la del anfitrión, que no sabe cerrarse */ }
       },
     };
   },

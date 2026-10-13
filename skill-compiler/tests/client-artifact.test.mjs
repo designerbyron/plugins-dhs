@@ -41,7 +41,11 @@ describe('artefacto de interfaz', () => {
     assert.equal(id, manifest.name, 'el id del artefacto tiene que ser el nombre del paquete');
     assert.equal(manifest.dsh.client.platform, 'web');
     assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'), true,
-      'el paquete dueño del slot tiene que estar declarado como dependencia de cliente');
+      'el paquete dueño del slot de la píldora tiene que estar declarado como dependencia de cliente');
+    // El segundo slot que usa la pieza —el del nodo `command`— lo declara el paquete de chat al registrar
+    // su nodo: sin declararlo aquí, el registro puede llegar antes que la declaración del slot.
+    assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-chat'), true,
+      'el paquete que declara `conversation.chat.commandview` también tiene que estar declarado');
   });
 
   it('pide React al anfitrión y no lo trae consigo', () => {
@@ -106,5 +110,60 @@ describe('artefacto de interfaz', () => {
   it('no depende de que una animación acabe para saber el estado', () => {
     assert.equal(client.includes('animationend'), false, 'el estado se lee del dato, no del fin de la animación');
     assert.equal(client.includes('transitionend'), false);
+  });
+});
+
+describe('artefacto de interfaz · tarjeta de resultados', () => {
+  it('registra una entrada keyed por comando en el slot del nodo `command`', () => {
+    assert.match(client, /COMMAND_VIEW_SLOT = 'conversation\.chat\.commandview'/,
+      'el slot keyed del nodo command es el único sitio desde el que se puede decidir cómo se pinta un resultado');
+    assert.match(client, /ctx\.slots\.inject\(COMMAND_VIEW_SLOT, \(\) => ctx\.slots\.register\(\{\s*\n\s*name: COMMAND_VIEW_SLOT,\s*\n\s*key: command,/);
+    assert.match(client, /locale: NS/, 'la tarjeta recibe la `t` de nuestro espacio de nombres');
+  });
+
+  it('cubre los cinco comandos que dejan un bloque en el flujo', () => {
+    const declared = /COMMAND_NAMES = \[([^\]]+)\]/.exec(client)?.[1] ?? '';
+    for (const name of ['skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar']) {
+      assert.equal(declared.includes(`'${name}'`), true, `falta ${name} en COMMAND_NAMES`);
+    }
+  });
+
+  it('la X es un botón de verdad, accesible, y vive en la esquina derecha', () => {
+    assert.match(client, /className: 'skc-card-icon skc-card-close'/);
+    assert.match(client, /'aria-label': say\('card_close'\)/);
+    assert.match(client, /title: say\('card_close'\)/, 'el nombre tiene que servir también a puntero y teclado');
+    assert.match(client, /\.skc-card-close \{ margin-left: auto; \}/, 'la X va al final de la cabecera');
+    assert.match(client, /\.skc-card-icon:hover, \.skc-card-icon:focus-visible/, 'se descubre con puntero y con teclado');
+    assert.match(client, /\.skc-card-icon:focus-visible \{ outline:/);
+  });
+
+  it('el cierre se recuerda en la sesión de la página y no crece sin fin', () => {
+    assert.match(client, /window\.sessionStorage\.getItem\(CLOSED_KEY\)/);
+    assert.match(client, /window\.sessionStorage\.setItem\(CLOSED_KEY/);
+    assert.match(client, /ids\.slice\(-CLOSED_MAX\)/);
+    assert.equal(client.includes("'skc-closed'"), true);
+    // Cerrar es por ejecución, no por comando: dos `/skill-propuestas` son dos bloques distintos.
+    assert.match(client, /if \(!ids\.includes\(commandId\)\) writeClosed\(\[\.\.\.ids, commandId\]\)/);
+  });
+
+  it('si el nodo del comando no llega, se dice: nunca desaparece en silencio', () => {
+    assert.match(client, /say\('card_unreadable'\)/);
+  });
+
+  it('el texto del resultado se pinta como texto, jamás como HTML', () => {
+    assert.equal(client.includes('dangerouslySetInnerHTML'), false);
+    assert.match(client, /h\('pre', \{ className: 'skc-card-body' \}, text\)/);
+  });
+
+  it('un fallo al registrar la tarjeta no puede llevarse el registro de la píldora', () => {
+    const pill = client.indexOf('}, SkillCompilerBadge));');
+    const card = client.indexOf('}, SkillCommandCard));');
+    assert.equal(pill > 0 && card > pill, true, 'la píldora se registra primero');
+    assert.match(client, /try \{\s*\n\s*for \(const command of COMMAND_NAMES\)/, 'el registro de la tarjeta va protegido');
+  });
+
+  it('la tarjeta lleva su propia hoja de estilos: puede montarse sin la píldora', () => {
+    const card = client.slice(client.indexOf('function SkillCommandCard'));
+    assert.match(card, /h\('style', null, STYLES\)/, 'el CSS vive en el árbol, y cada pieza lo lleva consigo');
   });
 });

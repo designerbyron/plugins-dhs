@@ -163,6 +163,14 @@ argumentos que escribir: `skill-ver-<id>`, `skill-aprobar-<id>`, `skill-rechazar
 la decisión completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila
 desaparece del menú: una pendiente que ya no lo está no se sigue ofreciendo.
 
+### Cerrar un resultado
+
+Cada resultado de estos comandos se puede **cerrar**: la tarjeta lleva una **X** en la esquina derecha. Lo
+cerrado se recuerda mientras dure la pestaña —es una preferencia de vista: no borra nada del log ni del
+almacén— y dos ejecuciones del mismo comando se cierran por separado. Colapsar sigue estando, y el cierre
+es aparte: colapsar no era lo que faltaba. El contrato del slot y las decisiones de aspecto, en
+[`docs/FEEDBACK-VISUAL.md`](docs/FEEDBACK-VISUAL.md).
+
 Aprobar desde aquí deja la skill **disponible en el acto**: el agente la ve en su siguiente paso y
 `/nombre` la carga, sin reiniciar el harness. Y no cambia la regla de fondo: los comandos los escribe una
 persona, el modelo no puede invocarlos ni saltarse la validación.
@@ -278,6 +286,9 @@ todo lo que decide algo vive en `lib/`.
   `SKILL_COMPILER_CLI` y un valor por defecto; en otra máquina, exporta esa variable tras clonar. No se
   usa `Config` del harness para esto porque obligaría a importar otro paquete del que depende la
   resolución de módulos del perfil: un riesgo real a cambio de una comodidad.
+- **La X de cerrar cubre los comandos con nombre fijo**, no las filas de pendientes (`skill-aprobar-<id>`):
+  el slot del anfitrión despacha por nombre exacto y esos nombres llevan el id, que el cliente no conoce de
+  antemano. Esas filas escriben una línea y usan la tarjeta del anfitrión.
 - **La versión vive en este repositorio**, con el detalle en `docs/` y el historial en `CHANGELOG.md`.
   El árbol de trabajo está bajo el docroot de Apache, así que el repositorio lleva un `.htaccess` que
   deniega todo — incluido `.git/`, que servido por HTTP es una fuga clásica.

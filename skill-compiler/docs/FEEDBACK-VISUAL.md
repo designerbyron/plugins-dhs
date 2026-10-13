@@ -117,6 +117,44 @@ antes se retiró: no existe en la identidad.
 - Los diccionarios se registran dentro de `ctx.effect`, y los estilos viven en el árbol de React: al
   desmontar, se retiran los dos.
 
+## Cerrar un resultado
+
+Los comandos dejan su resultado en el flujo del chat, y `/skill-propuestas` o `/skill-ver` ocupan media
+pantalla. Medido con el usuario delante: se podían **colapsar** —la tarjeta del anfitrión tiene chevron—,
+pero no **cerrar**, así que los bloques se apilaban y estorbaban.
+
+El sitio por donde se puede hacer está en el contrato del **cliente**, no en el del Host: el nodo `command`
+del chat declara un slot **keyed** (`conversation.chat.commandview`) y despacha por el **nombre del comando**:
+
+```text
+ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
+  name: 'conversation.chat.commandview',
+  key: 'skill-propuestas',        // el `entryKey` que pasa el nodo es el nombre del comando
+  locale: NS,
+}, SkillCommandCard));
+```
+
+Registrar ahí es la forma soportada de decidir cómo se pinta **un resultado nuestro**: el slot es del
+anfitrión y nosotros ocupamos la entrada de nuestros comandos, sin reclamar el nodo entero —una clave tiene
+un solo ocupante, y reclamarla lanzaría al cargar— y sin tocar el DOM de nadie.
+
+Decisiones de la tarjeta, y de dónde salen:
+
+| Decisión | Por qué |
+|---|---|
+| **X en la esquina derecha**, presente con opacidad baja y a plena al puntero o al foco | Es lo que se busca justo cuando el bloque estorba; escondida hasta el hover no sirve ni al teclado ni al tacto |
+| El cierre es por **`commandId`**, no por comando | Dos `/skill-propuestas` son dos bloques: cerrar uno no puede llevarse el otro |
+| Se recuerda en `sessionStorage` (tope de 200), no en el Host | Es una preferencia de **vista**: no toca el log de la sesión ni el almacén del plugin, y muere con la pestaña. Cerrar no borra nada |
+| Desplegada por defecto si el resultado ocupa varias líneas | Es la información que se pidió; colapsar sigue disponible, y el cierre es aparte: colapsar no era lo que faltaba |
+| Si el nodo no llegara (otra versión del anfitrión), se **dice** | Un resultado que desaparece en silencio es peor que un aviso |
+| El resultado se pinta como texto (`pre`, sin `dangerouslySetInnerHTML`) | Lo escribe el Host, pero la regla no cambia: nunca HTML |
+| El registro va en su propio `try`, después del de la píldora | Si el anfitrión no declara ese slot, la pieza pierde la X y conserva la píldora |
+| `@deepseek-ai/dsh-client-ui-chat` declarado en `dsh.client.inject` | Es quien declara el slot; sin eso, el registro podría llegar antes que la declaración |
+
+**Lo que esta pieza no puede hacer**: cerrar los bloques de las **filas de pendientes**
+(`skill-aprobar-<id>`). El despacho del slot es por nombre exacto y esos nombres llevan el id, que el
+cliente no conoce de antemano. No es una pérdida real —escriben una línea— y se dice en vez de disimularse.
+
 ## Lo que la interfaz NO puede hacer, y por qué (para no reintentarlo)
 
 La píldora informa de lo que el plugin **aprendió**, pero no hay en la aplicación una **bandeja de
@@ -141,9 +179,14 @@ Hoy, además, la superficie de decisión incluye el **terminal** (`list`, `check
 `reject`, `review`) y lo que el modelo te diga cuando le preguntes: `skill_review` devuelve las pendientes
 del proyecto.
 
+Y desde 1.4.0 también se decide **dentro** de la aplicación, sin bandeja: los comandos del compositor y,
+encima, **una fila por pendiente en el menú `/`** (`lib/pending-rows.mjs`), que se elige con el ratón o con
+las flechas y se ejecuta al elegirla. La **bandeja** con estado propio sigue descartada por los tres
+motivos de la tabla; la **decisión**, no.
+
 ## Límites, dichos en voz alta
 
-- **El dibujo no está verificado visualmente.** El estado que lo alimenta (132 pruebas, incluido el
+- **El dibujo no está verificado visualmente.** El estado que lo alimenta (217 pruebas, incluido el
   contrato contra el registro real de proyecciones) y la forma del
   artefacto (carga, slot, idioma, movimiento reducido, ausencia de emoji) sí; **cómo se ve** solo se
   comprueba instalando el plugin y mirando la interfaz. No hay control de navegador en este puesto, así
