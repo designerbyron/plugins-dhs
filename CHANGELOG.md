@@ -41,6 +41,9 @@ intentarlo y leyó `failed`.
 
 ### Medido
 
+- **«Usable sin reiniciar», de punta a punta en el log real**: la aprobación quedó en `seq 8675` y el
+  catálogo que recibió el agente en su paso siguiente, `seq 8688`, ya incluía la skill (34 skills antes,
+  35 después). Es la promesa de la 1.3.0 medida por primera vez en vivo, no solo contra el registro real.
 - 223 pruebas (antes 217), suite hermética en verde y `doctor` verde.
 - El caso completo, reproducido contra el CLI real en una arena: la segunda aprobación responde «Ya estaba
   activa» con exit 0 y el estado no se mueve; `reject` sobre algo activo explica que esa vía no se aplica.

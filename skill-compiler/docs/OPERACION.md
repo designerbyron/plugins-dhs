@@ -76,7 +76,9 @@ registro. La herramienta lo dice en su propio resumen («APROBADA AUTOMÁTICAMEN
 ### Disponible sin reiniciar
 
 Aprobar avisa al registro de skills, y el agente recibe el catálogo actualizado **en su siguiente paso**;
-`/nombre` carga la skill en la misma sesión. Lo que no está en manos del plugin es el **menú desplegable**
+`/nombre` carga la skill en la misma sesión. Medido en vivo el 2026-10-13, en el log de la sesión de
+`saas-corporative`: la aprobación quedó en `seq 8675` y el catálogo del paso siguiente, `seq 8688`, ya la
+incluía — 34 skills antes, 35 después, sin reiniciar el harness. Lo que no está en manos del plugin es el **menú desplegable**
 del compositor, que cachea por sesión: escribir el nombre funciona igual, y la lista sugerida puede tardar
 hasta que la sesión cambie de preset o se reconecte.
 
