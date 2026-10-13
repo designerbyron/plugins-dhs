@@ -49,6 +49,9 @@ export function createCatalogSignal({
   let invalidate = null;
   /** Cuántos avisos llegaron a la invalidación. Lo usa la puerta de frescura para medir, no para decidir. */
   let notifications = 0;
+  /** Suscriptores del mismo aviso: hay cosas del plugin (las filas del menú) que dependen del almacén y
+   *  no de la invalidación del catálogo, así que el aviso tiene que llegarles aunque no haya invalidación. */
+  const listeners = new Set();
   let watcher = null;
   let timer = null;
   let stopped = false;
@@ -68,9 +71,17 @@ export function createCatalogSignal({
   };
 
   const notifyNow = () => {
-    if (stopped || invalidate === null) return;
-    notifications += 1;
-    invalidate();
+    if (stopped) return;
+    if (invalidate !== null) {
+      notifications += 1;
+      invalidate();
+    }
+    for (const listener of listeners) {
+      // Un suscriptor que falle no puede llevarse el aviso por delante: el catálogo ya se invalidó.
+      try {
+        listener();
+      } catch { /* el siguiente suscriptor sigue teniendo su aviso */ }
+    }
   };
 
   return {
@@ -89,6 +100,17 @@ export function createCatalogSignal({
 
     /** Cuántos avisos se entregaron de verdad (diagnóstico y pruebas). */
     count: warn,
+
+    /**
+     * Suscribe una reacción al mismo aviso. Devuelve la baja.
+     *
+     * @param listener - se llama en cada aviso, haya o no invalidación del registro.
+     */
+    onChange(listener) {
+      if (typeof listener !== 'function') return () => {};
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
 
     /**
      * Empieza a vigilar el almacén. Idempotente y tolerante: si el sistema de ficheros no soporta la

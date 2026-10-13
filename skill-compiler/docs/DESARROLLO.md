@@ -11,7 +11,8 @@ Cómo está organizado, cómo se amplía sin romperlo, y qué reglas hacen que e
 | `lib/presentation.mjs` | El estado del feedback visual: el contrato del marcador y el plegado de eventos | **Sí**, es Node puro |
 | `lib/projection.mjs` | La unidad de proyección: los esquemas **Zod** del estado y de la vista, y la comprobación del contrato del registro antes de registrarla | **Sí**, y contra el registro **real** del harness |
 | `lib/catalog-signal.mjs` | La señal de catálogo: conserva la invalidación que el registro entrega al provider y la dispara por mutación propia **y** por observación del almacén | **Sí**, contra el registro real |
-| `lib/commands.mjs` | Los cinco comandos humanos: listar, leer, aprobar, rechazar y el modo automático. Sobre `lib/compiler.mjs`, sin decisiones propias | **Sí**, camino por camino |
+| `lib/commands.mjs` | Los cinco comandos humanos: listar, leer, aprobar, rechazar y el modo automático — y las tres acciones compartidas que usan tanto el comando con argumentos como la fila del menú. Sobre `lib/compiler.mjs`, sin decisiones propias | **Sí**, camino por camino |
+| `lib/pending-rows.mjs` | Las filas del menú `/`: una por pendiente y verbo, sin argumentos, con nombres que cumplen la gramática del registro de comandos y sin repetirse entre proyectos | **Sí**, con la gramática del contrato |
 | `lib/auto-approve.mjs` | El pliegue del modo «aprobar en esta sesión» desde los `command/run` del log | **Sí**, es Node puro |
 | `lib/definitions.mjs` | El protocolo y las definiciones de las cuatro herramientas y del proveedor, como objetos planos | **Sí**, con un `exec` falso |
 | `index.js` | El adaptador Cordis: elige los puntos de extensión y registra. **~120 líneas** | No: importa `@deepseek-ai/dsh-tools` |
@@ -85,7 +86,7 @@ hace improbable.
 
 ```sh
 npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
-npm test              # 196 pruebas
+npm test              # 209 pruebas
 npm run test:hermetic # las mismas + huella del almacén real antes y después
 ```
 

@@ -22,8 +22,9 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 
 import { createCatalogSignal } from './lib/catalog-signal.mjs';
-import { skillCommands } from './lib/commands.mjs';
+import { skillCommands, targetCommands } from './lib/commands.mjs';
 import { defaultRoot } from './lib/compiler.mjs';
+import { pendingRowsForAll } from './lib/pending-rows.mjs';
 import { PROTOCOL, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
 
 /** Identidad del Loader. */
@@ -64,6 +65,24 @@ export function apply(ctx, config = {}) {
   // pruebas puedan observar ese contrato sin montar el harness entero.
   const catalog = config.catalog ?? createCatalogSignal({ root });
 
+  // ── Las filas de pendientes: la superficie de selección, no una nota de sintaxis ────────────────
+  //
+  // El humano vio la lista de pendientes y no encontró cómo elegir una: el compositor no ofrece una
+  // lista pulsable para los argumentos de un comando. La superficie de selección del harness es el menú
+  // `/`, y desde un plugin se usa así: **una entrada por pendiente, sin argumentos**, porque un comando
+  // del host sin argumentos se ejecuta en el acto al elegirlo. Esto vive aquí, fuera de los bloques de
+  // inyección, porque lo alimentan dos sitios: el provider (que recibe el `cwd` de la sesión) y la
+  // propia señal de catálogo (cualquier mutación cambia qué hay pendiente).
+  const knownCwds = new Set();
+  /** Lo sustituye el bloque de comandos: sin servicio de comandos no hay filas, y no pasa nada. */
+  let refreshPendingRows = () => false;
+
+  const noteScope = (cwd) => {
+    if (typeof cwd !== 'string' || cwd.trim() === '' || knownCwds.has(cwd)) return;
+    knownCwds.add(cwd);
+    refreshPendingRows();
+  };
+
   ctx.systemPrompt.section({
     name: 'skill-compiler:protocol',
     order: SECTION_ORDER,
@@ -86,11 +105,17 @@ export function apply(ctx, config = {}) {
   // mano), que la señal vigila. La promesa —«usable sin reiniciar»— depende de esto y sólo de esto.
   ctx.skills.registerProvider((control) => {
     catalog.bind(control?.invalidate);
-    return skillProvider({ root });
+    return skillProvider({ root, observe: noteScope });
   });
   ctx.effect(() => {
     catalog.start();
-    return () => catalog.stop();
+    // Cualquier cambio del almacén —incluido el que provoca aprobar desde aquí— recompone las filas:
+    // una pendiente aprobada no puede seguir ofreciéndose en el menú.
+    const off = catalog.onChange(() => refreshPendingRows());
+    return () => {
+      off?.();
+      catalog.stop();
+    };
   });
 
   // ── La superficie humana: aprobar y rechazar sin salir del harness ──────────────────────────────
@@ -102,14 +127,50 @@ export function apply(ctx, config = {}) {
     const registry = scoped?.commands ?? ctx.commands;
     if (registry === undefined || typeof registry.register !== 'function') return;
     ctx.effect(() => {
-      const disposers = [];
+      const base = [];
+      const rows = [];
+      let currentRows = '';
+
+      /** Recompone las filas de pendientes. Si el conjunto no cambió, no toca el registro: re-registrar
+       *  lo mismo emitiría `commands/change` en vano y haría parpadear el menú. */
+      const registerRows = () => {
+        let definitions;
+        try {
+          definitions = targetCommands({ root, catalog, rows: pendingRowsForAll({ root, cwds: [...knownCwds] }) });
+        } catch {
+          return false; // el almacén ilegible no puede tumbar los comandos que ya están
+        }
+        const signature = definitions.map((definition) => definition.name).join('\n');
+        if (signature === currentRows) return false;
+        for (const dispose of rows.splice(0)) {
+          try {
+            dispose();
+          } catch {
+            /* ya retirada */
+          }
+        }
+        for (const definition of definitions) {
+          try {
+            rows.push(registry.register(definition));
+          } catch {
+            /* una fila que no se puede registrar no se lleva las demás */
+          }
+        }
+        currentRows = signature;
+        return true;
+      };
+
+      refreshPendingRows = registerRows;
       try {
-        for (const command of skillCommands({ root, catalog })) disposers.push(registry.register(command));
+        for (const command of skillCommands({ root, catalog, onListed: registerRows })) base.push(registry.register(command));
       } catch {
         // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.
       }
+      registerRows();
+
       return () => {
-        for (const dispose of disposers) {
+        refreshPendingRows = () => false;
+        for (const dispose of [...base, ...rows]) {
           try {
             if (typeof dispose === 'function') dispose();
           } catch {

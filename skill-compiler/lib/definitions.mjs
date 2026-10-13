@@ -276,10 +276,14 @@ export function skillReview({ root = defaultRoot() } = {}) {
 /**
  * Fábrica del proveedor de skills. Filtra por el cwd de la consulta: es la pieza que impide que una
  * skill aprendida en un proyecto se cargue en otro.
- */export function skillProvider({ root = defaultRoot() } = {}) {
+ */export function skillProvider({ root = defaultRoot(), observe } = {}) {
   return {
     name: 'skill-compiler',
     async list({ cwd }) {
+      // El harness dice aquí en qué sesión está sirviendo. Es el único sitio donde el plugin conoce el
+      // ámbito sin que un humano lo declare, así que es aquí donde se anotan las filas de pendientes
+      // que esa sesión puede elegir en el menú.
+      observe?.(cwd);
       return listForProject(cwd, { root })
         .map((entry) => {
           const loaded = readSkill(entry.path);

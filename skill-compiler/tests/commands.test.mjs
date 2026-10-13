@@ -19,8 +19,9 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
-import { skillCommands } from '../lib/commands.mjs';
+import { skillCommands, targetCommands } from '../lib/commands.mjs';
 import { approve, projectKey, propose } from '../lib/compiler.mjs';
+import { pendingRowsFor } from '../lib/pending-rows.mjs';
 import { cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
@@ -223,5 +224,87 @@ describe('comandos · resiliencia', () => {
         assert.equal(result.text.trim().length > 0, true, `${command.name} devolvió texto vacío`);
       }
     }
+  });
+});
+
+describe('comandos · filas de pendientes', () => {
+  it('la fila que se elige en el menú mueve la propuesta, con la misma puerta', () => {
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    const catalog = fakeCatalog();
+    const rows = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
+
+    const aprobar = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check');
+    const result = aprobar.handler({ agent });
+    assert.equal(result.kind, 'success', JSON.stringify(result));
+    assert.equal(catalog.count(), 1, 'la fila avisa al catálogo igual que el comando con argumentos');
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check', 'SKILL.md')), true);
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'proposed', 'measured-decision-check')), false);
+  });
+
+  it('la fila no puede saltarse la puerta: una propuesta que no la pasa no se aprueba', () => {
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    // El caso real que la puerta existe para atrapar: la propuesta se escribió bien y **después** alguien
+    // la tocó a mano. La herramienta no puede crear una inválida, así que aquí se rompe en el disco.
+    writeFileSync(
+      join(s.root, 'projects', KEY, 'proposed', 'measured-decision-check', 'SKILL.md'),
+      ['---', 'name: measured-decision-check', 'description: "Decide with measured evidence."', '---', '', '# Corto', '', 'nada.'].join('\n'),
+    );
+    const catalog = fakeCatalog();
+    const rows = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
+
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
+    assert.equal(result.kind, 'error');
+    assert.match(result.text, /no pasa la puerta/);
+    assert.equal(catalog.count(), 0, 'nada se movió, así que nada cambió');
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false);
+  });
+
+  it('con avisos la fila no aprueba: aceptarlos exige decirlo, y eso es del comando con argumentos', () => {
+    const s = sandbox();
+    propose(goodInput(WARNS), { root: s.root, curated: s.curated, cwd: CWD });
+    const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
+
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
+    assert.equal(result.kind, 'error');
+    assert.match(result.text, /--force/);
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false);
+  });
+
+  it('la fila de otro proyecto falla con el motivo, en vez de decidir en el proyecto equivocado', () => {
+    const s = sandbox();
+    const otro = 'C:\\xampp\\htdocs\\otro-proyecto';
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: otro });
+    const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: otro }) });
+
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
+    assert.equal(result.kind, 'error');
+    assert.match(result.text, /no en esta sesión/);
+    assert.equal(existsSync(join(s.root, 'projects', projectKey(otro), 'approved', 'measured-decision-check')), false);
+  });
+
+  it('leer una pendiente enseña el veredicto de la puerta antes de decidir', () => {
+    const s = sandbox();
+    propose(goodInput(WARNS), { root: s.root, curated: s.curated, cwd: CWD });
+    const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
+
+    const result = rows.find((row) => row.name === 'skill-ver-measured-decision-check').handler({ agent });
+    assert.equal(result.kind, 'success');
+    assert.match(result.text, /Puerta de validación: pasa\./);
+    assert.match(result.text, /aviso/);
+    assert.match(result.text, /Aprobarla con estos avisos exige decirlo/);
+    // Y el contenido entero, para poder leer antes de decidir.
+    assert.match(result.text, /## When to Use/);
+  });
+
+  it('apartar desde la fila no borra nada', () => {
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
+
+    const result = rows.find((row) => row.name === 'skill-rechazar-measured-decision-check').handler({ agent });
+    assert.equal(result.kind, 'success');
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'measured-decision-check', 'SKILL.md')), true);
   });
 });

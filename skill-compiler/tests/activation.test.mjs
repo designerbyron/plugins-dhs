@@ -138,4 +138,66 @@ describe('activación', () => {
     assert.equal(invalidations, 2, 'aprobar tiene que avisar al catálogo');
     disposeAll();
   });
+  it('las filas de pendientes aparecen cuando la sesión pide su catálogo, y se retiran al decidir', async () => {
+    const s = sandbox();
+    const signal = createCatalogSignal({ root: s.root, watch: false });
+    // Un registro de verdad en miniatura: acepta definiciones y honra el disposer que devuelve, que es
+    // exactamente el contrato del registro de comandos del harness.
+    const registry = new Map();
+    const commands = {
+      register: (command) => {
+        registry.set(command.name, command);
+        return () => registry.delete(command.name);
+      },
+    };
+    const { ctx, seen, disposeAll } = fakeContext({ commands });
+    apply(ctx, { root: s.root, catalog: signal });
+
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    assert.equal(registry.size, 5, 'sin ámbito conocido sólo están los comandos base, no filas de otro proyecto');
+
+    // El harness pide el catálogo de la sesión: es el único momento en que el plugin conoce el ámbito.
+    const provider = seen.providers[0]();
+    await provider.list({ cwd: CWD });
+    const rows = ['skill-ver-measured-decision-check', 'skill-aprobar-measured-decision-check', 'skill-rechazar-measured-decision-check'];
+    for (const name of rows) assert.equal(registry.has(name), true, `falta la fila ${name}`);
+    assert.equal(registry.get(rows[1]).input, undefined, 'la fila se ejecuta al elegirla: no reclama argumentos');
+
+    // Elegirla en el menú es la decisión completa: se llama al handler sin argumentos.
+    const result = registry.get(rows[1]).handler({ agent: { session: { header: { cwd: CWD } } } });
+    assert.equal(result.kind, 'success', JSON.stringify(result));
+
+    // Y al aprobar, las filas se recomponen: una pendiente que ya no lo está no puede seguir ofreciéndose.
+    for (const name of rows) assert.equal(registry.has(name), false, `sigue anunciada ${name}`);
+    assert.equal(registry.size, 5, 'los cinco comandos base no se tocan al recomponer');
+
+    disposeAll();
+    assert.equal(registry.size, 0, 'descargar el plugin no deja comandos colgando');
+  });
+
+  it('recomputar no re-registra lo mismo: sin cambio real, el menú no parpadea', async () => {
+    const s = sandbox();
+    const signal = createCatalogSignal({ root: s.root, watch: false });
+    let registrations = 0;
+    const registry = new Map();
+    const commands = {
+      register: (command) => {
+        registrations += 1;
+        registry.set(command.name, command);
+        return () => registry.delete(command.name);
+      },
+    };
+    const { ctx, seen, disposeAll } = fakeContext({ commands });
+    apply(ctx, { root: s.root, catalog: signal });
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+
+    const provider = seen.providers[0]();
+    await provider.list({ cwd: CWD });
+    const afterArming = registrations;
+    // Un cambio del almacén sin efecto sobre las pendientes (aquí: la misma lista) no vuelve a registrar.
+    signal.notify();
+    assert.equal(registrations, afterArming, 'no se re-registra una fila idéntica');
+    assert.equal(registry.has('skill-aprobar-measured-decision-check'), true);
+    disposeAll();
+  });
 });

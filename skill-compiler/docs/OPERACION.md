@@ -22,11 +22,24 @@ del modelo. El registro de la sesión guarda cada ejecución.
 
 ```
 /skill-propuestas              qué espera tu aprobación y qué está activo, en este proyecto
-/skill-ver <id>                la propuesta entera (o la ya activa)
+/skill-ver <id>                la propuesta entera (o la ya activa), con el veredicto de la puerta
 /skill-aprobar <id> [--force]  activarla; exige que pase la misma puerta que la CLI
 /skill-rechazar <id>           apartarla sin borrarla
 /skill-auto [activar|desactivar]  aprobar automáticamente en ESTA sesión
 ```
+
+### Elegir en el menú, en vez de escribir sintaxis
+
+Además de los comandos de arriba, **cada pendiente se anuncia en el menú `/` con tres filas** —leer entera,
+activar, apartar sin borrar— llamadas `skill-ver-<id>`, `skill-aprobar-<id>` y `skill-rechazar-<id>`. No
+tienen argumentos a propósito: en el contrato del harness, un comando del host que no reclama argumentos se
+ejecuta **en el acto** al elegirlo en el menú, así que seleccionar la fila **es** la decisión, sin recordar
+ni teclear nada. Teclear el comando entero hace exactamente lo mismo: son los mismos comandos.
+
+Las filas aparecen cuando el harness pide el catálogo de la sesión (o al ejecutar `/skill-propuestas`, que
+las anuncia con su nombre exacto) y se recomponen cuando cambia el almacén: aprobada una pendiente, su fila
+deja de ofrecerse. El ámbito se comprueba al ejecutar la fila, no al anunciarla: una fila de otro proyecto
+falla diciendo a cuál pertenece, en lugar de aprobar en el proyecto equivocado.
 
 Dos cosas que no se delegan nunca: **la puerta de validación** (una propuesta que no la pase no se activa,
 ni con el modo automático) y **el registro** (todo queda en el log de la sesión).
@@ -150,6 +163,7 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | `check` falla en una propuesta que escribí a mano | Una edición posterior rompió el contrato | El propio `check` dice qué regla; edita y repite |
 | `upstream` dice que cambió y quiero la versión nueva | Nuestra versión está adaptada | Vendoriza otra vez con el mismo id: se propone como actualización y, al aprobar, la anterior se aparta en `superseded/` |
 | La píldora del feedback visual no aparece nunca | El perfil no resolvió `zod`, o el servicio de proyección no está, o la unidad no cumplió el contrato (entonces **no se registra**) | `node bin/skill-compiler.mjs doctor`: dice si la proyección cumple el contrato y si el registro real proyecta. Con las herramientas funcionando, es un adorno ausente, no una avería |
+| Veo la lista de pendientes pero no encuentro cómo elegir una | El comando con argumentos hay que escribirlo entero, y el compositor no ofrece lista pulsable para los argumentos de un comando del host | Escribe `/` y elige la fila `skill-aprobar-<id>` (o `skill-ver-…`, `skill-rechazar-…`). `/skill-propuestas` las anuncia por su nombre exacto. Si no aparecen en el menú, ejecútalo: es lo que las arma |
 | Los comandos `/skill-*` no aparecen en el compositor | El perfil no monta el registro de comandos (`dsh-commands`), o el plugin no se activó | `dsh --profile web --dump-config` debe listar `- id: commands`. Con el plugin activo y ese servicio presente, los comandos se registran; sin él, el plugin sigue sirviendo skills y herramientas |
 | Apruebo una skill y el agente no la ve | La invalidación del catálogo no llegó: el registro de skills **cachea y no tiene TTL** | Es lo que cubre 1.3.0 (aviso al aprobar + vigilancia del almacén). Si reaparece: `/skill-propuestas` dice qué está activo, y `doctor` ejecuta la puerta de frescura contra el registro real |
 | La skill recién aprobada no sale en el menú al escribir `/` | El **cliente** cachea el catálogo por sesión y su invalidación no está en manos de un plugin | Escribe `/nombre` a mano: la resolución la hace el host y funciona ya. El menú se refresca al cambiar de preset, reconectar o recargar la página |

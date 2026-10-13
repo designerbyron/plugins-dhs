@@ -158,6 +158,11 @@ El modelo propone; tú decides.
 /skill-auto activar|desactivar    aprobar automáticamente en ESTA sesión
 ```
 
+Y cada pendiente aparece además en el menú `/` como **tres filas elegibles** —leer, activar, apartar—, sin
+argumentos que escribir: `skill-ver-<id>`, `skill-aprobar-<id>`, `skill-rechazar-<id>`. **Elegir la fila es
+la decisión completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila
+desaparece del menú: una pendiente que ya no lo está no se sigue ofreciendo.
+
 Aprobar desde aquí deja la skill **disponible en el acto**: el agente la ve en su siguiente paso y
 `/nombre` la carga, sin reiniciar el harness. Y no cambia la regla de fondo: los comandos los escribe una
 persona, el modelo no puede invocarlos ni saltarse la validación.
@@ -230,11 +235,11 @@ y vendorizas una versión limpia, o no se vendoriza.
 
 ```sh
 cd "C:\xampp\htdocs\plugins-dhs\skill-compiler"   # o donde esté clonado
-npm test              # las 50 pruebas
-npm run test:hermetic # las 50 pruebas + huella del store real antes y después
+npm test              # las 209 pruebas
+npm run test:hermetic # las 209 pruebas + huella del store real antes y después
 ```
 
-50 pruebas, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la máquina.
+209 pruebas, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la máquina.
 
 - `tests/compiler.test.mjs` — validación, composición del `SKILL.md`, solapamiento, idempotencia,
   aislamiento por proyecto, aprobación/rechazo/supersesión, inventario.

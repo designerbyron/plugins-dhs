@@ -335,6 +335,32 @@ switch (command) {
       line(false, `no se pudieron comprobar los comandos: ${error.message}`, 'revisa lib/commands.mjs');
     }
 
+    // ── Las filas de pendientes: la superficie que convierte aprobar en elegir ────────────────────
+    //
+    // Medido con el usuario delante: veía la lista de pendientes y no encontraba cómo elegir una, porque
+    // el compositor no ofrece una lista pulsable para los argumentos de un comando. Las filas son
+    // comandos sin argumentos que el menú `/` ofrece; si su composición se rompe, autorizar vuelve a ser
+    // una sintaxis que hay que recordar.
+    try {
+      const { pendingRowsFor } = await import(pathToFileURL(join(packageRoot, 'lib', 'pending-rows.mjs')).href);
+      const { pending: pendingOf, projectKey: keyOf } = await import(pathToFileURL(join(packageRoot, 'lib', 'compiler.mjs')).href);
+      const cwd = process.cwd();
+      const key = typeof flags.projectKey === 'string' ? flags.projectKey : keyOf(cwd);
+      const waiting = key === null ? [] : pendingOf({ root, key });
+      const rows = key === null || typeof flags.projectKey === 'string' ? null : pendingRowsFor({ root, cwd });
+      const malformed = (rows ?? []).filter((row) => !/^[a-z][a-z0-9_-]*$/.test(row.name) || row.description.trim().length === 0);
+      line(malformed.length === 0, rows === null
+        ? `filas de pendientes: ${waiting.length} pendientes en ${key ?? '(sin ámbito)'} (no se componen filas sin el cwd del proyecto)`
+        : `filas de pendientes: ${waiting.length} pendientes → ${rows.length} filas del menú, con nombre válido`,
+        'una fila con un nombre fuera de la gramática no se registra, y desaparece del menú sin avisar');
+      if (rows !== null) {
+        line(rows.length === waiting.length * 3, 'cada pendiente ofrece sus tres verbos (leer · activar · apartar)',
+          'revisa ROW_VERBS en lib/pending-rows.mjs');
+      }
+    } catch (error) {
+      line(false, `no se pudieron componer las filas de pendientes: ${error.message}`, 'revisa lib/pending-rows.mjs');
+    }
+
     // Compilar las herramientas y proyectar la unidad cubre dos caminos; el resto de los contratos con el
     // harness viven en pruebas que ya se ejecutan solas. Aquí se EJECUTAN, en vez de reimplementarlas: un
     // diagnóstico que duplica la puerta acaba diciendo algo distinto que la puerta.
@@ -346,11 +372,12 @@ switch (command) {
         'tests/catalog-freshness.test.mjs',    // la frescura del catálogo, sin reiniciar
         'tests/auto-approve.test.mjs',         // el modo de aprobación automática por sesión
         'tests/commands.test.mjs',             // los comandos humanos, camino por camino
+        'tests/pending-rows.test.mjs',         // las filas que el menú ofrece por cada pendiente
       ];
       const run = spawnSync(process.execPath, ['--test', ...gates], { cwd: packageRoot, encoding: 'utf8' });
       const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
       const failed = run.status !== 0 || /failing tests/.test(output);
-      line(!failed, 'las puertas de contrato con el harness pasan (salida, proyección, catálogo, modo automático, comandos)',
+      line(!failed, 'las puertas de contrato con el harness pasan (salida, proyección, catálogo, modo automático, comandos, filas del menú)',
         'ejecuta «npm test» y mira la primera prueba en rojo: dice qué contrato se rompió y con qué dato');
     } catch (error) {
       line(false, `no se pudieron ejecutar las puertas del harness: ${error.message}`, 'npm install');

@@ -4,43 +4,48 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
-## [1.2.0] — 2026-10-12
+## [1.4.0] — 2026-10-13
 
-**La superficie de aprobación, sin depender del terminal.** Una página de revisión que el CLI sirve
-**bajo demanda**: las propuestas pendientes con su resultado de validación y dos botones, aprobar y
-rechazar.
+**Decidir es elegir, no recordar sintaxis.** Medido con el usuario delante: `/skill-propuestas` enseñaba la
+lista de pendientes y su respuesta fue *«no veo cómo seleccionar y aprobar la skill»*. El texto pedía teclear
+`/skill-aprobar <id>`, y el compositor no ofrece ninguna lista pulsable para los argumentos de un comando del
+host: el flujo de autorización existía, pero su superficie era una nota al pie.
 
-### Añadido — revisión local
+### Añadido — el menú `/` como superficie de selección
 
-- `node bin/skill-compiler.mjs review [--port N]` sirve la página en `127.0.0.1` con un **token de un solo
-  uso** que solo se imprime en la terminal. Sin él la página responde **403** y no revela ni que existe.
-- La página enseña cada pendiente con su descripción, su `whenToUse`, el resultado de `check` (verde, o los
-  avisos y errores concretos) y los botones de aprobar y rechazar. Aprobada la lista se actualiza.
-- **La misma puerta que el terminal**: si una propuesta no pasa la validación **no hay botón de aprobar**, y
-  si tiene avisos aprobar es un acto aparte («Aprobar con avisos»). La página no puede ser más permisiva
-  que el comando.
-- **El cliente nunca nombra una ruta**: las acciones solo aceptan un `id`, y ese `id` tiene que estar entre
-  las pendientes de ese proyecto. Un `../../etc/passwd` responde 404 y no mueve nada.
-- **Todo el texto dinámico se escapa**: una descripción la escribió un modelo, así que se pinta como texto.
-- Sin dependencias nuevas (el `http` de Node), sin pipeline de compilación, y **nada en el camino crítico
-  de las sesiones**.
+- **Una fila por pendiente y verbo** (`lib/pending-rows.mjs`): leer entera, activar, apartar sin borrar. El
+  nombre lleva el id (`skill-aprobar-<id>`) y la descripción el proyecto, así que la fila se lee sola.
+- **Sin argumentos a propósito**: el contrato del harness ejecuta en el acto un comando del host «a secas»
+  al elegirlo en el menú (`host bare → detached execute`), así que **elegir la fila es la decisión completa**.
+  Y como sigue siendo un comando, también se puede teclear entero: dos formas, una implementación.
+- Las filas se anuncian **cuando el harness pide el catálogo de la sesión** (el proveedor recibe el `cwd`) y
+  se recomponen cuando cambia el almacén: aprobación desde aquí, CLI en otra terminal, edición a mano. Si el
+  conjunto no cambió, no se re-registra nada — el menú no parpadea.
+- El ámbito se comprueba **al ejecutar**, no al anunciar: una fila de otro proyecto falla diciendo de cuál
+  es, en vez de aprobar en el proyecto equivocado.
 
-### Documentado — por qué la bandeja no vive DENTRO de la aplicación
+### Añadido — leer antes de decidir
 
-Se intentó diseñar y se descartó con el contrato delante: exponer un remoto exige `@Remote` (decoradores de
-TypeScript procesados por el pipeline de `dsh-typert-protocol`), y este plugin escribe su artefacto de
-navegador a mano, sin build. La proyección tampoco puede contar los pendientes —es un plegado puro de
-eventos y no puede leer el almacén—, y si lo intentara mentiría en cuanto se aprobara algo por CLI, porque
-la aprobación no emite ningún evento de sesión. Queda razonado en `docs/FEEDBACK-VISUAL.md`.
+- `/skill-ver` (y la fila de leer) enseña el **veredicto de la puerta**: los fallos que impiden aprobar y los
+  avisos que exigirán `--force`. Antes eso sólo se descubría al intentar aprobar.
 
-### Verificado
+### Cambiado
 
-- **139 pruebas** (7 nuevas), y las de la página se hacen contra un **servidor real** en un puerto efímero,
-  comprobando **el disco** —que la propuesta se movió de `proposed/` a `approved/`— y no solo la respuesta.
-- Comprobado también a mano: la orden arranca, sin token responde 403, con token sirve la página y se cierra
-  con el proceso.
-- Aprobada `dsh-skill-library-authoring` por orden explícita del usuario; queda activa solo en el ámbito de
-  `saas-corporative`.
+- Las tres acciones (`viewProposal`, `approveProposal`, `rejectProposal`) viven en `lib/commands.mjs` y las
+  usan las dos superficies: el comando con argumentos y la fila del menú. La puerta sigue siendo la misma, y
+  una propuesta con avisos sigue exigiendo decirlo: la fila no aprueba nada con avisos.
+- `/skill-propuestas` lista, bajo cada pendiente, los comandos exactos que la deciden.
+- `lib/catalog-signal.mjs` gana `onChange`: hay cosas que dependen del almacén y no de la invalidación del
+  catálogo (las filas), y el aviso tiene que llegarles igual, aunque no haya invalidación a la que avisar.
+- `doctor`: 14 comprobaciones — añade la composición real de las filas del proyecto y ejecuta la puerta nueva.
+
+### Medido
+
+- 209 pruebas (antes 196), con la suite hermética en verde.
+- El registro de comandos devuelve el disposer exacto de cada alta y emite `commands/change` al registrar y
+  al retirar: comprobado en el código que se envía y cubierto en `tests/activation.test.mjs` con un registro
+  en miniatura que honra el disposer (las filas aparecen al pedir el catálogo, se retiran al aprobar, y se
+  retiran al descargar el plugin).
 
 ## [1.3.0] — 2026-10-13
 
@@ -104,6 +109,46 @@ siguiente arranque, y el agente seguía viendo el catálogo viejo.
 - `@deepseek-ai/dsh-skill` entra como **dependencia de desarrollo**: es el registro real contra el que se
   mide la frescura.
 
+
+## [1.2.0] — 2026-10-12
+
+**La superficie de aprobación, sin depender del terminal.** Una página de revisión que el CLI sirve
+**bajo demanda**: las propuestas pendientes con su resultado de validación y dos botones, aprobar y
+rechazar.
+
+### Añadido — revisión local
+
+- `node bin/skill-compiler.mjs review [--port N]` sirve la página en `127.0.0.1` con un **token de un solo
+  uso** que solo se imprime en la terminal. Sin él la página responde **403** y no revela ni que existe.
+- La página enseña cada pendiente con su descripción, su `whenToUse`, el resultado de `check` (verde, o los
+  avisos y errores concretos) y los botones de aprobar y rechazar. Aprobada la lista se actualiza.
+- **La misma puerta que el terminal**: si una propuesta no pasa la validación **no hay botón de aprobar**, y
+  si tiene avisos aprobar es un acto aparte («Aprobar con avisos»). La página no puede ser más permisiva
+  que el comando.
+- **El cliente nunca nombra una ruta**: las acciones solo aceptan un `id`, y ese `id` tiene que estar entre
+  las pendientes de ese proyecto. Un `../../etc/passwd` responde 404 y no mueve nada.
+- **Todo el texto dinámico se escapa**: una descripción la escribió un modelo, así que se pinta como texto.
+- Sin dependencias nuevas (el `http` de Node), sin pipeline de compilación, y **nada en el camino crítico
+  de las sesiones**.
+
+### Documentado — por qué la bandeja no vive DENTRO de la aplicación
+
+Se intentó diseñar y se descartó con el contrato delante: exponer un remoto exige `@Remote` (decoradores de
+TypeScript procesados por el pipeline de `dsh-typert-protocol`), y este plugin escribe su artefacto de
+navegador a mano, sin build. La proyección tampoco puede contar los pendientes —es un plegado puro de
+eventos y no puede leer el almacén—, y si lo intentara mentiría en cuanto se aprobara algo por CLI, porque
+la aprobación no emite ningún evento de sesión. Queda razonado en `docs/FEEDBACK-VISUAL.md`.
+
+### Verificado
+
+- **139 pruebas** (7 nuevas), y las de la página se hacen contra un **servidor real** en un puerto efímero,
+  comprobando **el disco** —que la propuesta se movió de `proposed/` a `approved/`— y no solo la respuesta.
+- Comprobado también a mano: la orden arranca, sin token responde 403, con token sirve la página y se cierra
+  con el proceso.
+- Aprobada `dsh-skill-library-authoring` por orden explícita del usuario; queda activa solo en el ámbito de
+  `saas-corporative`.
+
+
 ## [1.1.2] — 2026-10-12
 
 **El adorno visual dejaba el historial de sesiones sin cargar.** El harness respondía, al abrir el
@@ -159,6 +204,7 @@ registrado la unidad de proyección**.
 - `docs/DEPENDENCIAS.md` recoge la lección —«declarar no basta: el contrato»— y `docs/OPERACION.md` tiene
   una fila de diagnóstico para el síntoma exacto del historial sin cargar. Total: **132 pruebas**.
 
+
 ## [1.1.1] — 2026-10-12
 
 **El plugin no se activaba al instalarlo.** Se instalaba bien —ficha, título, icono y versión correctos—
@@ -210,6 +256,7 @@ primero escondía al segundo.
   instalado» de «no se puede cargar», que son problemas distintos.
 - `docs/DEPENDENCIAS.md`: el fallo contado entero, el experimento que lo aisló (enlace frente a copia),
   qué está declarado y por qué, y el procedimiento para subir versiones cuando el harness se actualice.
+
 
 ## [1.1.0] — 2026-10-12
 
@@ -274,6 +321,7 @@ Feedback visual: saber de un vistazo que el plugin está analizando, y si creó 
 - **El dibujo.** No hay control de navegador en este puesto: que la píldora se vea bien solo se comprueba
   instalando el plugin y mirándola. Lo verificado es que está construida según las reglas de diseño, no
   que el resultado guste.
+
 
 ## [1.0.0] — 2026-10-12
 
