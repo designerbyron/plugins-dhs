@@ -23,7 +23,8 @@ con 14 comprobaciones en verde.
 
 | Tema | Estado |
 |---|---|
-| Probar en vivo el **panel de decisiones en lote** (casillas + confirmación) en la tarjeta | Implementado en v1.5.0; falta el clic real. Si el anfitrión no expusiera `commands.execute` a un plugin de cliente, la tarjeta lo dirá con el motivo |
+| Probar en vivo el **panel de decisiones en lote** (casillas + confirmación) en la tarjeta | Implementado en v1.5.0 y **reparado en v1.5.2**: el cliente declaraba `inject: ['slots', 'locale']` y le faltaba `'remote.commands'` (el path que el anfitrión exige, igual que su propio paquete de comandos), así que el panel no podía leer las pendientes y encima decía «no hay nada» — ahora dice el motivo y por dónde seguir. Requiere recargar el plugin para tomar efecto |
+| Reducir el ruido del catálogo global | Medido el 2026-10-13: de las 20 skills de `~/.dsh/skills`, al prompt llegan 13. El motivo **no está medido** (candidatos: deduplicación por similitud o presupuesto). La composición por proyecto sí: 0 skills de otros proyectos en los tres casos |
 | **Adiciones a tres skills de tenants** (`hostinger-tenant-release`, `tenant-onboarding-provision`, `tenant-maintenance-update`) | Contenido redactado, **sin aplicar**. Las tres viven ahora en `approved/` del proyecto `saas-corporative`, así que las adiciones se aplican **ahí** (ámbito del proyecto), no en la biblioteca compartida |
 | **Cruces entre repos** | **Resuelto el 2026-10-13.** El cruce estaba fuera del plugin: cinco skills de proyecto en la biblioteca global y una nota del README de `prompt-doctor` que citaba la ruta de un proyecto. Ambas fuentes cerradas; evidencia en [`docs/AUDITORIA-2026-10-13-cruces-entre-repos.md`](docs/AUDITORIA-2026-10-13-cruces-entre-repos.md) |
 | Capturas y tarjetas del menú `/` no admiten decoración por fila | Medido y cerrado: no se reintenta |
@@ -36,6 +37,22 @@ con 14 comprobaciones en verde.
 - **Una regla, una implementación**: la puerta se comparte entre CLI, comandos, interfaz y página.
 - **El estado se repara, la vista se exige** estricta.
 - **Nada se escribe dentro del repositorio del usuario**: lo aprendido vive en `$DSH_HOME` por proyecto.
+
+## Cómo se compone el catálogo que ve el agente
+
+Medido el 2026-10-13 leyendo el bloque `<available_skills>` del log de tres sesiones reales —la del plugin, la
+de `saas-corporative` y la de `duranspainting`—:
+
+| Origen | `plugins-dhs` | `saas-corporative` | `duranspainting` |
+|---|---|---|---|
+| Del proyecto (store del plugin, servido por `cwd`) | **0** | 17 | 2 |
+| Biblioteca global (`~/.dsh/skills`, lo transversal) | 13 | 13 | 13 |
+| Empaquetadas en la app (office-docx/pptx/xlsx, diagnose-windows-sandbox-acl) | 4 | 4 | 4 |
+| Del workspace (`.dsh/skills` del repo, p. ej. `prompt-doctor`) | 0 | 1 | 0 |
+| **De otro proyecto** | **0** | **0** | **0** |
+
+El ámbito funciona: ningún proyecto ve skills de otro. Lo que se ve de más es lo global, que por diseño entra
+en todas las sesiones.
 
 ## Trampas ya medidas
 
