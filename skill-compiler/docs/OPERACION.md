@@ -65,6 +65,15 @@ Nada se borra nunca: retirar **mueve**. El respaldo vive en
 negándose si ese id ya existe (restaurar no puede destruir lo que hay). `retired` y `/skill-retiradas`
 dicen qué está apagado y qué se retiró, con la fecha.
 
+Tras apagar, encender o retirar, el plugin **avisa al catálogo** que sirve el dato: el registro de skills
+cachea sin TTL, y sin ese aviso el agente seguía teniendo delante la skill apagada (pasó en vivo; el defecto
+estaba sólo en las tres acciones nuevas, no en aprobar ni rechazar). `/skill-propuestas` muestra además la
+lista de **apagadas**, con cómo devolver cada una.
+
+**Límite que se declara**: la lista de *skills* del menú `/` la pinta el anfitrión con su propia caché de
+sesión, y un plugin no puede invalidarla. Lo que desaparece al instante es lo que sirve el plugin —el
+catálogo del agente—; del menú del compositor desaparece al reconectar la sesión.
+
 En la tarjeta, las **casillas** deciden en lote: `Volver a encender las marcadas` y `Retirar las marcadas`,
 con el paso de confirmación que dice cuántas son y que hay respaldo. El menú `/` ofrece una fila por cada
 skill **apagada** (`skill-habilitar-<id>`, `skill-eliminar-<id>`): son pocas por definición —lo que acabas

@@ -4,6 +4,41 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.7.1] — 2026-10-14
+
+**Apagar una skill la apagaba, y el agente seguía viéndola.** Reportado por el autor tras probarlo en vivo:
+deshabilitó `saas-corporative-gate-workflow`, el disco quedó correcto, pero en el menú seguía ofreciéndose.
+Su lectura fue exacta —«debería mostrarme que está deshabilitado y darme un botón para activarla»— y su
+generalización también: lo mismo vale para cualquier acción de gestión.
+
+### Corregido
+
+- **La causa, medida**: `skill-deshabilitar`, `skill-habilitar` y `skill-eliminar` movían la skill **sin
+  avisar al catálogo**, mientras que aprobar y rechazar sí avisaban. El registro de skills cachea por sesión
+  y **sin TTL**, así que el catálogo seguía sirviendo la versión anterior. Los datos estaban bien
+  (`listForProject` sólo lee `approved/`, y el provider no servía la apagada): lo que fallaba era el aviso.
+- **Un solo camino para el aviso**: las cinco acciones de mutación pasan por un envoltorio que notifica al
+  catálogo cuando —y sólo cuando— la acción movió algo. Una acción futura no puede olvidarse de avisar sin
+  que la suite lo diga.
+- **El estado, a la vista**: `/skill-propuestas` lista también las **apagadas**, con cómo devolver cada una
+  y cómo retirarla del todo. Antes, la única prueba de haber apagado algo era el resultado de aquel comando.
+
+### Medido
+
+- 251 pruebas (antes 243). Las ocho nuevas no enumeran comandos: exigen la **correspondencia** entre el aviso
+  y lo que cambió en disco, así que un comando nuevo que mueva algo y no avise falla ahí.
+- **Rojo demostrado con los handlers anteriores**: aprobar y rechazar avisaban; deshabilitar, habilitar y
+  retirar **no**.
+- Límite declarado, y no disimulado: la lista de *skills* del menú `/` la pinta el anfitrión con su propia
+  caché de sesión y un plugin no puede invalidarla. Desaparece al instante del catálogo del agente; del menú
+  del compositor, al reconectar la sesión.
+
+### Y queda como contrato
+
+La idea del autor, generalizada a regla del repositorio (reglas de oro 16 y de gobierno 6): **toda acción que
+cambia un estado (1) avisa a quien sirve el dato, (2) lo refleja donde el humano mira y (3) ofrece el gesto
+inverso en el mismo mensaje** — y no avisa si no movió nada.
+
 ## [1.7.0] — 2026-10-13
 
 **El ciclo de vida completo: apagar y retirar.** Preguntado por el autor: *«¿qué pasa si ya no quiero una

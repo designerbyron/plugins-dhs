@@ -214,6 +214,23 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
  * @returns las definiciones, en la forma que espera `ctx.commands.register(...)`.
  */
 export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) {
+  /**
+   * Envuelve una acción que **mueve** una skill para que avise al catálogo cuando de verdad movió algo.
+   *
+   * El registro de skills cachea los catálogos sin TTL, así que quien muta el almacén es quien tiene que
+   * avisar. Aprobar y rechazar lo hacían; apagar, encender y retirar no — y el resultado era una skill
+   * apagada que el agente seguía teniendo delante. Aquí el aviso no depende de que alguien se acuerde:
+   * las cinco acciones pasan por el mismo envoltorio, y la suite comprueba que todas avisan.
+   */
+  const moveAction = (action) => (...args) => {
+    const result = action(...args);
+    if (result?.ok === true) catalog?.notify();
+    return result;
+  };
+  const disableSkill = moveAction(disable);
+  const enableSkill = moveAction(enable);
+  const retireSkill = moveAction(retire);
+
   return [
     {
       name: 'skill-propuestas',
@@ -227,6 +244,9 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
 
         const waiting = pending({ root, key });
         const active = listForProject(cwd, { root });
+        // Lo apagado no se sirve, pero el humano tiene que verlo: sin esto, la única prueba de que apagó
+        // algo es el resultado de aquel comando, y no hay forma de saber qué queda por devolver.
+        const fueraDeServicio = retired(key, { root }).filter((skill) => skill.state === 'disabled');
         const auto = autoApproveFromEvents(agent?.session?.snapshotEvents?.() ?? []);
         const rows = pendingRowsFor({ root, cwd });
 
@@ -240,6 +260,10 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
           '',
           `Aprobadas y activas (${active.length}):`,
           active.length ? bullet(active) : '  · ninguna',
+          '',
+          `Apagadas (${fueraDeServicio.length}) — no se sirven al modelo, se conservan enteras:`,
+          fueraDeServicio.length ? bullet(fueraDeServicio) : '  · ninguna',
+          ...(fueraDeServicio.length > 0 ? [`  Para devolver una: /skill-habilitar <id>, o elige su fila en el menú «/». Para retirarla del todo: /skill-eliminar <id> --yes`] : []),
           '',
           `Aprobación automática en esta sesión: ${auto ? 'ACTIVA' : 'desactivada'}`,
           auto ? '  (las propuestas que pasen la validación se activan solas; /skill-auto desactivar para pararlo)' : '  (actívala con /skill-auto activar)',
@@ -333,7 +357,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
             ? `No hay ninguna skill activa con el id ${id} en ${key}.`
             : `«${id}» no está activa en ${key}: está en ${donde}.`);
         }
-        const moved = disable(id, key, { root });
+        const moved = disableSkill(id, key, { root });
         if (!moved.ok) return bad(`No se pudo apagar: ${moved.reason}`);
         return ok(`${id} apagada en ${key}.\n  deja de servirse al modelo, y se conserva entera: /skill-habilitar ${id} la devuelve.`);
       }),
@@ -348,7 +372,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
         if (key === null) return bad(NO_SCOPE);
         const id = String(rawInput ?? '').trim();
         if (id === '') return bad('Dime cuál: /skill-habilitar <id>. Lo apagado está en /skill-retiradas.');
-        const moved = enable(id, key, { root });
+        const moved = enableSkill(id, key, { root });
         if (!moved.ok) return bad(`No se pudo encender: ${moved.reason}`);
         return ok(`${id} vuelve a estar activa en ${key}: se sirve al modelo sólo en este proyecto.`);
       }),
@@ -368,7 +392,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
         if (!yes) {
           return ok(`Se va a RETIRAR «${id}» del proyecto ${key}.\n  Nada se borra: la carpeta se mueve a un respaldo con fecha, y vuelve con \`restore\` desde el terminal.\n  Repite así para hacerlo: /skill-eliminar ${id} --yes`);
         }
-        const moved = retire(id, key, { root });
+        const moved = retireSkill(id, key, { root });
         if (!moved.ok) return bad(`No se pudo retirar: ${moved.reason}`);
         return ok(`Retirada «${id}» de ${key}.\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: restore ${id} (CLI)\n`);
       }),

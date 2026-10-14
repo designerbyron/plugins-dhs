@@ -15,12 +15,12 @@
  *     de aprobación sin validación.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
 import { skillCommands, targetCommands } from '../lib/commands.mjs';
-import { approve, projectKey, propose } from '../lib/compiler.mjs';
+import { approve, disable, projectKey, propose } from '../lib/compiler.mjs';
 import { pendingRowsFor } from '../lib/pending-rows.mjs';
 import { cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
 
@@ -44,6 +44,70 @@ function fakeCatalog() {
   let count = 0;
   return { notify: () => { count += 1; }, count: () => count };
 }
+
+/**
+ * La puerta de la gestión: **toda acción que mueve el almacén avisa al catálogo, y ninguna de lectura
+ * avisa**. El registro de skills cachea sin TTL, así que una acción que mueve algo y no avisa deja al
+ * agente con la versión vieja delante — pasó en vivo: una skill apagada seguía ofreciéndose.
+ *
+ * Lo que se exige no es una lista de comandos, sino la correspondencia: el aviso tiene que coincidir con
+ * lo que de verdad cambió en disco. Así, un comando nuevo que mueva algo y no avise **falla aquí**.
+ */
+describe('gestión · el aviso al catálogo coincide con lo que cambió en disco', () => {
+  /** Los ficheros del almacén del proyecto, por estado: lo que manda es el disco, no la tabla del test. */
+  const foto = (root, key) => {
+    const base = join(root, 'projects', key);
+    if (!existsSync(base)) return '';
+    return ['proposed', 'approved', 'disabled', 'rejected', 'superseded']
+      .flatMap((estado) => (existsSync(join(base, estado)) ? readdirSync(join(base, estado)).map((id) => `${estado}:${id}`) : []))
+      .sort()
+      .join('|');
+  };
+
+  /** Deja una skill en el estado pedido, por el camino normal. */
+  const sembrar = (s, estado) => {
+    const r = propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    assert.equal(r.status, 'proposed', JSON.stringify(r));
+    if (estado === 'proposed') return r.id;
+    assert.equal(approve(r.id, KEY, { root: s.root }).ok, true);
+    if (estado === 'approved') return r.id;
+    assert.equal(disable(r.id, KEY, { root: s.root }).ok, true);
+    return r.id;
+  };
+
+  const CASOS = [
+    { nombre: 'skill-aprobar', estado: 'proposed', sufijo: ' --force', muta: true },
+    { nombre: 'skill-rechazar', estado: 'proposed', sufijo: '', muta: true },
+    { nombre: 'skill-deshabilitar', estado: 'approved', sufijo: '', muta: true },
+    { nombre: 'skill-habilitar', estado: 'disabled', sufijo: '', muta: true },
+    { nombre: 'skill-eliminar', estado: 'disabled', sufijo: ' --yes', muta: true },
+    { nombre: 'skill-propuestas', estado: 'approved', sufijo: null, muta: false },
+    { nombre: 'skill-ver', estado: 'approved', sufijo: '', muta: false },
+    { nombre: 'skill-retiradas', estado: 'disabled', sufijo: null, muta: false },
+  ];
+
+  for (const caso of CASOS) {
+    it(`${caso.nombre} avisa si y sólo si cambió el almacén`, () => {
+      const s = sandbox();
+      const catalog = fakeCatalog();
+      const { byName } = commands(s.root, catalog);
+      const id = sembrar(s, caso.estado);
+
+      const antes = foto(s.root, KEY);
+      const result = byName[caso.nombre].handler({ agent, rawInput: caso.sufijo === null ? undefined : `${id}${caso.sufijo}` });
+      const movio = foto(s.root, KEY) !== antes;
+
+      assert.equal(result.kind, 'success', `${caso.nombre} no debe fallar en su camino normal: ${JSON.stringify(result)}`);
+      assert.equal(movio, caso.muta, `${caso.nombre}: la tabla dice muta=${caso.muta} y el disco dice ${movio}`);
+      if (movio) {
+        assert.equal(catalog.count() > 0, true,
+          `${caso.nombre} movió una skill y NO avisó al catálogo: el agente la seguiría viendo`);
+      } else {
+        assert.equal(catalog.count(), 0, `${caso.nombre} no movió nada y avisó igualmente`);
+      }
+    });
+  }
+});
 
 describe('comandos · descriptor', () => {
   it('se declaran como el registro del harness los exige', () => {

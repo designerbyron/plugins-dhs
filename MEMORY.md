@@ -5,8 +5,8 @@ Memoria durable del repositorio. No es el historial de una sesión: es lo que ha
 
 ## Versión publicada
 
-**v1.7.0** del plugin `skill-compiler` — `main` sincronizado con `designerbyron/plugins-dhs`.
-243 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
+**v1.7.1** del plugin `skill-compiler` — `main` sincronizado con `designerbyron/plugins-dhs`.
+251 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
 con 14 comprobaciones en verde.
 
 ## Qué está verificado (con la evidencia)
@@ -25,7 +25,7 @@ con 14 comprobaciones en verde.
 |---|---|
 | Probar en vivo el **panel de decisiones en lote** (casillas + confirmación) en la tarjeta | Implementado en v1.5.0 y **reparado en v1.5.2**: el cliente declaraba `inject: ['slots', 'locale']` y le faltaba `'remote.commands'` (el path que el anfitrión exige, igual que su propio paquete de comandos), así que el panel no podía leer las pendientes y encima decía «no hay nada» — ahora dice el motivo y por dónde seguir. Requiere recargar el plugin para tomar efecto |
 | Filas del menú por sesión | Implementado en v1.6.0: se montan bajo el `agent.ctx` de la sesión, con el agente que el provider recibe. **Verificado en vivo por el autor**: ya no aparecen pendientes de otros proyectos |
-| **Deshabilitar y eliminar una skill** | **Implementado en v1.7.0**: estado `disabled` (apagar/encender, reversible) y retirada con respaldo fechado y `restore`; CLI, comandos, filas del menú (sólo para las apagadas) y tarjeta con casillas y confirmación. Ciclo completo medido por el CLI real. Falta que el autor lo pruebe en vivo |
+| **Deshabilitar y eliminar una skill** | **Implementado en v1.7.0** y **probado en vivo por el autor**: apagó una skill y el disco quedó correcto. Su prueba destapó el defecto que la v1.7.1 arregla: `skill-deshabilitar`/`skill-habilitar`/`skill-eliminar` movían la skill **sin avisar al catálogo**, así que el agente seguía viéndola ofrecida. Ahora toda acción que mueve avisa (una sola puerta, con suite que lo exige) y `/skill-propuestas` lista las apagadas con su vuelta |
 | La X en el resultado de una fila | Reparado en v1.6.1: el cliente aprende del catálogo los nombres de las filas y registra su tarjeta. La tarjeta **ya pintada** antes de aprender sigue sin X |
 | Reducir el ruido del catálogo global | Medido el 2026-10-13: de las 20 skills de `~/.dsh/skills`, al prompt llegan 13. El motivo **no está medido** (candidatos: deduplicación por similitud o presupuesto). La composición por proyecto sí: 0 skills de otros proyectos en los tres casos |
 | **Adiciones a tres skills de tenants** (`hostinger-tenant-release`, `tenant-onboarding-provision`, `tenant-maintenance-update`) | Contenido redactado, **sin aplicar**. Las tres viven ahora en `approved/` del proyecto `saas-corporative`, así que las adiciones se aplican **ahí** (ámbito del proyecto), no en la biblioteca compartida |

@@ -30,6 +30,13 @@ rompió, se notó.
 10. **Un solo estado vivo por dato.** El estado de la sesión se pliega del log; el de la interfaz, del
     almacén del navegador **persistente** (nunca de sesión, que muere con la pestaña).
 
+16. **Toda acción que cambia un estado lo dice, se ve y ofrece la vuelta.** Mutar sin avisar deja al agente
+    y a la interfaz con la versión vieja delante: una skill apagada que el modelo sigue teniendo en su
+    catálogo es peor que un error, porque parece que funcionó. Cada acción tiene que (1) **avisar** a quien
+    sirve el dato de que cambió, (2) **reflejar** el estado nuevo donde el humano mira, y (3) ofrecer el
+    **gesto inverso** en el mismo mensaje. Y una acción que no movió nada no avisa: si el aviso se da
+    siempre, deja de significar algo.
+
 ## Proceso
 
 11. **Medir antes de afirmar.** Un número medido antes que un adjetivo; lo no verificado se declara no

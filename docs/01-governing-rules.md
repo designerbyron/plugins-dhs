@@ -50,7 +50,23 @@ fallo, la pregunta es qué **clase** de fallo es y dónde se cierra: un contrato
 que se puede corromper, una regla que vive en dos sitios. Si algo es provisional, se declara y se dice
 cuándo se retira.
 
-## 6. Evidencia antes que adjetivos
+## 6. Toda mutación avisa, se ve y ofrece la vuelta
+
+Una acción que cambia el estado de algo cumple tres cosas, o está a medias:
+
+1. **Avisa** a quien cachea el dato. El registro de skills del harness cachea por sesión y **sin TTL**, así
+   que la frescura es responsabilidad de quien muta: sin aviso, el agente y la interfaz siguen con la
+   versión anterior, y el fallo no se ve — parece que funcionó.
+2. **Se ve**: el estado nuevo aparece donde el humano mira (la lista, la tarjeta, el mensaje del resultado),
+   no sólo en el disco.
+3. **Ofrece el gesto inverso** en el mismo mensaje. Si el humano tiene que recordar el comando que
+   deshace lo que acaba de hacer, la acción está incompleta.
+
+Y el aviso es **condicional a que algo haya cambiado**: avisar siempre convierte el aviso en ruido y deja de
+distinguir lo que pasó de lo que no. Esto se comprueba con una puerta (la suite exige que el aviso coincida
+con lo que cambió en disco), no con disciplina.
+
+## 7. Evidencia antes que adjetivos
 
 - Un número medido vale más que un adjetivo; si no hay medición, se dice que no la hay.
 - "Terminado" va acompañado de lo que lo demuestra: pruebas en verde, una medición, el artefacto leído de
@@ -58,7 +74,7 @@ cuándo se retira.
 - Lo que no se ha podido verificar se declara como no verificado, con el motivo. Un límite escondido es
   peor que un límite escrito.
 
-## 7. Commits y publicación
+## 8. Commits y publicación
 
 Un commit = una cosa. El mensaje dice qué cambió y qué lo demuestra. El push se decide y se declara; nunca
 `git add -A`. Los ficheros generados por pruebas no se commitean: si aparecen en `git status`, o el
