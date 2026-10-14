@@ -24,7 +24,7 @@ const CWD = 'C:\\xampp\\htdocs\\saas-corporative';
 
 /** Un contexto con la forma mínima que el plugin usa. Si el plugin toca algo que no está, se ve aquí. */
 function fakeContext(services = {}) {
-  const seen = { sections: [], tools: [], providers: [], injected: [], effects: 0, listeners: [] };
+  const seen = { sections: [], tools: [], providers: [], injected: [], effects: 0 };
   const disposers = [];
   const ctx = {
     systemPrompt: { section: (section) => seen.sections.push(section) },
@@ -33,13 +33,8 @@ function fakeContext(services = {}) {
     // Contrato real de Cordis: el callback del hijo devuelve su disposer y `inject` lo devuelve a quien
     // lo llamó. El doble anterior lo descartaba, y con eso una prueba no podía ver una fuga.
     inject: (deps, callback) => { seen.injected.push(deps); return callback(services); },
-    // El alta del agente: el plugin monta las filas de esa sesión bajo su propio contexto.
-    on: (event, listener) => {
-      seen.listeners.push({ event, listener });
-      return () => {
-        seen.listeners = seen.listeners.filter((entry) => entry.listener !== listener);
-      };
-    },
+    // El plugin no escucha eventos: el montaje por sesión llega por el provider (vía medida contra el
+    // registro real). El doble no declara `on` a propósito, para que usarlo aquí sea un fallo visible.
     // El efecto devuelve el disposer real: el harness los llama al descargar el plugin, y la prueba tiene
     // que hacer lo mismo — dejar la vigilancia de catálogo abierta sería dejar un recurso vivo.
     effect: (callback) => { seen.effects += 1; const dispose = callback(); disposers.push(dispose); return dispose; },
@@ -176,10 +171,11 @@ describe('activación', () => {
     // Nadie ha montado todavía: sin sesión no hay filas, ni en el global ni por agente.
     assert.equal(global.map.size, 5, 'el global tiene los cinco comandos base y ninguna fila');
 
-    const listener = seen.listeners.find((entry) => entry.event === 'agent/created')?.listener;
-    assert.equal(typeof listener, 'function', 'el plugin tiene que escuchar el alta del agente');
-    listener(agentFor(CWD));
-    listener(agentFor(OTRO));
+    // El montaje entra por el provider, que el registro llama con `{ cwd, agent }`: es la vía medida
+    // contra el registro real, y no depende de que un evento alcance el contexto raíz.
+    const provider = seen.providers[0]();
+    await provider.list({ cwd: CWD, agent: agentFor(CWD) });
+    await provider.list({ cwd: OTRO, agent: agentFor(OTRO) });
 
     const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-aprobar-'));
     assert.deepEqual(filasDe(CWD), ['skill-aprobar-measured-decision-check'], 'la sesión ve lo suyo');
@@ -215,9 +211,9 @@ describe('activación', () => {
     apply(ctx, { root: s.root, catalog: signal });
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
 
-    // El ámbito entra por el alta del agente, no por el catálogo: quien decide qué filas hay es la sesión.
-    const listener = seen.listeners.find((entry) => entry.event === 'agent/created')?.listener;
-    listener({ session: { header: { cwd: CWD } }, ctx: agentCtx });
+    // El ámbito entra por el provider, que recibe la sesión con su agente: quien decide qué filas hay
+    // es la sesión que pide el catálogo, no el proceso entero.
+    await seen.providers[0]().list({ cwd: CWD, agent: { session: { header: { cwd: CWD } }, ctx: agentCtx } });
     assert.equal(registry.has('skill-aprobar-measured-decision-check'), true, 'el agente ve su pendiente');
 
     const afterArming = registrations;

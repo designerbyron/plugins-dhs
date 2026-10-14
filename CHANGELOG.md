@@ -13,9 +13,13 @@ oferta que no puede cumplirse es una mentira con forma de atajo.
 
 ### Corregido
 
-- Las filas se registran **en el ámbito del agente de esa sesión** (`agent.ctx`, obtenido en un listener de
-  `agent/created`), que es el contrato que el harness documenta para este caso; antes se registraban en el
-  global, donde las veían todas las sesiones. El `cwd` del agente da el ámbito sin que nadie lo declare.
+- Las filas se registran **en el ámbito del agente de esa sesión**, bajo `agent.ctx`; antes se registraban
+  en el global, donde las veían todas las sesiones. El agente llega por donde el plugin ya recibe cada
+  sesión: **el provider recibe `{ cwd, agent }`** (medido contra el registro real, que además cachea por
+  `(cwd, agente, revisión)`), así que el ámbito sale de la sesión que pide el catálogo y no de un rastro de
+  ámbitos vistos. Se descartó el listener de `agent/created`: el contrato del harness lo emite con el
+  *scope carrier* del agente, y que alcance al contexto raíz del plugin no está garantizado — una fila que
+  no aparece no se distingue de una que no existe.
 - El plugin **conserva las retiradas** de cada agente y las ejecuta al descargarse: el harness avisa de que
   descargar el plugin no libera por su cuenta lo registrado bajo `agent.ctx`.
 - Decidir en una sesión ya no recompone las filas de las demás.

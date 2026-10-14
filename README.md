@@ -12,7 +12,7 @@ absoluta** con el gestor de plugins del harness.
 
 | Plugin | Qué hace | Estado |
 |---|---|---|
-| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | En uso · v1.6.0 · 234 pruebas en verde |
+| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | En uso · v1.6.0 · 235 pruebas en verde |
 
 ## Por qué está en `htdocs`
 

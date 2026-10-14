@@ -6,7 +6,7 @@ Memoria durable del repositorio. No es el historial de una sesión: es lo que ha
 ## Versión publicada
 
 **v1.6.0** del plugin `skill-compiler` — `main` sincronizado con `designerbyron/plugins-dhs`.
-234 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
+235 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
 con 14 comprobaciones en verde.
 
 ## Qué está verificado (con la evidencia)
@@ -24,6 +24,7 @@ con 14 comprobaciones en verde.
 | Tema | Estado |
 |---|---|
 | Probar en vivo el **panel de decisiones en lote** (casillas + confirmación) en la tarjeta | Implementado en v1.5.0 y **reparado en v1.5.2**: el cliente declaraba `inject: ['slots', 'locale']` y le faltaba `'remote.commands'` (el path que el anfitrión exige, igual que su propio paquete de comandos), así que el panel no podía leer las pendientes y encima decía «no hay nada» — ahora dice el motivo y por dónde seguir. Requiere recargar el plugin para tomar efecto |
+| Filas del menú por sesión | Implementado en v1.6.0: se montan bajo el `agent.ctx` de la sesión, con el agente que el provider recibe. Falta que el autor lo vea en vivo (recargando el plugin): en una sesión deben aparecer las pendientes de **su** proyecto y ninguna de otro |
 | Reducir el ruido del catálogo global | Medido el 2026-10-13: de las 20 skills de `~/.dsh/skills`, al prompt llegan 13. El motivo **no está medido** (candidatos: deduplicación por similitud o presupuesto). La composición por proyecto sí: 0 skills de otros proyectos en los tres casos |
 | **Adiciones a tres skills de tenants** (`hostinger-tenant-release`, `tenant-onboarding-provision`, `tenant-maintenance-update`) | Contenido redactado, **sin aplicar**. Las tres viven ahora en `approved/` del proyecto `saas-corporative`, así que las adiciones se aplican **ahí** (ámbito del proyecto), no en la biblioteca compartida |
 | **Cruces entre repos** | **Resuelto el 2026-10-13.** El cruce estaba fuera del plugin: cinco skills de proyecto en la biblioteca global y una nota del README de `prompt-doctor` que citaba la ruta de un proyecto. Ambas fuentes cerradas; evidencia en [`docs/AUDITORIA-2026-10-13-cruces-entre-repos.md`](docs/AUDITORIA-2026-10-13-cruces-entre-repos.md) |

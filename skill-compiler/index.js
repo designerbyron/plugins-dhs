@@ -82,6 +82,7 @@ export function apply(ctx, config = {}) {
   // de su sesión, que es lo que el contrato del harness pide para esto: registrar en `agent.ctx`,
   // obtenido en un listener de `agent/created`, y conservar el disposer por agente en un efecto propio.
   /** Lo sustituye el bloque de comandos: sin servicio de comandos no hay filas, y no pasa nada. */
+  let mountSession = () => false;
   let refreshPendingRows = () => false;
 
   ctx.systemPrompt.section({
@@ -106,7 +107,9 @@ export function apply(ctx, config = {}) {
   // mano), que la señal vigila. La promesa —«usable sin reiniciar»— depende de esto y sólo de esto.
   ctx.skills.registerProvider((control) => {
     catalog.bind(control?.invalidate);
-    return skillProvider({ root });
+    // El provider recibe cada sesión que pide su catálogo, con su agente: ahí se montan las filas de ESA
+    // sesión. Se mide contra el registro real en `que-recibe-el-provider` y en la prueba de activación.
+    return skillProvider({ root, observe: ({ agent }) => mountSession(agent) });
   });
   ctx.effect(() => {
     catalog.start();
@@ -231,21 +234,18 @@ export function apply(ctx, config = {}) {
         // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.
       }
 
-      // El alta del agente es donde el plugin conoce el ámbito sin que un humano lo declare: su `cwd`.
-      let offCreated = null;
-      try {
-        offCreated = ctx.on('agent/created', (agent) => mountFor(agent));
-      } catch {
-        /* sin el alta no hay filas por sesión; los comandos con argumentos siguen funcionando */
-      }
+      // El montaje lo dispara el provider, que recibe cada sesión con su agente (vía medida contra el
+      // registro real). No se usa un evento del ciclo de vida del agente: su entrega desde el contexto
+      // raíz no está garantizada, y una fila que no aparece no se distingue de una que no existe.
+      mountSession = (agent) => {
+        if (agent === undefined || agent === null) return false;
+        mountFor(agent);
+        return perAgent.has(agent);
+      };
 
       return () => {
+        mountSession = () => false;
         refreshPendingRows = () => false;
-        try {
-          if (typeof offCreated === 'function') offCreated();
-        } catch {
-          /* ya retirado */
-        }
         for (const entry of perAgent.values()) {
           // Las filas primero, con las retiradas que guarda el propio plugin: el ámbito del agente no se
           // desmonta solo al descargarse el plugin, y una fila viva apunta a una sesión que ya no está.

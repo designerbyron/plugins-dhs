@@ -138,6 +138,33 @@ describe('frescura del catálogo de skills', () => {
 });
 
 /**
+ * El contrato del que depende el ámbito de las filas del menú: **el registro entrega el agente** al
+ * provider, junto con el `cwd`. Es lo que permite montar las filas de cada pendiente bajo el contexto de
+ * su sesión —y no en el global, donde el humano acabó viendo, en el menú de un proyecto, las pendientes
+ * de otro—. Medido contra el registro real; si el harness dejara de entregarlo, esta puerta se cae.
+ */
+describe('el registro entrega la sesión al provider', () => {
+  it('llama a list({ cwd, agent }), no sólo con el cwd', async () => {
+    const ctx = new Context();
+    ctx.plugin(SkillRegistry);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const args = [];
+    ctx.skills.registerProvider(() => ({
+      name: 'explorador',
+      async list(received) { args.push(received); return []; },
+      async get() { return undefined; },
+    }));
+
+    const agent = { session: { header: { cwd: CWD } } };
+    await ctx.skills.list({ cwd: CWD, agent });
+    assert.ok(args.length > 0, 'el registro tiene que haber llamado al provider');
+    assert.equal(args[0].cwd, CWD);
+    assert.equal(args[0].agent, agent, 'el agente es lo que da el ámbito: sin él, las filas no son de nadie');
+  });
+});
+
+/**
  * La biblioteca curada también compone el catálogo del agente (la sirve el mismo registro), y no es
  * nuestra: si el humano mueve algo de ahí, las sesiones abiertas tienen que enterarse. Pero observarla
  * **no puede crear** un directorio ajeno que no exista.

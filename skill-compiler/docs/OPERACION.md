@@ -36,9 +36,9 @@ tienen argumentos a propósito: en el contrato del harness, un comando del host 
 ejecuta **en el acto** al elegirlo en el menú, así que seleccionar la fila **es** la decisión, sin recordar
 ni teclear nada. Teclear el comando entero hace exactamente lo mismo: son los mismos comandos.
 
-**Las filas son de una sesión, no de todas.** Se registran en el ámbito del agente de esa sesión —su `cwd`
-es el ámbito, y el contrato del harness para esto es registrar bajo `agent.ctx`, obtenido en un listener de
-`agent/created`—, así que en una sesión aparecen las pendientes de **su** proyecto y ninguna de otro. Antes
+**Las filas son de una sesión, no de todas.** Se registran en el ámbito de **su** agente —bajo `agent.ctx`,
+que el plugin obtiene del provider: el registro del harness lo llama con `{ cwd, agent }` en cada sesión que
+pide su catálogo—, así que en una sesión aparecen las pendientes de su proyecto y ninguna de otro. Antes
 se registraban en el global y el humano llegó a ver, en el menú de un proyecto, las pendientes de otro:
 ofrecidas y condenadas a fallar, porque la puerta —que sí comprueba el ámbito— las rechazaba con razón.
 

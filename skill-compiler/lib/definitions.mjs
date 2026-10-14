@@ -283,11 +283,14 @@ export function skillReview({ root = defaultRoot() } = {}) {
  */export function skillProvider({ root = defaultRoot(), observe } = {}) {
   return {
     name: 'skill-compiler',
-    async list({ cwd }) {
-      // El harness dice aquí en qué sesión está sirviendo. Es el único sitio donde el plugin conoce el
-      // ámbito sin que un humano lo declare, así que es aquí donde se anotan las filas de pendientes
-      // que esa sesión puede elegir en el menú.
-      observe?.(cwd);
+    async list({ cwd, agent }) {
+      // El harness dice aquí en qué sesión está sirviendo, y no sólo el `cwd`: entrega el **agente**
+      // (medido contra el registro real, que además cachea por `(cwd, agente, revisión)`). Es el único
+      // sitio donde el plugin conoce la sesión sin que un humano lo declare, así que es aquí donde se
+      // montan —bajo el contexto de ese agente— las filas que su menú puede ofrecer. Montarlas en el
+      // global las ofrecía a todas las sesiones, y el humano acabó viendo, en el menú de un proyecto,
+      // las pendientes de otro.
+      observe?.({ cwd, agent });
       return listForProject(cwd, { root })
         .map((entry) => {
           const loaded = readSkill(entry.path);
