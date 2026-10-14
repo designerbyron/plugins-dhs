@@ -33,6 +33,28 @@ describe('PROTOCOL', () => {
   it('es corto: entra en el prompt de todas las sesiones y se paga entero cada vez', () => {
     assert.equal(PROTOCOL.length < 1200, true, `demasiado largo: ${PROTOCOL.length} caracteres`);
   });
+
+  /**
+   * El defecto de uso que reportó el autor: «habiendo aprendido cosas, nunca ha sugerido una skill nueva ni
+   * ha actualizado una ya creada». La capacidad existía —`checkOverlap` trata el mismo id del propio
+   * proyecto como actualización, y hay pruebas funcionales que lo demuestran— pero **nadie se lo decía al
+   * modelo**: ni el protocolo ni la descripción de la herramienta mencionaban que un id existente la
+   * actualiza. Una capacidad que nadie sabe que existe es una capacidad que no existe.
+   */
+  it('declara la vía de actualización, que es la que el modelo no estaba usando', () => {
+    assert.match(PROTOCOL, /con el mismo id/, 'el protocolo tiene que decir cómo se actualiza: mismo id');
+    assert.match(PROTOCOL, /actualización, no un duplicado/);
+    assert.match(PROTOCOL, /apartada, nunca borrada/, 'y qué pasa con la versión anterior al aprobarla');
+    assert.match(PROTOCOL, /skill_review/, 'y cómo consultar lo que ya hay antes de proponer');
+  });
+
+  it('la descripción de skill_propose invita a actualizar, no sólo a crear', () => {
+    const definition = skillPropose({ root: '/no/usado' });
+    assert.match(definition.description, /UPDATE it/, 'la descripción es lo que el modelo lee para elegir la herramienta');
+    assert.match(definition.description, /superseded\//);
+    // El criterio es «se reutilizará», no «tarea compleja»: el freno anterior no mencionaba la actualización.
+    assert.equal(/never for a simple query/.test(definition.description), false);
+  });
 });
 
 describe('scopeOf', () => {

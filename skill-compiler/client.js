@@ -111,6 +111,7 @@ window.__ModuleLoader__.load({
         bulk_reading: 'Leyendo las pendientes…',
         bulk_none: 'Ninguna pendiente: si acabas de aprobar, ya no queda nada que decidir.',
         bulk_unreadable: 'No se pudieron leer las pendientes',
+        bulk_unreadable_hint: 'Síguelo desde el terminal o desde el menú «/»: la lista y la aprobación funcionan igual, pasan por la misma puerta',
         bulk_select_all: 'Marcar todas',
         bulk_clear: 'Desmarcar',
         bulk_approve: 'Aprobar las marcadas',
@@ -158,6 +159,7 @@ window.__ModuleLoader__.load({
         bulk_reading: 'Reading the pending ones…',
         bulk_none: 'Nothing pending: if you just approved, there is nothing left to decide.',
         bulk_unreadable: 'Could not read the pending ones',
+        bulk_unreadable_hint: 'Follow it from the terminal or from the «/» menu: the list and the approval work the same, through the same gate',
         bulk_select_all: 'Select all',
         bulk_clear: 'Clear',
         bulk_approve: 'Approve the selected',
@@ -555,9 +557,13 @@ window.__ModuleLoader__.load({
         h('div', { className: 'skc-bulk-head' }, h('span', null, say(bulk ? 'bulk_title' : 'bulk_single'))),
         failure === ''
           ? null
-          : h('div', { className: 'skc-bulk-note', 'data-tone': 'error' }, `${say('bulk_unreadable')}: ${failure}`),
-        ids === null ? h('div', { className: 'skc-bulk-note' }, say('bulk_reading')) : null,
-        ids !== null && rows.length === 0 && report === null
+          : h('div', { className: 'skc-bulk-note', 'data-tone': 'error' }, `${say('bulk_unreadable')}: ${failure}. ${say('bulk_unreadable_hint')}`),
+        // «Leyendo…» sólo mientras de verdad se está leyendo: si la lectura falló, el único aviso es el
+        // motivo, más abajo. Y «ninguna pendiente» sólo cuando se pudo leer y la lista vino vacía — decir
+        // «no hay nada» sin haber podido preguntar es una mentira por omisión, y además deja al humano sin
+        // salida: el error añade por dónde seguir.
+        ids === null && failure === '' ? h('div', { className: 'skc-bulk-note' }, say('bulk_reading')) : null,
+        ids !== null && failure === '' && rows.length === 0 && report === null
           ? h('div', { className: 'skc-bulk-note' }, say('bulk_none'))
           : null,
         rows.length === 0
@@ -742,7 +748,13 @@ window.__ModuleLoader__.load({
 
     return {
       // El servicio de idioma se declara aquí porque la pieza registra sus diccionarios en el arranque.
-      inject: ['slots', 'locale'],
+      //
+      // `remote.commands` se declara con su PATH, no como `remote`: el contexto de cliente resuelve los
+      // servicios por la ruta que el anfitrión declara, y su propio paquete de comandos usa exactamente
+      // `'remote.commands'`. Sin esta línea, `ctx.remote.commands` existía como proxy pero lanzaba
+      // «cannot get property "remote.commands" without inject» al primer uso: el panel anunciaba que no
+      // había nada pendiente cuando lo que pasaba es que no había podido preguntar.
+      inject: ['slots', 'locale', 'remote.commands'],
 
       apply(ctx) {
         // El registro del idioma es un recurso: se registra en un efecto para que se retire al descargar.

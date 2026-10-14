@@ -103,6 +103,17 @@ observa sólo si ya existe, porque vigilar no puede crear un directorio que no e
 cualquiera de las dos avisa al registro, que recompone el catálogo entero. Sin la segunda, mover o retirar
 una skill de la capa global dejaría a las sesiones abiertas con la lista anterior.
 
+### Actualizar una skill que se quedó corta
+
+Una skill aprobada no es intocable. Cuando lo aprendido la supera o la corrige, el modelo propone **con el
+mismo id** y eso es una actualización, no un duplicado: la propuesta queda pendiente como cualquier otra, y
+al aprobarla la versión anterior **se aparta** en `superseded/<id>-<fecha>/` — nunca se borra, así que el
+historial de lo que se sabía no se pierde. La tarjeta del resultado lo dice («updated» en vez de «created»),
+y el protocolo pide al modelo mirar antes qué hay con `skill_review`.
+
+Para la actualización **curada** (una skill de la biblioteca global) el anti-solapamiento sí veta: una skill
+aprendida no suplanta en silencio a la biblioteca compartida.
+
 ## CLI (la usas tú)
 
 ```sh

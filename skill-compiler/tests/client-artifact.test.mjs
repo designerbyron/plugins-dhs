@@ -229,4 +229,29 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.match(client, /const reading = typeof node\?\.args === 'string' \? node\.args\.trim\(\) : ''/);
     assert.match(client, /bulk_approve_one|bulk_reject_one/);
   });
+
+  /**
+   * El defecto que se vio en vivo: el panel decía «no hay nada pendiente» cuando lo que pasaba es que no
+   * había podido preguntar. La causa era la inyección —el contexto de cliente resuelve los servicios por su
+   * PATH, y el propio paquete de comandos del anfitrión declara `'remote.commands'`—, y el efecto, un
+   * mensaje que negaba el trabajo del humano.
+   */
+  it('declara el remoto que usa, con el path que el anfitrión exige', () => {
+    assert.match(client, /inject: \['slots', 'locale', 'remote\.commands'\]/,
+      'sin declararlo, ctx.remote.commands lanza «without inject» al primer uso');
+  });
+
+  it('si no pudo leer las pendientes, no dice que no hay nada', () => {
+    // Las dos afirmaciones dependen de que se haya podido leer: «leyendo…» mientras se lee, y «ninguna
+    // pendiente» sólo si la lectura salió bien y vino vacía. Sin `failure === ''`, las dos mienten.
+    assert.match(client, /ids === null && failure === '' \? h\('div', \{ className: 'skc-bulk-note' \}, say\('bulk_reading'\)\)/);
+    assert.match(client, /ids !== null && failure === '' && rows\.length === 0 && report === null/);
+    assert.equal(
+      /ids !== null && rows\.length === 0 && report === null/.test(client),
+      false,
+      'la condición de «ninguna pendiente» no puede ignorar el fallo de lectura',
+    );
+    // Y el error no deja sin salida: dice por dónde seguir, que es el mismo camino de siempre.
+    assert.match(client, /say\('bulk_unreadable_hint'\)/);
+  });
 });

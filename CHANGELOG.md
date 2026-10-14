@@ -4,6 +4,39 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.5.2] — 2026-10-13
+
+**Actualizar una skill existente era posible y nadie lo sabía.** Reportado por el autor: «habiendo aprendido
+cosas, nunca ha sugerido una skill nueva ni ha actualizado una ya creada». La capacidad estaba construida
+—`checkOverlap` trata el mismo id del propio proyecto como actualización, y al aprobarla la versión anterior
+se aparta en `superseded/`— con pruebas funcionales en verde; pero ni el protocolo ni la descripción de la
+herramienta lo decían, y son lo único que el modelo lee. Una capacidad que nadie sabe que existe es una
+capacidad que no existe.
+
+### Corregido
+
+- **Protocolo**: el criterio pasa de «tarea compleja, y solo entonces» a «si lo resuelto se reutilizará», y
+  declara **tres** vías, no dos: conocimiento nuevo, **actualización de una skill del proyecto que esto
+  supera o corrige** (`skill_propose` **con el mismo id**, y `skill_review` para ver qué hay antes) y
+  vendorización de un repositorio ajeno. Se dice qué pasa con la versión anterior: queda apartada, nunca
+  borrada.
+- **Descripción de `skill_propose`**: declara que un id existente **actualiza** en vez de crear —la
+  descripción es lo que el modelo lee para decidir si usa la herramienta— y se retira el «never for a simple
+  query», que empujaba a no proponer nada de lo aprendido en tareas normales.
+- El protocolo sigue **por debajo del límite que impone su propia prueba** (1175 < 1200 caracteres): entra
+  en el prompt de cada sesión y se paga entero cada vez.
+- La vía que se le indica al humano para aprobar es ahora la de la sesión (`/skill-aprobar <id>`, o su fila
+  en el menú `/`), con el comando del terminal como alternativa; antes sólo se le daba esta última.
+- Cuando una propuesta afina otra que ya estaba pendiente, el modelo lo ve dicho: «afina una propuesta que
+  ya estaba pendiente: no crea una skill nueva».
+
+### Medido
+
+- 234 pruebas (antes 230). Las dos nuevas fijan el contrato de la guía y **se demuestran rojas** contra la
+  versión anterior: el protocolo no decía «con el mismo id» y la descripción no decía «UPDATE it».
+- El camino funcional ya estaba probado y sigue verde: proponer con el mismo id de una skill aprobada
+  devuelve `updatesApproved`, y aprobarla deja la anterior en `superseded/`.
+
 ## [1.5.1] — 2026-10-13
 
 **La frescura, también para la biblioteca curada.** El plugin observaba su propio almacén, pero no la capa
