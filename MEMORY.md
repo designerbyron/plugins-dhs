@@ -32,6 +32,12 @@ con 14 comprobaciones en verde.
 | **Cruces entre repos** | **Resuelto el 2026-10-13.** El cruce estaba fuera del plugin: cinco skills de proyecto en la biblioteca global y una nota del README de `prompt-doctor` que citaba la ruta de un proyecto. Ambas fuentes cerradas; evidencia en [`docs/AUDITORIA-2026-10-13-cruces-entre-repos.md`](docs/AUDITORIA-2026-10-13-cruces-entre-repos.md) |
 | Capturas y tarjetas del menú `/` no admiten decoración por fila | Medido y cerrado: no se reintenta |
 
+## Pendientes del harness (no del plugin)
+
+| Tema | Estado |
+|---|---|
+| **`create_goal` choca con un objetivo pausado** | Reportado por el autor el 2026-10-13. Mientras trabajaba, el modelo respondió: *«El create_goal chocó con el objetivo pausado, pero tu mensaje es la instrucción directa y sigo… El modelo ha tenido que tomar otra ruta para no detenerse»*. Contexto observado: el harness mantiene objetivos («goals») con estado **pausado** —en una captura aparecía un «Paused Goal ACT-CARLOS-DIAZ-CHECKPOINT-AND-REPRODUCIBILITY-02» con sus controles—. **Sin verificar, y se dice**: no se ha medido por qué `create_goal` choca con uno pausado, ni si lo correcto es rodearlo, reanudarlo o parar y preguntar antes de cambiar de ruta. Retomar midiendo: el contrato de la herramienta de objetivos en el asar y el log de la sesión donde ocurrió (no en el repositorio de trabajo del autor) |
+
 ## Decisiones que no se vuelven a discutir
 
 - **Zod, no schemastery**, para las proyecciones: el registro valida con `schema.parse(...)`.
