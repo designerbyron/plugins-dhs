@@ -93,9 +93,47 @@ describe('resultado en una palabra', () => {
 
 describe('plegado del estado', () => {
   const call = (name, callId, id) => ({ type: 'tool/call', seq: 1, time: 1000, data: { name, callId, arguments: JSON.stringify({ id }) } });
+  // La forma REAL, medida contra el harness: un resultado de herramienta llega como bloque PLANO.
+  // La prueba usaba la anidada, y por eso el defecto —un `else` colgado del `if` interno, que dejaba los
+  // bloques planos sin leer— vivió en verde: la suite probaba una forma que el harness no produce.
   const result = (callId, text, seq = 2) => ({
     type: 'tool/result', seq, time: 2000,
+    data: { message: { source: { kind: 'tool', callId }, content: [{ type: 'text', text }] } },
+  });
+  const resultNested = (callId, text, seq = 2) => ({
+    type: 'tool/result', seq, time: 2000,
     data: { message: { source: { kind: 'tool', callId }, content: [{ type: 'tool-result', content: [{ type: 'text', text }] }] } },
+  });
+
+  it('el marcador se lee en las formas del contrato, no en una sola', () => {
+    const formas = [
+      ['plana (la del harness)', result],
+      ['anidada', resultNested],
+    ];
+    for (const [nombre, build] of formas) {
+      const s1 = applyLearning(initialLearning(), call('skill_propose', 'c1', 'mi-skill'));
+      const s2 = applyLearning(s1, build('c1', `${markerLine('created', 'mi-skill')}\n\ndetalle`));
+      assert.equal(s2.outcome, 'created', `sin leer el marcador en la forma ${nombre}, el adorno se queda mudo`);
+      assert.equal(s2.id, 'mi-skill', `y sin id en la forma ${nombre}`);
+      assert.equal(s2.created, 1);
+    }
+    // Y varios bloques se leen todos: un bloque vacío delante no puede dejar mudo al adorno. El marcador
+    // sigue teniendo que ir al principio del texto (el regex no se afloja: si no, leería un marcador citado
+    // dentro de un texto cualquiera, y eso sí sería adivinar).
+    const s1 = applyLearning(initialLearning(), call('skill_propose', 'c1', 'mi-skill'));
+    const varios = {
+      type: 'tool/result', seq: 2, time: 2000,
+      data: { message: { source: { kind: 'tool', callId: 'c1' },
+        content: [{ type: 'text', text: '' }, { type: 'text', text: markerLine('created', 'mi-skill') }] } },
+    };
+    assert.equal(applyLearning(s1, varios).outcome, 'created');
+    // Y el marcador citado dentro de un texto NO se atribuye: eso sería inventar de qué skill se trata.
+    const citado = {
+      type: 'tool/result', seq: 2, time: 2000,
+      data: { message: { source: { kind: 'tool', callId: 'c1' },
+        content: [{ type: 'text', text: 'salida:\n' + markerLine('created', 'otra') }] } },
+    };
+    assert.equal(applyLearning(s1, citado).outcome, 'none');
   });
 
   it('empieza en reposo y sin nada que enseñar', () => {

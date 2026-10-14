@@ -187,8 +187,20 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.match(client, /className: 'skc-card-stale'/);
     assert.match(client, /card_stale_approved/);
     assert.match(client, /card_stale_rejected/);
-    // Y se pliega sola: una lista que ya no describe el almacén no ocupa media pantalla, pero sigue ahí.
-    assert.match(client, /const expanded = touched \? open : open && !stale/);
+    // El `stale` MARCA el bloque, y eso se avisa aparte; lo que no puede es ESCONDER el resultado: el
+    // texto de un bloque es el registro de lo que pasó, y el usuario reportó que su lista de pendientes
+    // desaparecía. No hay adorno que valga si se lleva por delante lo que el humano pidió ver.
+    assert.match(client, /const expanded = touched \? open : open;/);
+    assert.doesNotMatch(client, /const expanded = touched \? open : open && !stale/, 'marcar no es ocultar');
+  });
+
+  it('el panel reintenta antes de decir que no hay filas, y no miente si no las encuentra', () => {
+    // Medido con el usuario delante: el comando arma sus filas al correr (`onListed`) y el host puede
+    // tardar un instante en anunciarlas, así que el panel leía «nada» justo cuando acababa de llegar algo.
+    assert.match(client, /if \(found\.length === 0\)/);
+    assert.match(client, /setTimeout\(resolve, 400\)/);
+    assert.match(client, /bulk_no_rows/);
+    assert.match(client, /La lista está en el resultado de arriba/);
     // La banda va fuera del cuerpo desplegable: se lee aunque la tarjeta esté colapsada.
     assert.match(client, /role: 'note'/);
   });

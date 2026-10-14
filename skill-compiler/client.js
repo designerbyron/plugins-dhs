@@ -115,6 +115,7 @@ window.__ModuleLoader__.load({
         bulk_single: 'Esta propuesta',
         bulk_reading: 'Leyendo las pendientes…',
         bulk_none: 'Ninguna pendiente: si acabas de aprobar, ya no queda nada que decidir.',
+        bulk_no_rows: 'No hay filas que decidir en el catálogo de esta sesión. La lista está en el resultado de arriba: escribe «/» y elige la fila, o teclea el comando con su id.',
         bulk_unreadable: 'No se pudieron leer las pendientes',
         bulk_unreadable_hint: 'Síguelo desde el terminal o desde el menú «/»: la lista y la aprobación funcionan igual, pasan por la misma puerta',
         bulk_habilitar: 'Volver a encender las marcadas',
@@ -171,6 +172,7 @@ window.__ModuleLoader__.load({
         bulk_single: 'This proposal',
         bulk_reading: 'Reading the pending ones…',
         bulk_none: 'Nothing pending: if you just approved, there is nothing left to decide.',
+        bulk_no_rows: 'No rows to decide on in this session catalog. The list is in the result above: type «/» and pick the row, or type the command with its id.',
         bulk_unreadable: 'Could not read the pending ones',
         bulk_unreadable_hint: 'Follow it from the terminal or from the «/» menu: the list and the approval work the same, through the same gate',
         bulk_habilitar: 'Switch the marked ones back on',
@@ -536,10 +538,19 @@ window.__ModuleLoader__.load({
           return undefined;
         }
         let alive = true;
+        const leer = () => listCommands(sessionId).then((commands) => rowIds(commands, listVerbFor(node?.name)));
         (async () => {
           try {
-            const commands = await listCommands(sessionId);
-            if (alive) setIds(rowIds(commands, listVerbFor(node?.name)));
+            let found = await leer();
+            // El comando que originó este bloque acaba de armar sus filas (`onListed`), así que el host
+            // puede tardar un instante en anunciarlas. Sin este reintento, el panel decía «no hay nada»
+            // justo cuando acababa de llegar algo.
+            if (found.length === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 400));
+              if (!alive) return;
+              found = await leer();
+            }
+            if (alive) setIds(found);
           } catch (error) {
             if (alive) {
               setIds([]);
@@ -617,7 +628,7 @@ window.__ModuleLoader__.load({
         // salida: el error añade por dónde seguir.
         ids === null && failure === '' ? h('div', { className: 'skc-bulk-note' }, say('bulk_reading')) : null,
         ids !== null && failure === '' && rows.length === 0 && report === null
-          ? h('div', { className: 'skc-bulk-note' }, say('bulk_none'))
+          ? h('div', { className: 'skc-bulk-note' }, say('bulk_no_rows'))
           : null,
         rows.length === 0
           ? null
@@ -702,7 +713,10 @@ window.__ModuleLoader__.load({
       const stale = isList && decision !== null && decision.seq > -1 && seq !== null && decision.seq > seq;
       // Una lista obsoleta se pliega sola —ya no es la información que se pidió— y se despliega si el
       // humano la pide. Marcar y colapsar es lo honesto: el bloque sigue ahí, pero no engaña a primera vista.
-      const expanded = touched ? open : open && !stale;
+      // El `stale` **marca** que la lista quedó atrás de una decisión, y eso se avisa aparte; lo que no
+      // puede hacer es **esconder** el resultado. El texto de un bloque es el registro de lo que pasó, y
+      // una lista de pendientes que el humano pidió ver no desaparece porque después se decidiera algo.
+      const expanded = touched ? open : open;
 
       // Las hojas de estilo se llevan en el árbol, como la de la píldora: desmontar la tarjeta las retira,
       // y cada una puede montarse sin la otra.

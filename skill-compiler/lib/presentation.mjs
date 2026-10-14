@@ -98,14 +98,24 @@ export function initialLearning() {
 const pendingCount = (pending) => (Array.isArray(pending) ? pending.length : 0);
 
 /** Texto plano de un resultado de herramienta, tal y como lo escribió `output.render`. */
+/**
+ * El texto de un bloque, en cualquiera de las formas que admite el contrato de mensajes.
+ *
+ * Medido contra el harness real: un resultado de herramienta llega como `{ type: 'text', text: '...' }`
+ * —plano—, y el texto también puede venir anidado en `content`. Se recorre la forma **entera** en vez de
+ * elegir una rama con un `else`: la versión anterior colgaba el `else` del `if` interno (faltaba una llave)
+ * y un bloque plano no se leía **nunca**, así que el marcador del resultado no aparecía y todo resultado de
+ * `skill_propose` contaba como «ninguno». El adorno se quedaba mudo sin que nada fallara a la vista.
+ */
+function blockText(block) {
+  if (typeof block?.text === 'string') return [block.text];
+  if (Array.isArray(block?.content)) return block.content.flatMap((inner) => blockText(inner));
+  return [];
+}
+
 function resultText(event) {
   const blocks = event?.data?.message?.content ?? [];
-  const parts = [];
-  for (const block of blocks) {
-    if (Array.isArray(block?.content)) for (const inner of block.content) if (typeof inner?.text === 'string') parts.push(inner.text);
-    else if (typeof block?.text === 'string') parts.push(block.text);
-  }
-  return parts.join('\n');
+  return blocks.flatMap((block) => blockText(block)).join('\n');
 }
 
 /**

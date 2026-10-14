@@ -4,6 +4,31 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.7.2] — 2026-10-14
+
+**El adorno mudo, y la lista que no se veía.** Defectos medidos en vivo, con la sesión del autor delante.
+
+- **La píldora nunca se animaba** (`resultText`). El marcador que el plugin escribe en el resultado
+  (`[skill-compiler] created <id>`) no se leía, así que la proyección contaba **todos** los resultados como
+  «ninguno»: sin engranaje, sin aviso de propuesta nueva y los contadores siempre a cero. La causa era una
+  llave: el `else` colgaba del `if` **interno** del bucle, así que un bloque **plano** —`{type:'text', text}`,
+  que es justo la forma que usa el harness— no se leía **nunca**. Ahora se recorre la forma entera (plana,
+  anidada y varios bloques) con una función recursiva y no eligiendo una rama.
+  **Y por qué la suite no lo cazó**: la prueba construía el resultado con la forma **anidada**, que el harness
+  no produce. El helper usa ya la forma **real** medida y hay una prueba que exige las dos.
+  Esto explica también lo reportado antes —«nunca ha sugerido ni actualizado una skill»—: las propuestas
+  llegaban, pero el adorno no las contaba.
+- **El resultado que no se veía** (la tarjeta). El cuerpo del bloque se plegaba cuando el bloque quedaba
+  marcado como anterior a una decisión: se pedía la lista de pendientes y se veía «nada». Marcar que una lista
+  quedó atrás es correcto —y se sigue avisando—, pero **no puede esconder el registro**: el texto de un
+  resultado es lo que pasó.
+- **El panel afirmaba «nada pendiente» cuando no encontraba filas**. El comando arma sus filas al correr
+  (`onListed`) y el host puede tardar un instante en anunciarlas, así que el panel leía «nada» justo cuando
+  acababa de llegar algo. Ahora reintenta una vez y, si sigue sin verlas, lo **dice** con el camino
+  alternativo (el texto del resultado y el menú «/») en vez de afirmar que no hay nada.
+
+257 pruebas en verde · suite hermética con huella idéntica · `doctor` verde.
+
 ## [1.7.1] — 2026-10-14 — **primera versión estable**
 
 Esta versión queda declarada como la **primera estable** del repositorio, con criterios y con compromiso (ver
