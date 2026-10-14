@@ -37,6 +37,11 @@ rompió, se notó.
     **gesto inverso** en el mismo mensaje. Y una acción que no movió nada no avisa: si el aviso se da
     siempre, deja de significar algo.
 
+17. **La ruta de una máquina no se publica.** Ni la local de nadie en la documentación, ni una absoluta en el
+    código: la instalación se explica por la URL del repositorio, los ejemplos usan un marcador, y lo que
+    sabe dónde vive lo **deriva**. Y los artefactos firmados con su hash no se reescriben, aunque tengan una
+    ruta antigua dentro: reescribirlos rompería su autorización.
+
 ## Proceso
 
 11. **Medir antes de afirmar.** Un número medido antes que un adjetivo; lo no verificado se declara no

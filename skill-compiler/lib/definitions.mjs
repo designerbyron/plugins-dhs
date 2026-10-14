@@ -8,6 +8,7 @@
  */
 
 import { basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { autoApproveFor } from './auto-approve.mjs';
 import { approve, checkProposal, defaultRoot, listForProject, overview, projectKey, propose, readSkill } from './compiler.mjs';
@@ -51,14 +52,18 @@ export function scopeOf(exec) {
 }
 
 /**
- * Ruta del CLI que se le indica al usuario para aprobar. No se puede deducir desde aquí —el plugin
- * queda instalado en el perfil y el repositorio vive en otro sitio—, así que se resuelve con una
- * variable de entorno y un valor por defecto. No se usa `Config` del harness para esto porque
- * obligaría a importar otro paquete del que depende la resolución de módulos del perfil; el porqué
- * está declarado en el README.
+ * Ruta del CLI que se le indica al humano para aprobar.
+ *
+ * Se **deriva de la ruta de este propio fichero** —el plugin sabe dónde vive— en vez de escribirse: una
+ * ruta absoluta en el código se queda obsoleta en cuanto el repositorio se mueve, y además publica la
+ * ubicación local de quien la escribió. El CLI del paquete ya lo hace así para enseñarse a sí mismo.
+ *
+ * `SKILL_COMPILER_CLI` sigue existiendo como escape para un despliegue que mueva el CLI fuera del
+ * paquete; no se usa `Config` del harness porque obligaría a importar otro paquete del que depende la
+ * resolución de módulos del perfil.
  */
 const CLI_PATH = process.env.SKILL_COMPILER_CLI
-  ?? 'C:\\xampp\\htdocs\\plugins-dhs\\skill-compiler\\bin\\skill-compiler.mjs';
+  ?? fileURLToPath(new URL('../bin/skill-compiler.mjs', import.meta.url));
 
 const approveHint = (id) =>
   `\`/skill-aprobar ${id}\` en esta sesión (o su fila «skill-aprobar-${id}» en el menú «/»); alternativa desde el terminal: node "${CLI_PATH}" approve ${id}`;

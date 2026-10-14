@@ -118,7 +118,7 @@ El plugin **no se instala solo**: escribirlo en el perfil es cosa del gestor de 
 2. Desde la página **Plugins** de la interfaz de DSH, instala un bundle **por ruta absoluta**:
 
    ```
-   C:\xampp\htdocs\plugins-dhs\skill-compiler
+   <donde-clonaste-el-repo>/skill-compiler
    ```
 
    (También vale `install_bundle` con `target` = esa ruta absoluta.)
@@ -199,7 +199,7 @@ persona, el modelo no puede invocarlos ni saltarse la validación.
 
 ```sh
 # ¿qué ámbito tiene este directorio?
-node "C:\xampp\htdocs\plugins-dhs\skill-compiler\bin\skill-compiler.mjs" where
+node "<donde-clonaste-el-repo>/skill-compiler/bin/skill-compiler.mjs" where
 
 # qué hay propuesto, aprobado y rechazado
 node ".../bin/skill-compiler.mjs" list
@@ -262,7 +262,7 @@ y vendorizas una versión limpia, o no se vendoriza.
 ## Pruebas
 
 ```sh
-cd "C:\xampp\htdocs\plugins-dhs\skill-compiler"   # o donde esté clonado
+cd "<donde-clonaste-el-repo>/skill-compiler"   # donde lo hayas clonado
 npm test              # las 209 pruebas
 npm run test:hermetic # las 209 pruebas + huella del store real antes y después
 ```

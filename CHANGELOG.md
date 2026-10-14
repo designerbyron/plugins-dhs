@@ -4,6 +4,26 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.7.1] — 2026-10-14 — **primera versión estable**
+
+Esta versión queda declarada como la **primera estable** del repositorio, con criterios y con compromiso (ver
+la sección de estado en el README): 251 pruebas en verde, suite hermética, contratos comprobados contra los
+paquetes reales del harness, `doctor` verde y el ciclo completo probado en vivo. Lo que sigue abierto son
+decisiones y límites declarados, no defectos.
+
+Y dos correcciones de la documentación, con su puerta:
+
+- **La ruta local de nadie, en ninguna parte**: la documentación escribía la ruta de la máquina donde se
+  clonó el repositorio. La instalación se explica por la **URL del repositorio** y los ejemplos usan
+  `<donde-clonaste-el-repo>`. En el **código** la ruta del CLI se **deriva** del propio fichero
+  (`fileURLToPath`) en vez de escribirse: una ruta escrita caduca en cuanto el repositorio se mueve, y encima
+  el plugin la enseña al humano como si fuera la buena.
+- **La puerta**: `tests/repo-hygiene.test.mjs` — estricta en código (ninguna ruta absoluta) y precisa en
+  documentación (prohíbe lo que identifica a una máquina o a una persona, porque hay ejemplos legítimos con
+  marcador, como la tabla que documenta que esas rutas se rechazan). Demostrada en rojo.
+- Excepciones **declaradas**, no agujeros: `plans/*.md` son artefactos autorizados por su SHA-256 y no se
+  reescriben; los `cwd` de ejemplo de `tests/` son datos de la prueba.
+
 ## [1.7.1] — 2026-10-14
 
 **Apagar una skill la apagaba, y el agente seguía viéndola.** Reportado por el autor tras probarlo en vivo:

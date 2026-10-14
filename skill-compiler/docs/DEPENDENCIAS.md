@@ -77,7 +77,7 @@ Se evaluó, y se descartó con motivo:
 ### En el repositorio (desarrollo, o instalación por ruta)
 
 ```sh
-cd C:\xampp\htdocs\plugins-dhs\skill-compiler
+cd <donde-clonaste-el-repo>/skill-compiler
 npm install      # instala el cierre declarado en node_modules/
 node bin/skill-compiler.mjs doctor   # comprueba que todo carga, que las herramientas compilan y que la proyección proyecta
 ```
@@ -124,7 +124,7 @@ que ahora lo cierran, y que van más allá de declarar la dependencia correcta:
 Las versiones están clavadas a `0.2.0-rc.2` (el runtime verificado). Si el harness sube de versión:
 
 ```sh
-cd C:\xampp\htdocs\plugins-dhs\skill-compiler
+cd <donde-clonaste-el-repo>/skill-compiler
 npm install @deepseek-ai/dsh-tools@<nueva> @deepseek-ai/cordis@<nueva> zod@<la que declare el harness>
 npm install
 npm test                          # incluye las puertas de contrato con el harness

@@ -153,7 +153,7 @@ aprendida no suplanta en silencio a la biblioteca compartida.
 ## CLI (la usas tú)
 
 ```sh
-cd C:\xampp\htdocs\plugins-dhs\skill-compiler
+cd <donde-clonaste-el-repo>/skill-compiler
 node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 ```
 
@@ -216,7 +216,7 @@ node bin/skill-compiler.mjs upstream mi-skill
 | Variable | Para qué | Por defecto |
 |---|---|---|
 | `DSH_HOME` | Dónde está el almacén (`$DSH_HOME/skill-compiler`) y la biblioteca curada (`$DSH_HOME/skills`) | `~/.dsh` |
-| `SKILL_COMPILER_CLI` | La ruta que el plugin le dice al usuario para aprobar | `C:\xampp\htdocs\plugins-dhs\skill-compiler\bin\skill-compiler.mjs` |
+| `SKILL_COMPILER_CLI` | Sólo si el CLI vive **fuera** del paquete: la ruta que el plugin le dice al usuario para aprobar | *(vacío)* — se deriva de la ruta del propio plugin |
 
 `SKILL_COMPILER_CLI` existe porque el plugin instalado vive en el perfil y no puede deducir dónde está el
 repositorio. En otra máquina, expórtala tras clonar.

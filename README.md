@@ -17,7 +17,8 @@ absoluta** con el gestor de plugins del harness.
 ## Por qué está en `htdocs`
 
 Decisión del operador: llevar estos plugins bajo control de versiones en un repositorio propio, junto al
-resto de su trabajo. Como `C:\xampp\htdocs` es el docroot de Apache, la carpeta lleva un `.htaccess` que
+resto de su trabajo. Como la carpeta puede acabar dentro de un docroot de Apache (por ejemplo si se clona
+en el árbol de XAMPP), lleva un `.htaccess` que
 **deniega todo**:
 
 ```apache
@@ -39,7 +40,7 @@ El gestor de plugins de DSH no lee repositorios: instala un **bundle** por ruta 
 1. **Instala las dependencias del plugin**, que van declaradas en su manifiesto:
 
    ```sh
-   cd C:\xampp\htdocs\plugins-dhs\skill-compiler
+   cd <donde-clonaste-el-repo>/skill-compiler
    npm install
    node bin/skill-compiler.mjs doctor   # dice si algo falta, y con qué comando se arregla
    ```
@@ -53,7 +54,7 @@ El gestor de plugins de DSH no lee repositorios: instala un **bundle** por ruta 
 3. En el diálogo, pega la ruta absoluta de la carpeta del plugin:
 
    ```
-   C:\xampp\htdocs\plugins-dhs\skill-compiler
+   <donde-clonaste-el-repo>/skill-compiler
    ```
 
 4. Cuando diga **Installed**, pulsa **Enable now**. Si el resultado pide reiniciar, reinicia el harness.
@@ -116,6 +117,33 @@ los cambios.
 Es la misma regla que aplica el propio plugin con las skills que vendoriza: guarda de dónde vinieron, con
 su hash y su fecha, para que nadie tenga que creerse nada de memoria.
 
+## Estado: primera versión estable (1.7.1)
+
+La **1.7.1** es la primera versión que este repositorio declara **estable**. No es un adjetivo: son criterios
+y un compromiso.
+
+**Lo que lo sostiene**
+
+- 251 pruebas en verde, con la suite **hermética** que mide la huella del almacén real antes y después.
+- Los contratos se comprueban contra los **paquetes reales** del harness (registro de skills, de comandos y de
+  proyecciones), no contra dobles escritos a mano.
+- `doctor` verde: cada comprobación **ejecuta** el camino que vigila, no lo reimplementa.
+- El flujo completo **probado en vivo**: proponer, aprobar, apagar, encender, retirar y recuperar.
+- Sin defectos abiertos en el flujo. Lo que sigue abierto son **decisiones** (qué debe hacer el modelo ante un
+  objetivo pausado) y **límites declarados**, no fallos.
+
+**El compromiso**: no cambian de forma incompatible sin subir de versión *major*:
+
+| Qué | Se mantiene |
+|---|---|
+| Comandos de la sesión | Los nombres `skill-*` y su forma (`input` opcional, resultado `{kind, text}`) |
+| CLI | `where`, `list`, `show`, `check`, `approve`, `reject`, `disable`, `enable`, `delete`, `retired`, `restore`, `vendor`, `upstream`, `provenance`, `doctor`, `review` |
+| Almacén | `projects/<clave>/{proposed,approved,disabled,rejected,superseded}` y el `SKILL.md` con su frontmatter |
+| Ámbito | El proyecto sale del `cwd` de la sesión; nunca lo declara el modelo |
+
+**Lo que «estable» no significa**: que no haya límites —los hay, y están declarados uno a uno— ni que la
+versión pase a 1.0.0. La numeración es la que es; esto declara una garantía, no renombra nada.
+
 ## Estado del repositorio
 
 - Rama `main`. El remoto se configura con `git remote add origin <url>` (ver más abajo).
@@ -130,7 +158,7 @@ su hash y su fecha, para que nadie tenga que creerse nada de memoria.
 El remoto ya está configurado en este clon. Para el primer envío:
 
 ```sh
-cd C:\xampp\htdocs\plugins-dhs
+cd <donde-clonaste-el-repo>
 git remote -v                 # comprobar a dónde apunta
 git push -u origin main       # el primer envío; después basta `git push`
 ```

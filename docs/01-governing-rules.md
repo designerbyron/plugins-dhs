@@ -74,7 +74,24 @@ con lo que cambió en disco), no con disciplina.
 - Lo que no se ha podido verificar se declara como no verificado, con el motivo. Un límite escondido es
   peor que un límite escrito.
 
-## 8. Commits y publicación
+## 8. La ruta de una máquina no es de nadie más
+
+La documentación publicada **no** escribe la ruta local de quien la escribió, y el código **nunca** escribe
+una ruta absoluta.
+
+- **Instalación**: se explica por la **URL del repositorio** y los ejemplos usan un marcador
+  (`cd <donde-clonaste-el-repo>/skill-compiler`). Quien lee no tiene por qué saber dónde vive tu copia.
+- **Código**: lo que sabe dónde vive, lo **deriva**
+  (`fileURLToPath(new URL('../bin/skill-compiler.mjs', import.meta.url))`). Una ruta escrita caduca en cuanto
+  el repositorio se mueve, y encima el plugin la enseña al humano como si fuera la buena.
+- **Excepciones, declaradas**: los artefactos autorizados por su **SHA-256** (`plans/*.md`) no se reescriben
+  —cambiarlos invalidaría su autorización— y los `cwd` de ejemplo de `tests/` son datos de la prueba, no
+  instrucciones de instalación.
+- **Y una puerta**: `tests/repo-hygiene.test.mjs`, estricta en código y precisa en documentación (prohíbe lo
+  que identifica a una máquina o a una persona, no toda ruta absoluta: hay ejemplos legítimos con marcador).
+  Es lo que impide que vuelva a colarse en el próximo fichero.
+
+## 9. Commits y publicación
 
 Un commit = una cosa. El mensaje dice qué cambió y qué lo demuestra. El push se decide y se declara; nunca
 `git add -A`. Los ficheros generados por pruebas no se commitean: si aparecen en `git status`, o el
