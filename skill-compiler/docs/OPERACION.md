@@ -51,6 +51,26 @@ dicho en vez de fingir: quedan el comando con argumentos y la tarjeta, que resue
 Dos cosas que no se delegan nunca: **la puerta de validación** (una propuesta que no la pase no se activa,
 ni con el modo automático) y **el registro** (todo queda en el log de la sesión).
 
+### Deshacer el aprendizaje: apagar y retirar
+
+Una skill aprobada no es para siempre, y el ciclo tiene dos gestos distintos a propósito:
+
+| Gesto | Qué hace | ¿Se puede deshacer? |
+|---|---|---|
+| **Apagar** (`disable`, `/skill-deshabilitar <id>`) | Deja de servirse al modelo y sale de las activas. **Se conserva entera.** | Sí: `enable` / `/skill-habilitar <id>` |
+| **Retirar** (`delete --yes`, `/skill-eliminar <id> --yes`) | La carpeta sale del almacén a un **respaldo fechado** con su huella. | Sí, con `restore <id>` desde el terminal |
+
+Nada se borra nunca: retirar **mueve**. El respaldo vive en
+`$DSH_HOME/backups/skills-eliminadas/<fecha>/<proyecto>/<id>/`, y `restore` lo devuelve a `approved/`
+negándose si ese id ya existe (restaurar no puede destruir lo que hay). `retired` y `/skill-retiradas`
+dicen qué está apagado y qué se retiró, con la fecha.
+
+En la tarjeta, las **casillas** deciden en lote: `Volver a encender las marcadas` y `Retirar las marcadas`,
+con el paso de confirmación que dice cuántas son y que hay respaldo. El menú `/` ofrece una fila por cada
+skill **apagada** (`skill-habilitar-<id>`, `skill-eliminar-<id>`): son pocas por definición —lo que acabas
+de apagar— así que no llenan el menú, y es donde se decide su vuelta. Las pendientes siguen teniendo las
+suyas (`skill-aprobar-<id>`, `skill-rechazar-<id>`, `skill-ver-<id>`).
+
 ### Cerrar un resultado
 
 Los resultados de estos comandos se pintan en el flujo del chat con una **X** en la esquina derecha: eso lo

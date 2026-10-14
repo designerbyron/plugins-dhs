@@ -28,7 +28,9 @@
  * por el `cwd` de la sesión— y la puerta de validación vive donde siempre, en `lib/compiler.mjs`. Las
  * filas son una forma de llegar; la regla sigue siendo la misma.
  */
-import { pending, projectKey } from './compiler.mjs';
+import { join } from 'node:path';
+
+import { pending, projectKey, scanTree } from './compiler.mjs';
 
 /** La gramática del registro de comandos del harness, copiada del contrato: `/^[a-z][a-z0-9_-]*$/u`. */
 export const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
@@ -134,6 +136,34 @@ export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
  * @param cwds - los directorios de trabajo conocidos, en el orden en que se conocieron.
  * @returns las filas concatenadas, cada una con su `key` para que el handler pueda comprobar el ámbito.
  */
+/**
+ * Verbos de una skill **apagada**. Son pocas por definición —lo que el humano acaba de apagar— así que
+ * caben en el menú sin llenarlo, y es justo donde se decide volver a encenderla o retirarla del todo.
+ */
+const RETIRED_VERBS = [
+  { verb: 'habilitar', describe: (id, proyecto) => `Vuelve a encender «${id}» en ${proyecto}: se conserva entera y no hubo que reinstalarla.` },
+  { verb: 'eliminar', describe: (id, proyecto) => `Retira «${id}» de ${proyecto}: se mueve a un respaldo fechado, nunca se borra, y vuelve con \`restore\`.` },
+];
+
+/** Las filas de lo apagado de un proyecto, con la misma gramática que las de lo pendiente. */
+export function retiredRowsFor({ root, cwd, taken = new Set() } = {}) {
+  const key = projectKey(cwd);
+  if (key === null) return [];
+  const proyecto = projectName(cwd, key);
+  const rows = [];
+  for (const apagada of scanTree(join(root, 'projects', key, 'disabled'), 'apagada')) {
+    const slug = commandSlug(apagada.id);
+    if (slug === null) continue;
+    for (const { verb, describe } of RETIRED_VERBS) {
+      const name = uniqueName(`skill-${verb}-${slug}`, taken);
+      if (!COMMAND_NAME.test(name)) continue;
+      taken.add(name);
+      rows.push({ id: apagada.id, verb, name, description: describe(apagada.id, proyecto) });
+    }
+  }
+  return rows;
+}
+
 export function pendingRowsForAll({ root, cwds = [] } = {}) {
   const taken = new Set();
   const rows = [];

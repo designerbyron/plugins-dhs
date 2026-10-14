@@ -121,9 +121,12 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.match(client, /locale: NS/, 'la tarjeta recibe la `t` de nuestro espacio de nombres');
   });
 
-  it('cubre los cinco comandos que dejan un bloque en el flujo', () => {
+  it('cubre los comandos que dejan un bloque en el flujo, incluidos los del ciclo de vida', () => {
     const declared = /COMMAND_NAMES = \[([^\]]+)\]/.exec(client)?.[1] ?? '';
-    for (const name of ['skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar']) {
+    for (const name of [
+      'skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar',
+      'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar', 'skill-retiradas',
+    ]) {
       assert.equal(declared.includes(`'${name}'`), true, `falta ${name} en COMMAND_NAMES`);
     }
   });
@@ -177,7 +180,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     // Medido con el usuario delante: aprobó una skill y el bloque que tenía debajo siguió enseñándola
     // como pendiente. El texto de un resultado es el registro de lo que pasó, así que lo que se puede
     // decir es que hubo una decisión POSTERIOR, y eso viaja en la proyección (plegada del log).
-    assert.match(client, /const LIST_COMMANDS = \['skill-propuestas', 'skill-ver'\]/);
+    assert.match(client, /const LIST_COMMANDS = \['skill-propuestas', 'skill-ver', 'skill-retiradas'\]/);
     assert.match(client, /view\.decisionSeq/, 'el dato viene de la proyección, no de inventarlo');
     assert.match(client, /decision\.seq > seq/, 'la comparación es contra el seq del propio bloque');
     assert.match(client, /Number\.isFinite\(node\?\.seq\)/, 'sin seq en el nodo no se compara');
@@ -204,8 +207,8 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
   it('las pendientes salen del catálogo del host, no de parsear el texto del resultado', () => {
     // La única fuente estructurada: cada pendiente ya tiene su fila `skill-aprobar-<id>` en el catálogo,
     // que es también la que alimenta el menú `/`. Parsear el texto duplicaría el formato en dos sitios.
-    assert.match(client, /function pendingIds\(commands\)/);
-    assert.match(client, /const PENDING_PREFIX = 'skill-aprobar-'/);
+    assert.match(client, /function rowIds\(commands, verb\)/);
+    assert.match(client, /const rowPrefix = \(verb\) => `skill-\$\{verb\}-`/);
     assert.match(client, /listCommands\(sessionId\)/);
     assert.equal(/outcome\?\.text[^\n]*split/.test(client), false, 'el texto del resultado no se parsea');
   });

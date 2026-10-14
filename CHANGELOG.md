@@ -4,6 +4,47 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.7.0] — 2026-10-13
+
+**El ciclo de vida completo: apagar y retirar.** Preguntado por el autor: *«¿qué pasa si ya no quiero una
+skill, puedo eliminarla de mi proyecto?»*. Hasta aquí la respuesta era que no: sobre una aprobada el único
+gesto era pedir una actualización. Ahora hay dos, y son distintos a propósito.
+
+### Añadido
+
+- **Apagar** (`disable` / `/skill-deshabilitar <id>`): estado nuevo `disabled/`. Deja de servirse al modelo,
+  sale de las activas y **se conserva entera**; `enable` la devuelve. Reversible con un gesto.
+- **Retirar** (`delete --yes` / `/skill-eliminar <id> --yes`): el único gesto irreversible, y por eso
+  **no borra**: mueve la carpeta a `$DSH_HOME/backups/skills-eliminadas/<fecha>/<proyecto>/<id>/` con su
+  huella, y dice cuál es la vuelta. Sin `--yes` no toca nada: enseña qué se movería y dónde.
+- **Volver** (`restore <id>`): devuelve la skill del respaldo a `approved/`, negándose si ese id ya existe.
+- **`retired` y `/skill-retiradas`**: qué está apagado y qué se retiró, con su fecha.
+- **En lote, desde la tarjeta**: casillas y acciones por verbo —`Volver a encender las marcadas`,
+  `Retirar las marcadas`— con el paso de confirmación. De paso se cerró un hueco: el verbo «rechazar» estaba
+  declarado pero **sin botón**, así que rechazar en lote era inalcanzable.
+- **Filas del menú para lo apagado** (`skill-habilitar-<id>`, `skill-eliminar-<id>`): son pocas por
+  definición —lo que acabas de apagar—, así que no llenan el menú, y es donde se decide su vuelta.
+- La huella de una skill **excluye `meta.json`** a propósito: ese fichero registra su ciclo de vida y cambia
+  en cada decisión, así que incluirlo haría imposible comprobar que volvió lo mismo.
+
+### Corregido
+
+- `locate` no conocía `disabled`, así que apagar algo ya apagado no se reconocía como «ya estaba» y
+  respondía con un error de movimiento en vez de con la verdad.
+- El anti-solapamiento mira también lo apagado: sin eso, el modelo propondría como nueva una skill que el
+  humano sólo apagó, y acabaríamos con dos versiones del mismo id.
+- Aprobar con una versión **apagada** del mismo id la aparta en `superseded/`: no pueden quedar dos estados
+  con el mismo id. Y se avisa (`updatesDisabled`) en vez de anunciarlo como «creada».
+
+### Medido
+
+- 243 pruebas (antes 236), hermética en verde, `doctor` en verde.
+- **El ciclo completo, por el CLI real y en una arena**: proponer → aprobar → apagar → apagar otra vez
+  (dice «ya estaba», exit 0) → `retired` → encender → `delete` sin `--yes` (avisa y no toca nada) →
+  `delete --yes` (respaldo en disco, huella) → `restore` (vuelve) → `restore` otra vez (se niega).
+- La prueba de idempotencia y la de que el respaldo es idéntico encontraron dos defectos propios por el
+  camino (el `locate` y la huella con `meta.json`), que es exactamente para lo que están.
+
 ## [1.6.1] — 2026-10-13
 
 **La X también en los resultados de una fila del menú.** Reportado por el autor: al elegir del menú una fila

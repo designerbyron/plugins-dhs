@@ -24,7 +24,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createCatalogSignal } from './lib/catalog-signal.mjs';
 import { skillCommands, targetCommands } from './lib/commands.mjs';
 import { curatedLibraryRoot, defaultRoot } from './lib/compiler.mjs';
-import { pendingRowsFor } from './lib/pending-rows.mjs';
+import { pendingRowsFor, retiredRowsFor } from './lib/pending-rows.mjs';
 import { PROTOCOL, scopeOf, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
 
 /** Identidad del Loader. */
@@ -137,7 +137,12 @@ export function apply(ctx, config = {}) {
 
       const composeFor = (cwd) => {
         try {
-          return targetCommands({ root, catalog, rows: pendingRowsFor({ root, cwd }) });
+          // Las dos colecciones con las que se decide en el menú: lo que espera aprobación y lo apagado
+          // (que es donde se elige volver a encenderlo o retirarlo del todo). Comparten gramática y camino,
+          // y los nombres no pueden chocar entre ellas: la segunda recibe los ya tomados.
+          const pendientes = pendingRowsFor({ root, cwd });
+          const apagadas = retiredRowsFor({ root, cwd, taken: new Set(pendientes.map((row) => row.name)) });
+          return targetCommands({ root, catalog, rows: [...pendientes, ...apagadas] });
         } catch {
           return null; // el almacén ilegible no puede tumbar los comandos que ya están
         }

@@ -168,6 +168,13 @@ Aprobar algo que ya está aprobado no es un fallo: responde «Ya estaba activa»
 decisión termina con la lista de pendientes al día, así que no hace falta volver a pedirla. Si un bloque de
 `/skill-propuestas` quedó antes de una decisión, se marca como anterior y se pliega solo.
 
+### Nunca te quedas con una skill que ya no quieres
+
+Se puede **apagar** (reversible: deja de servirse y se conserva entera) y **retirar** (se mueve a un
+respaldo con fecha y huella, nunca se borra), y volver atrás con `enable` y `restore`. En la tarjeta, con
+casillas y confirmación, para hacerlo de una vez. El detalle, en
+[`docs/OPERACION.md`](docs/OPERACION.md#deshacer-el-aprendizaje-apagar-y-retirar).
+
 ### Decidir en lote, sin salir del bloque
 
 La tarjeta de `/skill-propuestas` **se puede marcar**: una casilla por pendiente, `marcar todas`, y una

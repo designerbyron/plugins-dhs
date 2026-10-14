@@ -27,10 +27,14 @@
  * catálogo (`catalog.notify()`), que es la que llama a la invalidación del registro. Ese aviso es lo
  * que hace cierta la promesa de «usable sin reiniciar».
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { AUTO_COMMAND, autoApproveFromEvents, parseAutoCommand } from './auto-approve.mjs';
-import { approve, checkProposal, defaultRoot, listForProject, locate, pending, projectKey, reject } from './compiler.mjs';
+import {
+  approve, checkProposal, defaultRoot, disable, enable, listForProject, locate, pending, projectKey,
+  reject, retire, retired,
+} from './compiler.mjs';
 import { scopeOf } from './definitions.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
 
@@ -307,6 +311,84 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
             '',
             'Desde ahora nada se activa sin tu decisión: las propuestas esperan en /skill-propuestas.',
           ].join('\n'));
+      }),
+    },
+
+    // ── El ciclo de vida, desde la sesión ───────────────────────────────────────────────────────────
+    // Apagar es reversible y no se confunde con retirar. Retirar es el único gesto irreversible del
+    // plugin, así que **exige un `--yes` explícito** y dice antes dónde queda el respaldo: un clic, o una
+    // línea, no pueden borrar el trabajo de nadie.
+    {
+      name: 'skill-deshabilitar',
+      description: 'Apaga una skill activa de este proyecto: deja de servirse al modelo y se conserva entera. Reversible.',
+      input: { hint: '<id>' },
+      handler: guarded(({ agent, rawInput }) => {
+        const { key } = scopeOfAgent(agent);
+        if (key === null) return bad(NO_SCOPE);
+        const id = String(rawInput ?? '').trim();
+        if (id === '') return bad('Dime cuál: /skill-deshabilitar <id>. Las activas están en /skill-propuestas.');
+        if (!existsSync(join(root, 'projects', key, 'approved', id))) {
+          const donde = locate(id, key, { root });
+          return bad(donde === null
+            ? `No hay ninguna skill activa con el id ${id} en ${key}.`
+            : `«${id}» no está activa en ${key}: está en ${donde}.`);
+        }
+        const moved = disable(id, key, { root });
+        if (!moved.ok) return bad(`No se pudo apagar: ${moved.reason}`);
+        return ok(`${id} apagada en ${key}.\n  deja de servirse al modelo, y se conserva entera: /skill-habilitar ${id} la devuelve.`);
+      }),
+    },
+
+    {
+      name: 'skill-habilitar',
+      description: 'Vuelve a encender una skill que estaba apagada en este proyecto.',
+      input: { hint: '<id>' },
+      handler: guarded(({ agent, rawInput }) => {
+        const { key } = scopeOfAgent(agent);
+        if (key === null) return bad(NO_SCOPE);
+        const id = String(rawInput ?? '').trim();
+        if (id === '') return bad('Dime cuál: /skill-habilitar <id>. Lo apagado está en /skill-retiradas.');
+        const moved = enable(id, key, { root });
+        if (!moved.ok) return bad(`No se pudo encender: ${moved.reason}`);
+        return ok(`${id} vuelve a estar activa en ${key}: se sirve al modelo sólo en este proyecto.`);
+      }),
+    },
+
+    {
+      name: 'skill-eliminar',
+      description: 'Retira una skill de este proyecto: se mueve a un respaldo fechado, nunca se borra. Exige --yes.',
+      input: { hint: '<id> [--yes]' },
+      handler: guarded(({ agent, rawInput }) => {
+        const { key } = scopeOfAgent(agent);
+        if (key === null) return bad(NO_SCOPE);
+        const input = String(rawInput ?? '').trim();
+        const yes = /(?:^|\s)--yes$/.test(input);
+        const id = input.replace(/(?:\s+--yes)?$/, '').trim();
+        if (id === '') return bad('Dime cuál: /skill-eliminar <id> [--yes].');
+        if (!yes) {
+          return ok(`Se va a RETIRAR «${id}» del proyecto ${key}.\n  Nada se borra: la carpeta se mueve a un respaldo con fecha, y vuelve con \`restore\` desde el terminal.\n  Repite así para hacerlo: /skill-eliminar ${id} --yes`);
+        }
+        const moved = retire(id, key, { root });
+        if (!moved.ok) return bad(`No se pudo retirar: ${moved.reason}`);
+        return ok(`Retirada «${id}» de ${key}.\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: restore ${id} (CLI)\n`);
+      }),
+    },
+
+    {
+      name: 'skill-retiradas',
+      description: 'Qué está apagado en este proyecto y qué se retiró ya, con su fecha.',
+      handler: guarded(({ agent }) => {
+        const { cwd, key } = scopeOfAgent(agent);
+        if (key === null) return bad(NO_SCOPE);
+        const lista = retired(key, { root });
+        if (lista.length === 0) return ok(`Nada apagado ni retirado en ${cwd} [${key}].`);
+        return ok([
+          `Fuera de servicio en ${cwd} [${key}]:`,
+          '',
+          ...lista.map((skill) => `  · ${skill.id} — ${skill.state === 'disabled' ? 'apagada (reversible)' : `retirada el ${skill.retiredAt} (en el respaldo)`}`),
+          '',
+          'Con un id a mano: /skill-habilitar <id> lo devuelve · /skill-eliminar <id> --yes lo retira del todo.',
+        ].join('\n'));
       }),
     },
 

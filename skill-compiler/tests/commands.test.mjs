@@ -46,10 +46,13 @@ function fakeCatalog() {
 }
 
 describe('comandos · descriptor', () => {
-  it('los cinco se declaran como el registro del harness los exige', () => {
+  it('se declaran como el registro del harness los exige', () => {
     const { list } = commands('C:\\tmp');
     assert.deepEqual(list.map((c) => c.name).sort(),
-      ['skill-aprobar', 'skill-auto', 'skill-propuestas', 'skill-rechazar', 'skill-ver']);
+      [
+        'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-habilitar',
+        'skill-propuestas', 'skill-rechazar', 'skill-retiradas', 'skill-ver',
+      ]);
     for (const command of list) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/, `${command.name} no cumple la gramática del harness`);
       assert.equal(typeof command.description, 'string');
@@ -57,7 +60,8 @@ describe('comandos · descriptor', () => {
       assert.equal(typeof command.handler, 'function');
     }
     // Los que toman un id lo anuncian: es lo que el compositor enseña al escribir el comando.
-    for (const name of ['skill-ver', 'skill-aprobar', 'skill-rechazar']) {
+    // Los que toman un id lo anuncian, y también los del ciclo de vida.
+    for (const name of ['skill-ver', 'skill-aprobar', 'skill-rechazar', 'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar']) {
       const command = list.find((c) => c.name === name);
       assert.equal(typeof command.input?.hint, 'string');
     }

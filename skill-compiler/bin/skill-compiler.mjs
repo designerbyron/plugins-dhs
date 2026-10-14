@@ -15,6 +15,11 @@
  *   node bin/skill-compiler.mjs check [<id>]              # puerta: valida antes de aprobar
  *   node bin/skill-compiler.mjs approve <id>              # activar (exige que `check` pase)
  *   node bin/skill-compiler.mjs reject <id>               # apartar sin borrar
+ *   node bin/skill-compiler.mjs disable <id>              # apagar: reversible, se conserva entera
+ *   node bin/skill-compiler.mjs enable <id>               # volver a encender
+ *   node bin/skill-compiler.mjs delete <id> [--yes]       # RETIRAR: mueve a un respaldo fechado (no borra)
+ *   node bin/skill-compiler.mjs retired                   # qué está apagado y qué se retiró
+ *   node bin/skill-compiler.mjs restore <id>              # recuperar del respaldo
  *   node bin/skill-compiler.mjs vendor <url> [--id X] [--note "..."]
  *                                                         # nuestra versión de una skill externa
  *   node bin/skill-compiler.mjs upstream <id>             # ¿se movió el origen?
@@ -23,7 +28,7 @@
  *   node bin/skill-compiler.mjs review [--port N]         # página local para aprobar y rechazar
  *
  * Opciones: `--project-key <clave>` para actuar sobre otro proyecto, `--force` para aprobar aunque
- * `check` avise (nunca si `check` falla).
+ * `check` avise (nunca si `check` falla), `--yes` para confirmar una retirada.
  *
  * Exit: 0 correcto · 1 problema (check en rojo, aprobación rechazada, vendorizado bloqueado) · 2 uso.
  */
@@ -32,7 +37,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  approve, checkProposal, defaultRoot, listForProject, locate, overview, pending, projectKey, reject,
+  approve, checkProposal, defaultRoot, disable, enable, listForProject, locate, overview, pending,
+  projectKey, reject, restore, retire, retired, retiredRoot,
 } from '../lib/compiler.mjs';
 import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
 
@@ -53,6 +59,7 @@ for (let i = 1; i < argv.length; i++) {
   const arg = argv[i];
   if (arg === '--project-key') { flags.projectKey = argv[++i]; continue; }
   if (arg === '--force') { flags.force = true; continue; }
+  if (arg === '--yes') { flags.yes = true; continue; }
   if (arg === '--id') { flags.id = argv[++i]; continue; }
   if (arg === '--note') { flags.note = argv[++i]; continue; }
   if (arg === '--url') { flags.url = argv[++i]; continue; }
@@ -159,6 +166,70 @@ switch (command) {
     process.stdout.write(`Aprobada ${id} en ${key}\n  ${moved.path}\n`);
     if (moved.superseded) process.stdout.write(`  versión anterior apartada en ${moved.superseded}\n`);
     process.stdout.write('Se sirve al modelo solo en este proyecto.\n');
+    break;
+  }
+
+  // ── apagar, retirar y volver ────────────────────────────────────────────────────────────────────
+  // El único gesto irreversible es `delete`, y por eso **no borra**: mueve a un respaldo fechado y dice
+  // cuál es la vuelta. Sin `--yes` no toca nada.
+  case 'disable': {
+    const id = positional[0];
+    if (!id) usage(2);
+    const key = scope();
+    if (locate(id, key, { root }) === 'disabled') {
+      process.stdout.write(`Ya estaba apagada: ${id} en ${key}\n  No se ha cambiado nada.\n`);
+      break;
+    }
+    const moved = disable(id, key, { root });
+    if (!moved.ok) { process.stderr.write(`No se pudo apagar: ${moved.reason}\n`); process.exit(1); }
+    process.stdout.write(`Apagada ${id} en ${key}\n  deja de servirse al modelo, y se conserva entera: vuele con \`enable ${id}\`\n`);
+    break;
+  }
+
+  case 'enable': {
+    const id = positional[0];
+    if (!id) usage(2);
+    const key = scope();
+    const moved = enable(id, key, { root });
+    if (!moved.ok) { process.stderr.write(`No se pudo encender: ${moved.reason}\n`); process.exit(1); }
+    process.stdout.write(`Encendida ${id} en ${key}\n  vuelve a servirse al modelo en este proyecto.\n`);
+    break;
+  }
+
+  case 'delete': {
+    const id = positional[0];
+    if (!id) usage(2);
+    const key = scope();
+    const destino = join(retiredRoot(), key, id);
+    if (flags.yes !== true) {
+      process.stdout.write(`Se va a RETIRAR ${id} del proyecto ${key}:\n  respaldo: ${destino}\n`);
+      process.stdout.write('Nada se borra: la carpeta se mueve, con su huella, y vuelve con `restore`.\n');
+      process.stdout.write('Repite con --yes para hacerlo.\n');
+      process.exit(1);
+    }
+    const moved = retire(id, key, { root });
+    if (!moved.ok) { process.stderr.write(`No se pudo retirar: ${moved.reason}\n`); process.exit(1); }
+    process.stdout.write(`Retirada ${id} del proyecto ${key}\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: restore ${id}\n`);
+    break;
+  }
+
+  case 'retired': {
+    const key = scope();
+    const lista = retired(key, { root });
+    if (lista.length === 0) { process.stdout.write(`Nada apagado ni retirado en ${key}\n`); break; }
+    for (const skill of lista) {
+      process.stdout.write(`  ${skill.state === 'disabled' ? 'apagada ' : 'retirada'}  ${skill.id}${skill.retiredAt ? `  (${skill.retiredAt})` : ''}\n`);
+    }
+    break;
+  }
+
+  case 'restore': {
+    const id = positional[0];
+    if (!id) usage(2);
+    const key = scope();
+    const moved = restore(id, key, { root });
+    if (!moved.ok) { process.stderr.write(`No se pudo restaurar: ${moved.reason}\n`); process.exit(1); }
+    process.stdout.write(`Restaurada ${id} en ${key}\n  ${moved.path}\n  huella: ${moved.hash}\n`);
     break;
   }
 

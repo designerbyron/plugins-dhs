@@ -60,7 +60,10 @@ window.__ModuleLoader__.load({
      * despacho del slot es por nombre exacto; las filas de pendientes (`skill-aprobar-<id>`) escriben una
      * línea y usan la tarjeta del host, que para eso basta.
      */
-    const COMMAND_NAMES = ['skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar'];
+    const COMMAND_NAMES = [
+      'skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar',
+      'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar', 'skill-retiradas',
+    ];
     /** Todos los comandos del plugin empiezan así: es lo que distingue los suyos en el catálogo del host. */
     const COMMAND_PREFIX = 'skill-';
     /**
@@ -69,7 +72,7 @@ window.__ModuleLoader__.load({
      * un resultado es el registro de lo que pasó y no se reescribe, así que lo que se hace es decir que hay
      * una decisión posterior — eso lo sabe el log, y por eso viaja en la proyección.
      */
-    const LIST_COMMANDS = ['skill-propuestas', 'skill-ver'];
+    const LIST_COMMANDS = ['skill-propuestas', 'skill-ver', 'skill-retiradas'];
     /**
      * Dónde se recuerda un resultado cerrado.
      *
@@ -114,6 +117,14 @@ window.__ModuleLoader__.load({
         bulk_none: 'Ninguna pendiente: si acabas de aprobar, ya no queda nada que decidir.',
         bulk_unreadable: 'No se pudieron leer las pendientes',
         bulk_unreadable_hint: 'Síguelo desde el terminal o desde el menú «/»: la lista y la aprobación funcionan igual, pasan por la misma puerta',
+        bulk_habilitar: 'Volver a encender las marcadas',
+        bulk_confirm_habilitar: 'Sí, encender',
+        bulk_ask_habilitar: 'Vas a volver a encender',
+        bulk_ok_habilitar: 'encendidas',
+        bulk_eliminar: 'Retirar las marcadas',
+        bulk_confirm_eliminar: 'Sí, retirar',
+        bulk_ask_eliminar: 'Vas a retirar (se mueven a un respaldo fechado, no se borran)',
+        bulk_ok_eliminar: 'retiradas',
         bulk_select_all: 'Marcar todas',
         bulk_clear: 'Desmarcar',
         bulk_approve: 'Aprobar las marcadas',
@@ -162,6 +173,14 @@ window.__ModuleLoader__.load({
         bulk_none: 'Nothing pending: if you just approved, there is nothing left to decide.',
         bulk_unreadable: 'Could not read the pending ones',
         bulk_unreadable_hint: 'Follow it from the terminal or from the «/» menu: the list and the approval work the same, through the same gate',
+        bulk_habilitar: 'Switch the marked ones back on',
+        bulk_confirm_habilitar: 'Yes, switch on',
+        bulk_ask_habilitar: 'About to switch back on',
+        bulk_ok_habilitar: 'switched on',
+        bulk_eliminar: 'Retire the marked ones',
+        bulk_confirm_eliminar: 'Yes, retire',
+        bulk_ask_eliminar: 'About to retire (they move to a dated backup, never deleted)',
+        bulk_ok_eliminar: 'retired',
         bulk_select_all: 'Select all',
         bulk_clear: 'Clear',
         bulk_approve: 'Approve the selected',
@@ -443,21 +462,43 @@ window.__ModuleLoader__.load({
 
     /* ── decidir aquí mismo: la lista, marcable ──────────────────────────────────────────────────── */
 
-    /** El prefijo con el que el host anuncia cada pendiente: una fila `skill-aprobar-<id>` por skill. */
-    const PENDING_PREFIX = 'skill-aprobar-';
+    /**
+     * El prefijo de una fila del menú es `skill-<verbo>-`: es la gramática que lee el panel, y vale igual
+     * para las pendientes (`skill-aprobar-<id>`) que para lo apagado (`skill-eliminar-<id>`).
+     */
+    const rowPrefix = (verb) => `skill-${verb}-`;
 
-    /** Los ids pendientes, tal y como los anuncia el catálogo del host. Una sola fuente: sus filas. */
-    function pendingIds(commands) {
+    /** Los ids de un verbo, tal y como los anuncia el catálogo del host. Una sola fuente: sus filas. */
+    function rowIds(commands, verb) {
       const list = Array.isArray(commands) ? commands : (Array.isArray(commands?.commands) ? commands.commands : []);
+      const prefix = rowPrefix(verb);
       const ids = [];
       for (const command of list) {
         const name = typeof command?.name === 'string' ? command.name : '';
-        if (!name.startsWith(PENDING_PREFIX)) continue;
-        const id = name.slice(PENDING_PREFIX.length);
+        if (!name.startsWith(prefix)) continue;
+        const id = name.slice(prefix.length);
         if (id !== '' && !ids.includes(id)) ids.push(id);
       }
       return ids;
     }
+
+    /** Los verbos de cada lista, y sus textos: es lo único que cambia entre decidir propuestas y apagadas. */
+    const VERB_TEXTS = {
+      aprobar: { go: 'bulk_approve', confirm: 'bulk_confirm_approve', ask: 'bulk_ask_approve', ok: 'bulk_ok_approve' },
+      rechazar: { go: 'bulk_reject', confirm: 'bulk_confirm_reject', ask: 'bulk_ask_reject', ok: 'bulk_ok_reject' },
+      habilitar: { go: 'bulk_habilitar', confirm: 'bulk_confirm_habilitar', ask: 'bulk_ask_habilitar', ok: 'bulk_ok_habilitar' },
+      eliminar: { go: 'bulk_eliminar', confirm: 'bulk_confirm_eliminar', ask: 'bulk_ask_eliminar', ok: 'bulk_ok_eliminar' },
+    };
+
+    /**
+     * En `/skill-retiradas` también se decide en lote: reencender o retirar del todo lo que está apagado.
+     * Retirar exige `--yes` —lo añade el panel, y por eso el paso de confirmación no es decorativo—: es el
+     * único gesto irreversible, y siempre deja respaldo fechado.
+     */
+    function actionsFor(nodeName) {
+      return String(nodeName ?? '') === 'skill-retiradas' ? ['habilitar', 'eliminar'] : ['aprobar', 'rechazar'];
+    }
+    const listVerbFor = (nodeName) => (String(nodeName ?? '') === 'skill-retiradas' ? 'eliminar' : 'aprobar');
 
     /**
      * El panel de decisiones de una lista de pendientes —y de una propuesta leída con `/skill-ver`—.
@@ -482,7 +523,10 @@ window.__ModuleLoader__.load({
       const [failure, setFailure] = React.useState('');
       const [picked, setPicked] = React.useState([]);
       const [stage, setStage] = React.useState('pick');
-      const [verb, setVerb] = React.useState('aprobar');
+      // La primera acción de la lista decide el verbo inicial; el resto se ofrecen como botones. Antes sólo
+      // existía «aprobar» y el verbo de rechazar estaba declarado pero sin botón: quedaba inalcanzable.
+      const acciones = actionsFor(node?.name);
+      const [verb, setVerb] = React.useState(() => acciones[0]);
       const [report, setReport] = React.useState(null);
       const [busy, setBusy] = React.useState(false);
 
@@ -495,7 +539,7 @@ window.__ModuleLoader__.load({
         (async () => {
           try {
             const commands = await listCommands(sessionId);
-            if (alive) setIds(pendingIds(commands));
+            if (alive) setIds(rowIds(commands, listVerbFor(node?.name)));
           } catch (error) {
             if (alive) {
               setIds([]);
@@ -508,7 +552,10 @@ window.__ModuleLoader__.load({
 
       const rows = ids ?? [];
       const toggle = (id) => setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
-      const target = verb === 'aprobar' ? 'skill-aprobar' : 'skill-rechazar';
+      // El verbo decide el comando, y sólo retirar pide confirmación explícita al host.
+      const target = `skill-${verb}`;
+      const texts = VERB_TEXTS[verb] ?? VERB_TEXTS.aprobar;
+      const linea = (id) => `${target} ${id}${verb === 'eliminar' ? ' --yes' : ''}`;
 
       const run = async () => {
         setBusy(true);
@@ -517,7 +564,7 @@ window.__ModuleLoader__.load({
         const failed = [];
         for (const id of picked) {
           try {
-            const result = await runCommand(sessionId, `${target} ${id}`);
+            const result = await runCommand(sessionId, linea(id));
             if (result !== null && result !== undefined && result.kind === 'error') failed.push({ id, reason: String(result.text ?? '') });
             else done.push(id);
           } catch (error) {
@@ -543,13 +590,17 @@ window.__ModuleLoader__.load({
 
       if (stage === 'pick') {
         if (picked.length > 0) {
-          addButton('go', `${say(verb === 'aprobar' ? 'bulk_approve' : 'bulk_reject')} (${picked.length})`, () => setStage('confirm'));
+          // Un botón por acción: marcar no decide, elegir la acción tampoco — el paso de confirmación sigue
+          // detrás, y es el que dice qué se va a hacer y con qué consecuencia.
+          for (const opcion of acciones) {
+            addButton(`go-${opcion}`, `${say(VERB_TEXTS[opcion].go)} (${picked.length})`, () => { setVerb(opcion); setStage('confirm'); });
+          }
           addButton('clear', say('bulk_clear'), () => setPicked([]), { quiet: true });
         } else if (rows.length > 1) {
           addButton('all', say('bulk_select_all'), () => setPicked(rows.slice()));
         }
       } else if (stage === 'confirm') {
-        addButton('yes', say(verb === 'aprobar' ? 'bulk_confirm_approve' : 'bulk_confirm_reject'), run);
+        addButton('yes', say(texts.confirm), run);
         addButton('no', say('bulk_cancel'), () => setStage('pick'), { quiet: true });
       } else if (stage === 'done' && report !== null) {
         addButton('again', say('bulk_again'), () => { setReport(null); setStage('pick'); }, { quiet: true });
@@ -587,14 +638,14 @@ window.__ModuleLoader__.load({
             })),
         stage === 'confirm'
           ? h('div', null,
-            h('div', { className: 'skc-bulk-note' }, `${say(verb === 'aprobar' ? 'bulk_ask_approve' : 'bulk_ask_reject')} ${picked.length}: ${picked.join(', ')}`),
+            h('div', { className: 'skc-bulk-note' }, `${say(texts.ask)} ${picked.length}: ${picked.join(', ')}`),
             h('div', { className: 'skc-bulk-note' }, say('bulk_ask_footer')))
           : null,
         stage === 'running' ? h('div', { className: 'skc-bulk-note' }, say('bulk_running')) : null,
         stage === 'done' && report !== null
           ? h('div', null,
             h('div', { className: 'skc-bulk-note' },
-              `${report.done.length} ${say(verb === 'aprobar' ? 'bulk_ok_approve' : 'bulk_ok_reject')} · ${report.failed.length} ${say('bulk_failed')}`),
+              `${report.done.length} ${say(texts.ok)} · ${report.failed.length} ${say('bulk_failed')}`),
             h('div', { className: 'skc-bulk-note' }, `${say('bulk_remaining')}: ${ids === null ? '' : ids.length}`),
             report.failed.length === 0
               ? null

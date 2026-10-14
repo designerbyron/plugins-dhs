@@ -242,6 +242,9 @@ export function existingSkills({ root = defaultRoot(), curated = curatedLibraryR
     ...listProjects(root).flatMap((project) => [
       ...scanTree(join(root, 'projects', project, 'proposed'), `propuesto:${project}`),
       ...scanTree(join(root, 'projects', project, 'approved'), `aprobado:${project}`),
+      // Lo apagado sigue existiendo: si no entrara aquí, el modelo propondría como nueva una skill que el
+      // humano sólo apagó, y acabaríamos con dos versiones del mismo id.
+      ...scanTree(join(root, 'projects', project, 'disabled'), `apagada:${project}`),
     ]),
   ];
 }
@@ -350,6 +353,10 @@ export function propose(input, { root = defaultRoot(), cwd, now = new Date().toI
   // La diferencia importa: es lo que el usuario ve en la interfaz y lo que le dice si su biblioteca
   // creció o si se afinó lo que ya había.
   const updatesProposal = existsSync(join(root, 'projects', key, 'proposed', candidate.id));
+  // Una versión **apagada** también se reemplaza al aprobar (`move` la aparta), así que el humano tiene
+  // que saberlo: sin esto, proponer sobre algo apagado se anunciaba como «creada» y la aprobación
+  // reemplazaba en silencio una skill que alguien había apagado a propósito.
+  const updatesDisabled = existsSync(join(root, 'projects', key, 'disabled', candidate.id));
 
   const project = input.project ?? cwd;
   const dir = join(root, 'projects', key, 'proposed', candidate.id);
@@ -380,6 +387,7 @@ export function propose(input, { root = defaultRoot(), cwd, now = new Date().toI
     sha256: createHash('sha256').update(skill).digest('hex'),
     updatesApproved,
     updatesProposal,
+    updatesDisabled,
     relatedElsewhere: overlap.relatedElsewhere,
   };
 }
@@ -396,6 +404,19 @@ function move(root, key, id, from, to) {
     superseded = join(root, 'projects', key, 'superseded', `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
     mkdirSync(dirname(superseded), { recursive: true });
     renameSync(target, superseded);
+  }
+  // Aprobar reemplaza CUALQUIER versión anterior del mismo id: además de la aprobada que hubiera, una
+  // apagada o una propuesta vieja. Dejar dos estados con el mismo id sería servir una y esconder la otra,
+  // y la próxima decisión del humano caería sobre la que no está viendo.
+  if (to === 'approved') {
+    for (const otro of ['disabled', 'proposed']) {
+      const candidato = join(root, 'projects', key, otro, id);
+      if (candidato === source || !existsSync(candidato)) continue;
+      const aparcado = join(root, 'projects', key, 'superseded', `${id}-${otro}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+      mkdirSync(dirname(aparcado), { recursive: true });
+      renameSync(candidato, aparcado);
+      if (superseded === null) superseded = aparcado;
+    }
   }
   const metaFile = join(source, 'meta.json');
   if (existsSync(metaFile)) {
@@ -418,6 +439,135 @@ function move(root, key, id, from, to) {
  */
 export const approve = (id, key, opts = {}) => move(opts.root ?? defaultRoot(), key, id, 'proposed', 'approved');
 export const reject = (id, key, opts = {}) => move(opts.root ?? defaultRoot(), key, id, 'proposed', 'rejected');
+
+// ── el ciclo de vida completo: apagar, retirar y volver ──────────────────────────────────────────
+//
+// Aprobar no era el final del camino: faltaba poder **apagar** algo que ya no quieres (reversible) y
+// **retirarlo** del todo (irreversible, así que con respaldo y con vuelta). Sin esto, la única salida
+// sobre una skill aprobada era pedir una actualización, que es otra cosa.
+
+/** Raíz de los respaldos: fuera del almacén y con fecha. Lo retirado no se pierde, se archiva. */
+export function backupsRoot() {
+  const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
+  return process.env.SKILL_COMPILER_BACKUPS || join(dshHome, 'backups', 'skills-eliminadas');
+}
+
+/** Subcarpeta del día: un respaldo por fecha, para que dos retiradas no se pisen. */
+export function retiredRoot(now = new Date()) {
+  return join(backupsRoot(), now.toISOString().slice(0, 10));
+}
+
+/**
+ * Huella del **contenido** de una skill, fichero a fichero. `meta.json` queda fuera a propósito: es el
+ * registro de su ciclo de vida y cambia con cada decisión (aprobarla, apagarla), así que incluirlo haría
+ * que «volvió lo mismo» nunca se pudiera comprobar. Lo que se compara aquí es la skill, no su papeleo.
+ */
+export function folderHash(dir) {
+  const partes = [];
+  const walk = (base, rel) => {
+    for (const entry of readdirSync(join(base, rel), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const next = rel === '' ? entry.name : `${rel}/${entry.name}`;
+      if (entry.isDirectory()) walk(base, next);
+      else if (next !== 'meta.json') partes.push(`${next}:${createHash('sha256').update(readFileSync(join(base, next))).digest('hex')}`);
+    }
+  };
+  walk(dir, '');
+  return createHash('sha256').update(partes.join('\n')).digest('hex').slice(0, 16);
+}
+
+/**
+ * Apagar una skill aprobada: deja de servirse y sale de la lista de activas, pero **se conserva entera** y
+ * vuelve con un gesto. No es lo mismo que retirarla, y por eso son dos estados y dos verbos.
+ */
+export const disable = (id, key, opts = {}) => move(opts.root ?? defaultRoot(), key, id, 'approved', 'disabled');
+
+/**
+ * Volver a encenderla. Si ya hay una aprobada con ese id, se dice: pisarla en silencio destruiría una
+ * skill que alguien aprobó, y decidir eso no le toca al plugin.
+ */
+export function enable(id, key, opts = {}) {
+  const root = opts.root ?? defaultRoot();
+  if (existsSync(join(root, 'projects', key, 'approved', id))) {
+    return { ok: false, reason: `ya hay una skill aprobada con ese id en ${key}: decide primero qué hacer con ella` };
+  }
+  return move(root, key, id, 'disabled', 'approved');
+}
+
+/**
+ * Retirar: la carpeta sale del almacén a un respaldo fechado, con su huella. Es el único gesto
+ * irreversible del plugin, así que **nunca borra**: mueve, y deja la vuelta al lado.
+ */
+export function retire(id, key, { root = defaultRoot(), now = new Date(), backupRoot = null } = {}) {
+  const candidatos = [join(root, 'projects', key, 'disabled', id), join(root, 'projects', key, 'approved', id)];
+  const source = candidatos.find((dir) => existsSync(dir)) ?? null;
+  if (source === null) return { ok: false, reason: `no hay ninguna skill activa ni apagada con el id ${id} en ${key}` };
+  const target = join(backupRoot ?? retiredRoot(now), key, id);
+  if (existsSync(target)) return { ok: false, reason: `ya hay un respaldo de ${id} con esa fecha: no se sobrescribe` };
+  const hash = folderHash(source);
+  try {
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(source, target);
+  } catch (error) {
+    return { ok: false, reason: `no se pudo retirar: ${error.message}` };
+  }
+  return { ok: true, id, projectKey: key, backup: target, path: join(target, 'SKILL.md'), hash, revierte: `restore ${id}` };
+}
+
+/** El respaldo más reciente de un id para un proyecto, o `null`. */
+function hallarRespaldo(key, id, { backup = null, backupRoot = null }) {
+  if (backup !== null) {
+    if (existsSync(join(backup, key, id))) return join(backup, key, id);
+    if (existsSync(backup)) return backup;
+    return null;
+  }
+  const base = backupRoot ?? backupsRoot();
+  if (!existsSync(base)) return null;
+  const dias = readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort().reverse();
+  for (const dia of dias) {
+    const candidato = join(base, dia, key, id);
+    if (existsSync(candidato)) return candidato;
+  }
+  return null;
+}
+
+/**
+ * La vuelta: del respaldo al almacén. Se niega si ese id ya existe —restaurar no puede destruir lo que
+ * hay— y devuelve la huella, para poder comprobar que volvió lo mismo.
+ */
+export function restore(id, key, opts = {}) {
+  const root = opts.root ?? defaultRoot();
+  const source = hallarRespaldo(key, id, opts);
+  if (source === null) return { ok: false, reason: `no hay respaldo de ${id} para ${key}` };
+  if (existsSync(join(root, 'projects', key, 'approved', id)) || existsSync(join(root, 'projects', key, 'disabled', id))) {
+    return { ok: false, reason: `${id} ya existe en ${key}: decide qué hacer con ella antes de restaurar` };
+  }
+  const hash = folderHash(source);
+  const target = join(root, 'projects', key, 'approved', id);
+  try {
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(source, target);
+  } catch (error) {
+    return { ok: false, reason: `no se pudo restaurar: ${error.message}` };
+  }
+  return { ok: true, id, projectKey: key, path: join(target, 'SKILL.md'), hash };
+}
+
+/**
+ * Lo apagado y lo retirado de un proyecto: es la lista que el humano mira cuando quiere deshacerse de algo,
+ * y la que alimenta la decisión en lote.
+ */
+export function retired(key, { root = defaultRoot(), backupRoot = null } = {}) {
+  const apagadas = scanTree(join(root, 'projects', key, 'disabled'), 'apagada').map((skill) => ({ ...skill, state: 'disabled' }));
+  const base = backupRoot ?? backupsRoot();
+  const archivadas = [];
+  if (existsSync(base)) {
+    const dias = readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort().reverse();
+    for (const dia of dias) {
+      for (const skill of scanTree(join(base, dia, key), 'eliminada')) archivadas.push({ ...skill, state: 'retired', retiredAt: dia });
+    }
+  }
+  return [...apagadas, ...archivadas];
+}
 
 /**
  * La puerta que hay que pasar ANTES de aprobar: válida la propuesta guardada, que es además lo que
@@ -453,7 +603,9 @@ export function checkProposal(id, key, { root = defaultRoot() } = {}) {
  * dice la verdad, sin que el estado deje de ser el mismo.
  */
 export function locate(id, key, { root = defaultRoot() } = {}) {
-  for (const where of ['proposed', 'approved', 'rejected']) {
+  // `disabled` entra aquí: sin él, apagar algo ya apagado no se reconocía como «ya estaba», y la
+  // respuesta era un error de movimiento en vez de decir la verdad (que es lo que el humano espera).
+  for (const where of ['proposed', 'approved', 'disabled', 'rejected']) {
     if (existsSync(join(root, 'projects', key, where, id, 'SKILL.md'))) return where;
   }
   return null;

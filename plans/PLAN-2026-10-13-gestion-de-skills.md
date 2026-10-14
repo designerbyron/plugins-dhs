@@ -1,6 +1,10 @@
 # Plan — ciclo de vida completo de una skill: deshabilitar y eliminar
 
-**Estado: anotado, sin implementar.** Nace de la pregunta del autor: *«¿qué pasa si ya no quiero una skill,
+**Estado: IMPLEMENTADO en v1.7.0** (las cinco fases, 243 pruebas, ciclo completo medido por el CLI real).
+Dos ajustes sobre lo aquí diseñado, y el porqué: las filas del menú por skill aprobada **no** se hicieron
+—17 aprobadas en un proyecto son 17 filas de ruido— y en su lugar las filas se ofrecen para lo **apagado**
+(que son pocas por definición); y el verbo «rechazar» en lote estaba declarado pero sin botón, así que al
+generalizar el panel por verbo quedó alcanzable. Lo de abajo se conserva como el diseño que se siguió. Nace de la pregunta del autor: *«¿qué pasa si ya no quiero una skill,
 puedo eliminarla de mi proyecto/sesión?»*, y de su propuesta: *«podría tener una lista de deshabilitados que
 se pueden eliminar y podría eliminar de una vez»*. Este documento la cierra como clase, no como parche: se
 diseña el ciclo de vida entero y lo que hoy falta.
@@ -55,7 +59,7 @@ proposed ──aprobar──▶ approved ──deshabilitar──▶ disabled �
 |---|---|
 | **CLI** | `disable <id>` · `enable <id>` · `delete <id>` (con `--yes`, respaldo y huella) · `retired` (la lista) · `restore <id>` |
 | **Comandos de la sesión** | `/skill-deshabilitar <id>` · `/skill-habilitar <id>` · `/skill-eliminar <id>` · `/skill-retiradas`, y **una fila por skill aprobada** (`skill-deshabilitar-<id>`), montada en el ámbito de su agente |
-| **Tarjeta del resultado** | Lista de activas y de retiradas con **casillas**; acciones `Deshabilitar las marcadas (N)` y `Eliminar las marcadas (N)`; **paso de confirmación** que dice cuántas son, que se guarda respaldo y dónde; y tras el lote, `N hechas · M con fallo` con el motivo de cada fallo |
+| **Tarjeta del resultado** | Lista de activas y de retiradas con **casillas**; acciones por verbo (`Volver a encender las marcadas (N)`, `Retirar las marcadas (N)`); **paso de confirmación** que dice cuántas son, que se guarda respaldo y dónde; y tras el lote, `N hechas · M con fallo` con el motivo de cada fallo |
 | **Página de revisión** | Lo mismo, en la página local, para trabajar sin sesión abierta |
 
 La **eliminación en lote** es la petición literal del autor («eliminar de una vez»): marcar varias,

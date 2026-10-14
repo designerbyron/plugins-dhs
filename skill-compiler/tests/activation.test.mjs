@@ -102,7 +102,7 @@ describe('activación', () => {
     disposeAll();
   });
 
-  it('registra los cinco comandos humanos, con la forma que el harness exige', () => {
+  it('registra los comandos humanos, con la forma que el harness exige', () => {
     const s = sandbox();
     const registered = [];
     const { ctx, disposeAll } = fakeContext({ commands: { register: (command) => { registered.push(command); return () => {}; } } });
@@ -110,7 +110,10 @@ describe('activación', () => {
     disposeAll();
 
     assert.deepEqual(registered.map((c) => c.name).sort(),
-      ['skill-aprobar', 'skill-auto', 'skill-propuestas', 'skill-rechazar', 'skill-ver']);
+      [
+        'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-habilitar',
+        'skill-propuestas', 'skill-rechazar', 'skill-retiradas', 'skill-ver',
+      ]);
     for (const command of registered) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/);
       assert.equal(command.description.trim().length > 0, true);
@@ -169,7 +172,7 @@ describe('activación', () => {
       { root: s.root, curated: s.curated, cwd: OTRO });
 
     // Nadie ha montado todavía: sin sesión no hay filas, ni en el global ni por agente.
-    assert.equal(global.map.size, 5, 'el global tiene los cinco comandos base y ninguna fila');
+    assert.equal(global.map.size, 9, 'el global tiene los comandos base y ninguna fila');
 
     // El montaje entra por el provider, que el registro llama con `{ cwd, agent }`: es la vía medida
     // contra el registro real, y no depende de que un evento alcance el contexto raíz.
@@ -180,7 +183,7 @@ describe('activación', () => {
     const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-aprobar-'));
     assert.deepEqual(filasDe(CWD), ['skill-aprobar-measured-decision-check'], 'la sesión ve lo suyo');
     assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
-    assert.equal(global.map.size, 5, 'las filas no se registran en el global: ahí se ofrecerían a todos');
+    assert.equal(global.map.size, 9, 'las filas no se registran en el global: ahí se ofrecerían a todos');
 
     // Decidir en una sesión no toca las filas de la otra.
     const fila = perAgent.get(CWD).map.get('skill-aprobar-measured-decision-check');
