@@ -61,6 +61,8 @@ window.__ModuleLoader__.load({
      * línea y usan la tarjeta del host, que para eso basta.
      */
     const COMMAND_NAMES = ['skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar'];
+    /** Todos los comandos del plugin empiezan así: es lo que distingue los suyos en el catálogo del host. */
+    const COMMAND_PREFIX = 'skill-';
     /**
      * Los comandos cuyo resultado es una LISTA que una decisión posterior deja atrás. Medido con el usuario
      * delante: aprobó una skill y el bloque que tenía debajo siguió enseñándola como pendiente. El texto de
@@ -615,12 +617,30 @@ window.__ModuleLoader__.load({
      * colapsable; el cierre es aparte, porque colapsar no era lo que faltaba: faltaba poder quitarla.
      */
     function SkillCommandCard(props) {
-      const { node, t, sessionId, runCommand, listCommands } = props;
+      const { node, t, sessionId, runCommand, listCommands, ensureCard } = props;
       const say = translator(t);
       const commandId = typeof node?.commandId === 'string' ? node.commandId : null;
       const text = typeof node?.outcome?.text === 'string' ? node.outcome.text : '';
       const decision = useDecision(props.useProjection);
       const [closed, setClosed] = React.useState(() => commandId !== null && readClosed().includes(commandId));
+
+      // Aprender qué comandos son del plugin, para que **también las filas del menú** tengan tarjeta
+      // propia —y con ella su X—. El nombre de una fila no se puede saber de antemano; el catálogo del
+      // host sí lo dice, y aquí ya hay `sessionId` para preguntarlo.
+      React.useEffect(() => {
+        if (typeof sessionId !== 'string' || typeof ensureCard !== 'function' || typeof listCommands !== 'function') return undefined;
+        let vivo = true;
+        (async () => {
+          try {
+            const commands = await listCommands(sessionId);
+            for (const entry of commands) {
+              const name = typeof entry === 'string' ? entry : entry?.name;
+              if (vivo && typeof name === 'string') ensureCard(name);
+            }
+          } catch { /* el panel ya dice por qué no pudo leer: aquí no hay nada que añadir */ }
+        })();
+        return () => { vivo = false; };
+      }, [sessionId]);
       const [open, setOpen] = React.useState(() => text.includes('\n'));
       const [touched, setTouched] = React.useState(false);
 
@@ -793,15 +813,36 @@ window.__ModuleLoader__.load({
         // La tarjeta de los resultados de nuestros comandos: una entrada keyed por nombre. Si esta versión
         // del anfitrión no declarara ese slot, la pieza pierde la X y conserva la píldora —un adorno nunca
         // puede estropear el trabajo, y menos el flujo del chat.
-        try {
-          for (const command of COMMAND_NAMES) {
-            ctx.slots.inject(COMMAND_VIEW_SLOT, () => ctx.slots.register({
+        //
+        // Los nombres base se fijan aquí; las **filas del menú**, no: llevan el id en el nombre
+        // (`skill-aprobar-<id>`), así que no se pueden enumerar de antemano y el slot no existía para
+        // ellas. Consecuencia medida: al elegir una fila, su resultado lo pintaba la tarjeta del
+        // anfitrión **sin X** y el bloque quedaba fijo en la conversación. El cliente los aprende del
+        // catálogo del host en cuanto tiene un `sessionId` (al montar cualquier tarjeta nuestra) y
+        // registra su slot entonces.
+        const cardSlots = new Map();
+        const ensureCard = (name) => {
+          if (typeof name !== 'string' || name === '' || !name.startsWith(COMMAND_PREFIX) || cardSlots.has(name)) return;
+          try {
+            const dispose = ctx.slots.inject(COMMAND_VIEW_SLOT, () => ctx.slots.register({
               name: COMMAND_VIEW_SLOT,
-              key: command,
+              key: name,
               locale: NS,
-            }, (props) => h(SkillCommandCard, { ...props, runCommand, listCommands })));
+            }, (props) => h(SkillCommandCard, { ...props, runCommand, listCommands, ensureCard })));
+            cardSlots.set(name, dispose);
+          } catch { /* sin tarjeta propia: el resultado se lee en la del anfitrión, que no sabe cerrarse */ }
+        };
+        for (const command of COMMAND_NAMES) ensureCard(command);
+        // Las retiradas se guardan: descargar el plugin no puede dejar slots vivos apuntando a una pieza
+        // que ya no está.
+        ctx.effect(() => () => {
+          for (const dispose of cardSlots.values()) {
+            try {
+              if (typeof dispose === 'function') dispose();
+            } catch { /* ya retirado */ }
           }
-        } catch { /* sin tarjeta propia: el resultado se lee en la del anfitrión, que no sabe cerrarse */ }
+          cardSlots.clear();
+        });
       },
     };
   },

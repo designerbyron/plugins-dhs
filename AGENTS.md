@@ -46,7 +46,7 @@ absoluta** con el gestor de plugins del harness. El contrato de la casa está en
 ```sh
 cd skill-compiler
 npm install            # dependencias del harness, declaradas en el manifiesto
-npm test               # 235 pruebas
+npm test               # 236 pruebas
 npm run test:hermetic  # las pruebas + huella del almacén real antes y después
 node bin/skill-compiler.mjs doctor   # dice si algo falta y con qué comando se arregla
 ```

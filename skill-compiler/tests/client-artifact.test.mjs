@@ -117,7 +117,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
   it('registra una entrada keyed por comando en el slot del nodo `command`', () => {
     assert.match(client, /COMMAND_VIEW_SLOT = 'conversation\.chat\.commandview'/,
       'el slot keyed del nodo command es el único sitio desde el que se puede decidir cómo se pinta un resultado');
-    assert.match(client, /ctx\.slots\.inject\(COMMAND_VIEW_SLOT, \(\) => ctx\.slots\.register\(\{\s*\n\s*name: COMMAND_VIEW_SLOT,\s*\n\s*key: command,/);
+    assert.match(client, /ctx\.slots\.inject\(COMMAND_VIEW_SLOT, \(\) => ctx\.slots\.register\(\{\s*\n\s*name: COMMAND_VIEW_SLOT,\s*\n\s*key: name,/);
     assert.match(client, /locale: NS/, 'la tarjeta recibe la `t` de nuestro espacio de nombres');
   });
 
@@ -163,7 +163,10 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     const pill = client.indexOf('}, SkillCompilerBadge));');
     const card = client.indexOf('}, (props) => h(SkillCommandCard');
     assert.equal(pill > 0 && card > pill, true, 'la píldora se registra primero');
-    assert.match(client, /try \{\s*\n\s*for \(const command of COMMAND_NAMES\)/, 'el registro de la tarjeta va protegido');
+    // El registro de la tarjeta sigue protegido, ahora dentro de `ensureCard`: un fallo ahí no puede
+    // llevarse por delante la píldora ni el resto del plugin.
+    assert.match(client, /try \{\s*\n\s*const dispose = ctx\.slots\.inject\(COMMAND_VIEW_SLOT/, 'el registro de la tarjeta va protegido');
+    assert.match(client, /for \(const command of COMMAND_NAMES\) ensureCard\(command\)/, 'y los cinco nombres fijos se registran por el mismo camino');
   });
 
   it('la tarjeta lleva su propia hoja de estilos: puede montarse sin la píldora', () => {
@@ -215,7 +218,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.match(client, /este anfitrión no expone commands\.execute/);
     assert.match(client, /'data-tone': 'error'/);
     // El ámbito entra por las props del kit de sesión, no se adivina.
-    assert.match(client, /const \{ node, t, sessionId, runCommand, listCommands \} = props;/);
+    assert.match(client, /const \{ node, t, sessionId, runCommand, listCommands, ensureCard \} = props;/);
   });
 
   it('tras el lote, el estado de la lista se mueve con lo ejecutado', () => {
@@ -236,6 +239,22 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
    * PATH, y el propio paquete de comandos del anfitrión declara `'remote.commands'`—, y el efecto, un
    * mensaje que negaba el trabajo del humano.
    */
+  /**
+   * Defecto reportado en vivo: al elegir del menú una **fila** (`skill-aprobar-<id>`) el resultado salía
+   * con la tarjeta del anfitrión, **sin X**, y el bloque quedaba fijo en la conversación. La causa: el
+   * slot keyed se registraba sólo para los cinco nombres fijos, y el de una fila lleva el id dentro.
+   */
+  it('una fila del menú también tiene tarjeta propia: el cliente aprende los nombres del catálogo', () => {
+    assert.match(client, /const ensureCard = \(name\) =>/, 'el registro del slot tiene que poder hacerse en caliente');
+    assert.match(client, /name\.startsWith\(COMMAND_PREFIX\)/, 'y sólo para los comandos del plugin');
+    assert.match(client, /const COMMAND_PREFIX = 'skill-'/);
+    // Y los aprende de la fuente estructurada, no del texto de un resultado.
+    assert.match(client, /const commands = await listCommands\(sessionId\)/);
+    assert.match(client, /ensureCard\(name\)/);
+    // Las retiradas se guardan: descargar el plugin no deja slots vivos.
+    assert.match(client, /cardSlots\.clear\(\)/);
+  });
+
   it('declara el remoto que usa, con el path que el anfitrión exige', () => {
     assert.match(client, /inject: \['slots', 'locale', 'remote\.commands'\]/,
       'sin declararlo, ctx.remote.commands lanza «without inject» al primer uso');

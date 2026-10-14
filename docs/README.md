@@ -33,6 +33,9 @@
 ## Planes de trabajo
 
 - [`plans/`](../plans/) — planes con su análisis, sus fases y su estado. Los autorizados llevan su `.sha256`.
+- [`PLAN-2026-10-13-gestion-de-skills.md`](../plans/PLAN-2026-10-13-gestion-de-skills.md) — el ciclo de vida
+  completo: deshabilitar (reversible) y eliminar (con respaldo y vuelta), en lote y desde las cuatro
+  superficies. **Anotado, sin implementar.**
 
 ## Historial
 

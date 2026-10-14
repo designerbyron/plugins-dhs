@@ -4,6 +4,38 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.6.1] — 2026-10-13
+
+**La X también en los resultados de una fila del menú.** Reportado por el autor: al elegir del menú una fila
+(`skill-aprobar-<id>`), el resultado lo pintaba la tarjeta del anfitrión, **sin X**, y el bloque quedaba fijo
+en la conversación. La causa: el slot keyed se registraba sólo para los cinco nombres fijos, y el de una fila
+lleva el id dentro — no se puede enumerar de antemano.
+
+### Corregido
+
+- El cliente **aprende** los nombres de los comandos del plugin del catálogo del host —`commands.list`, la
+  misma fuente estructurada que alimenta el panel— en cuanto tiene un `sessionId`, y registra el slot de cada
+  uno. Los cinco nombres fijos se siguen fijando de arranque.
+- Las retiradas de esos slots se guardan y se ejecutan al descargar el plugin, para no dejar un slot vivo
+  apuntando a una pieza que ya no está.
+- Tres pruebas anclaban la forma anterior (`key: command` en el bucle fijo); las anclas nuevas fijan el
+  camino corregido.
+
+### Medido
+
+- 236 pruebas (antes 235). La nueva se demuestra **roja** contra el código anterior en las dos aserciones que
+  importan: `ensureCard` no existía y no había filtro por prefijo.
+- **Verificado en vivo por el autor**: en una sesión ya no aparecen las pendientes de otro proyecto (el
+  arreglo de la v1.6.0, confirmado en su pantalla).
+- Límite que se declara: una tarjeta **ya pintada** antes de que el cliente aprenda los nombres sigue siendo
+  la del anfitrión, sin X. Las nuevas salen con su X.
+
+### Anotado para el cierre
+
+[`plans/PLAN-2026-10-13-gestion-de-skills.md`](plans/PLAN-2026-10-13-gestion-de-skills.md): deshabilitar
+(reversible) y eliminar (con respaldo fechado y vuelta por `restore`), en lote y desde las cuatro
+superficies. Hoy no existe ninguno de los dos.
+
 ## [1.6.0] — 2026-10-13
 
 **Las filas de pendientes son de una sesión, no de todas.** Reportado por el autor: en una sesión de un
