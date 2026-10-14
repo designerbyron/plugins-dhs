@@ -5,8 +5,9 @@ Memoria durable del repositorio. No es el historial de una sesión: es lo que ha
 
 ## Versión publicada
 
-**v1.7.1** — **primera versión estable** del plugin `skill-compiler` — `main` sincronizado con `designerbyron/plugins-dhs`.
-251 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
+**v1.7.1** — **primera versión estable** del plugin `skill-compiler` — `main` sincronizado con `designerbyron/plugins-dhs`,
+con su tag `v1.7.1`.
+255 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
 con 14 comprobaciones en verde.
 
 ## Qué está verificado (con la evidencia)

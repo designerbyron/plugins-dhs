@@ -7,7 +7,7 @@ añade capacidad, `parche` cuando se corrige un defecto.
 ## [1.7.1] — 2026-10-14 — **primera versión estable**
 
 Esta versión queda declarada como la **primera estable** del repositorio, con criterios y con compromiso (ver
-la sección de estado en el README): 251 pruebas en verde, suite hermética, contratos comprobados contra los
+la sección de estado en el README): 255 pruebas en verde, suite hermética, contratos comprobados contra los
 paquetes reales del harness, `doctor` verde y el ciclo completo probado en vivo. Lo que sigue abierto son
 decisiones y límites declarados, no defectos.
 
