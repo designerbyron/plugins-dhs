@@ -36,10 +36,17 @@ tienen argumentos a propósito: en el contrato del harness, un comando del host 
 ejecuta **en el acto** al elegirlo en el menú, así que seleccionar la fila **es** la decisión, sin recordar
 ni teclear nada. Teclear el comando entero hace exactamente lo mismo: son los mismos comandos.
 
-Las filas aparecen cuando el harness pide el catálogo de la sesión (o al ejecutar `/skill-propuestas`, que
-las anuncia con su nombre exacto) y se recomponen cuando cambia el almacén: aprobada una pendiente, su fila
-deja de ofrecerse. El ámbito se comprueba al ejecutar la fila, no al anunciarla: una fila de otro proyecto
-falla diciendo a cuál pertenece, en lugar de aprobar en el proyecto equivocado.
+**Las filas son de una sesión, no de todas.** Se registran en el ámbito del agente de esa sesión —su `cwd`
+es el ámbito, y el contrato del harness para esto es registrar bajo `agent.ctx`, obtenido en un listener de
+`agent/created`—, así que en una sesión aparecen las pendientes de **su** proyecto y ninguna de otro. Antes
+se registraban en el global y el humano llegó a ver, en el menú de un proyecto, las pendientes de otro:
+ofrecidas y condenadas a fallar, porque la puerta —que sí comprueba el ámbito— las rechazaba con razón.
+
+Se recomponen cuando cambia el almacén (aprobada una pendiente, su fila deja de ofrecerse) y decidir en una
+sesión **no** toca las filas de las demás. Al descargar el plugin no queda ninguna: el plugin conserva las
+retiradas de cada agente, porque el harness avisa de que descargarse él no libera por su cuenta lo
+registrado bajo `agent.ctx`. Y si el `agent.ctx` de un anfitrión no admitiera el montaje, el plugin lo deja
+dicho en vez de fingir: quedan el comando con argumentos y la tarjeta, que resuelven por la misma puerta.
 
 Dos cosas que no se delegan nunca: **la puerta de validación** (una propuesta que no la pase no se activa,
 ni con el modo automático) y **el registro** (todo queda en el log de la sesión).

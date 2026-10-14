@@ -24,13 +24,22 @@ const CWD = 'C:\\xampp\\htdocs\\saas-corporative';
 
 /** Un contexto con la forma mínima que el plugin usa. Si el plugin toca algo que no está, se ve aquí. */
 function fakeContext(services = {}) {
-  const seen = { sections: [], tools: [], providers: [], injected: [], effects: 0 };
+  const seen = { sections: [], tools: [], providers: [], injected: [], effects: 0, listeners: [] };
   const disposers = [];
   const ctx = {
     systemPrompt: { section: (section) => seen.sections.push(section) },
     tools: { register: (tool) => seen.tools.push(tool) },
     skills: { registerProvider: (factory) => seen.providers.push(factory) },
-    inject: (deps, callback) => { seen.injected.push(deps); callback(services); },
+    // Contrato real de Cordis: el callback del hijo devuelve su disposer y `inject` lo devuelve a quien
+    // lo llamó. El doble anterior lo descartaba, y con eso una prueba no podía ver una fuga.
+    inject: (deps, callback) => { seen.injected.push(deps); return callback(services); },
+    // El alta del agente: el plugin monta las filas de esa sesión bajo su propio contexto.
+    on: (event, listener) => {
+      seen.listeners.push({ event, listener });
+      return () => {
+        seen.listeners = seen.listeners.filter((entry) => entry.listener !== listener);
+      };
+    },
     // El efecto devuelve el disposer real: el harness los llama al descargar el plugin, y la prueba tiene
     // que hacer lo mismo — dejar la vigilancia de catálogo abierta sería dejar un recurso vivo.
     effect: (callback) => { seen.effects += 1; const dispose = callback(); disposers.push(dispose); return dispose; },
@@ -138,41 +147,55 @@ describe('activación', () => {
     assert.equal(invalidations, 2, 'aprobar tiene que avisar al catálogo');
     disposeAll();
   });
-  it('las filas de pendientes aparecen cuando la sesión pide su catálogo, y se retiran al decidir', async () => {
+  it('cada agente ve las filas de SU proyecto, y jamás las de otro', async () => {
     const s = sandbox();
     const signal = createCatalogSignal({ root: s.root, watch: false });
-    // Un registro de verdad en miniatura: acepta definiciones y honra el disposer que devuelve, que es
-    // exactamente el contrato del registro de comandos del harness.
-    const registry = new Map();
-    const commands = {
-      register: (command) => {
-        registry.set(command.name, command);
-        return () => registry.delete(command.name);
-      },
+    const OTRO = 'C:\\xampp\\htdocs\\duranspainting';
+
+    // Un registro de verdad en miniatura por ámbito: el global y uno por agente. Aceptan definiciones y
+    // honran el disposer, que es el contrato del registro de comandos del harness.
+    const mini = () => {
+      const map = new Map();
+      return { map, commands: { register: (command) => { map.set(command.name, command); return () => map.delete(command.name); } } };
     };
-    const { ctx, seen, disposeAll } = fakeContext({ commands });
+    const global = mini();
+    const perAgent = new Map();
+    const agentFor = (cwd) => {
+      const scope = mini();
+      perAgent.set(cwd, scope);
+      return { session: { header: { cwd } }, ctx: fakeContext({ commands: scope.commands }).ctx };
+    };
+    const { ctx, seen, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
 
+    // Una pendiente en cada proyecto: el defecto reportado fue verlas todas mezcladas en el menú.
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
-    assert.equal(registry.size, 5, 'sin ámbito conocido sólo están los comandos base, no filas de otro proyecto');
+    propose({ ...goodInput(), id: 'pendiente-del-otro-proyecto', description: 'Otra cosa distinta, para el otro proyecto.' },
+      { root: s.root, curated: s.curated, cwd: OTRO });
 
-    // El harness pide el catálogo de la sesión: es el único momento en que el plugin conoce el ámbito.
-    const provider = seen.providers[0]();
-    await provider.list({ cwd: CWD });
-    const rows = ['skill-ver-measured-decision-check', 'skill-aprobar-measured-decision-check', 'skill-rechazar-measured-decision-check'];
-    for (const name of rows) assert.equal(registry.has(name), true, `falta la fila ${name}`);
-    assert.equal(registry.get(rows[1]).input, undefined, 'la fila se ejecuta al elegirla: no reclama argumentos');
+    // Nadie ha montado todavía: sin sesión no hay filas, ni en el global ni por agente.
+    assert.equal(global.map.size, 5, 'el global tiene los cinco comandos base y ninguna fila');
 
-    // Elegirla en el menú es la decisión completa: se llama al handler sin argumentos.
-    const result = registry.get(rows[1]).handler({ agent: { session: { header: { cwd: CWD } } } });
-    assert.equal(result.kind, 'success', JSON.stringify(result));
+    const listener = seen.listeners.find((entry) => entry.event === 'agent/created')?.listener;
+    assert.equal(typeof listener, 'function', 'el plugin tiene que escuchar el alta del agente');
+    listener(agentFor(CWD));
+    listener(agentFor(OTRO));
 
-    // Y al aprobar, las filas se recomponen: una pendiente que ya no lo está no puede seguir ofreciéndose.
-    for (const name of rows) assert.equal(registry.has(name), false, `sigue anunciada ${name}`);
-    assert.equal(registry.size, 5, 'los cinco comandos base no se tocan al recomponer');
+    const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-aprobar-'));
+    assert.deepEqual(filasDe(CWD), ['skill-aprobar-measured-decision-check'], 'la sesión ve lo suyo');
+    assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
+    assert.equal(global.map.size, 5, 'las filas no se registran en el global: ahí se ofrecerían a todos');
+
+    // Decidir en una sesión no toca las filas de la otra.
+    const fila = perAgent.get(CWD).map.get('skill-aprobar-measured-decision-check');
+    assert.equal(fila.input, undefined, 'la fila se ejecuta al elegirla: no reclama argumentos');
+    assert.equal(fila.handler({ agent: { session: { header: { cwd: CWD } } } }).kind, 'success');
+    assert.deepEqual(filasDe(CWD), [], 'las suyas se retiran al decidir');
+    assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'las del otro proyecto siguen intactas');
 
     disposeAll();
-    assert.equal(registry.size, 0, 'descargar el plugin no deja comandos colgando');
+    assert.equal(global.map.size, 0, 'descargar el plugin no deja comandos colgando');
+    for (const scope of perAgent.values()) assert.equal(scope.map.size, 0, 'ni filas de sesión');
   });
 
   it('recomputar no re-registra lo mismo: sin cambio real, el menú no parpadea', async () => {
@@ -187,17 +210,22 @@ describe('activación', () => {
         return () => registry.delete(command.name);
       },
     };
+    const agentCtx = fakeContext({ commands }).ctx;
     const { ctx, seen, disposeAll } = fakeContext({ commands });
     apply(ctx, { root: s.root, catalog: signal });
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
 
-    const provider = seen.providers[0]();
-    await provider.list({ cwd: CWD });
+    // El ámbito entra por el alta del agente, no por el catálogo: quien decide qué filas hay es la sesión.
+    const listener = seen.listeners.find((entry) => entry.event === 'agent/created')?.listener;
+    listener({ session: { header: { cwd: CWD } }, ctx: agentCtx });
+    assert.equal(registry.has('skill-aprobar-measured-decision-check'), true, 'el agente ve su pendiente');
+
     const afterArming = registrations;
     // Un cambio del almacén sin efecto sobre las pendientes (aquí: la misma lista) no vuelve a registrar.
     signal.notify();
     assert.equal(registrations, afterArming, 'no se re-registra una fila idéntica');
     assert.equal(registry.has('skill-aprobar-measured-decision-check'), true);
     disposeAll();
+    assert.equal(registry.size, 0, 'ni al descargar el plugin quedan filas colgando');
   });
 });

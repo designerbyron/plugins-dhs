@@ -4,6 +4,33 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.6.0] — 2026-10-13
+
+**Las filas de pendientes son de una sesión, no de todas.** Reportado por el autor: en una sesión de un
+proyecto veía en el menú `/` las pendientes de otro —con su id y su proyecto en la descripción— y al
+elegirlas la puerta las rechazaba con razón («está pendiente en duranspainting, no en esta sesión»). Una
+oferta que no puede cumplirse es una mentira con forma de atajo.
+
+### Corregido
+
+- Las filas se registran **en el ámbito del agente de esa sesión** (`agent.ctx`, obtenido en un listener de
+  `agent/created`), que es el contrato que el harness documenta para este caso; antes se registraban en el
+  global, donde las veían todas las sesiones. El `cwd` del agente da el ámbito sin que nadie lo declare.
+- El plugin **conserva las retiradas** de cada agente y las ejecuta al descargarse: el harness avisa de que
+  descargar el plugin no libera por su cuenta lo registrado bajo `agent.ctx`.
+- Decidir en una sesión ya no recompone las filas de las demás.
+- Se retira el rastro de `cwd` conocidos en el provider: el ámbito sale del agente, y anotar ámbitos al
+  servir el catálogo era justo lo que mezclaba proyectos.
+
+### Medido
+
+- 234 pruebas. La nueva fija la clase: dos agentes de proyectos distintos, cada uno con **sus** filas y
+  ninguna del otro; el global sin filas; decidir en uno no toca al otro; y al descargar el plugin no queda
+  ninguna colgando.
+- Dos defectos de las propias pruebas, corregidos al verlas fallar: `scopeOf` se llamaba con el agente pelado
+  en vez de con su `exec` (el montaje se caía en silencio) y el doble de `inject` no devolvía el disposer del
+  hijo, con lo que una prueba no podía ver una fuga real de filas.
+
 ## [1.5.2] — 2026-10-13
 
 **Actualizar una skill existente era posible y nadie lo sabía.** Reportado por el autor: «habiendo aprendido

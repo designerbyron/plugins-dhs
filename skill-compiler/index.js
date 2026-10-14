@@ -24,8 +24,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createCatalogSignal } from './lib/catalog-signal.mjs';
 import { skillCommands, targetCommands } from './lib/commands.mjs';
 import { curatedLibraryRoot, defaultRoot } from './lib/compiler.mjs';
-import { pendingRowsForAll } from './lib/pending-rows.mjs';
-import { PROTOCOL, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
+import { pendingRowsFor } from './lib/pending-rows.mjs';
+import { PROTOCOL, scopeOf, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
 
 /** Identidad del Loader. */
 export const name = 'skill-compiler';
@@ -69,23 +69,20 @@ export function apply(ctx, config = {}) {
   // clase de defecto que ya se cerró para el almacén propio.
   const catalog = config.catalog ?? createCatalogSignal({ root, also: [curatedLibraryRoot()] });
 
-  // ── Las filas de pendientes: la superficie de selección, no una nota de sintaxis ────────────────
+  // ── Las filas de pendientes: una oferta que corresponde a UNA sesión ────────────────────────────
   //
   // El humano vio la lista de pendientes y no encontró cómo elegir una: el compositor no ofrece una
   // lista pulsable para los argumentos de un comando. La superficie de selección del harness es el menú
   // `/`, y desde un plugin se usa así: **una entrada por pendiente, sin argumentos**, porque un comando
-  // del host sin argumentos se ejecuta en el acto al elegirlo. Esto vive aquí, fuera de los bloques de
-  // inyección, porque lo alimentan dos sitios: el provider (que recibe el `cwd` de la sesión) y la
-  // propia señal de catálogo (cualquier mutación cambia qué hay pendiente).
-  const knownCwds = new Set();
+  // del host sin argumentos se ejecuta en el acto al elegirlo.
+  //
+  // Y cada fila es de **un proyecto**. Registrarlas en el global parecía cómodo y era un defecto: el
+  // humano abrió una sesión de un proyecto y vio, en el menú, las pendientes de otro —ofrecidas y
+  // condenadas a fallar, porque la puerta las rechaza con razón—. Se registran en el ámbito del agente
+  // de su sesión, que es lo que el contrato del harness pide para esto: registrar en `agent.ctx`,
+  // obtenido en un listener de `agent/created`, y conservar el disposer por agente en un efecto propio.
   /** Lo sustituye el bloque de comandos: sin servicio de comandos no hay filas, y no pasa nada. */
   let refreshPendingRows = () => false;
-
-  const noteScope = (cwd) => {
-    if (typeof cwd !== 'string' || cwd.trim() === '' || knownCwds.has(cwd)) return;
-    knownCwds.add(cwd);
-    refreshPendingRows();
-  };
 
   ctx.systemPrompt.section({
     name: 'skill-compiler:protocol',
@@ -109,7 +106,7 @@ export function apply(ctx, config = {}) {
   // mano), que la señal vigila. La promesa —«usable sin reiniciar»— depende de esto y sólo de esto.
   ctx.skills.registerProvider((control) => {
     catalog.bind(control?.invalidate);
-    return skillProvider({ root, observe: noteScope });
+    return skillProvider({ root });
   });
   ctx.effect(() => {
     catalog.start();
@@ -132,49 +129,139 @@ export function apply(ctx, config = {}) {
     if (registry === undefined || typeof registry.register !== 'function') return;
     ctx.effect(() => {
       const base = [];
-      const rows = [];
-      let currentRows = '';
+      /** agente → cómo recomponer sus filas, y cómo retirarlas si el plugin se descarga. */
+      const perAgent = new Map();
 
-      /** Recompone las filas de pendientes. Si el conjunto no cambió, no toca el registro: re-registrar
-       *  lo mismo emitiría `commands/change` en vano y haría parpadear el menú. */
-      const registerRows = () => {
-        let definitions;
+      const composeFor = (cwd) => {
         try {
-          definitions = targetCommands({ root, catalog, rows: pendingRowsForAll({ root, cwds: [...knownCwds] }) });
+          return targetCommands({ root, catalog, rows: pendingRowsFor({ root, cwd }) });
         } catch {
-          return false; // el almacén ilegible no puede tumbar los comandos que ya están
+          return null; // el almacén ilegible no puede tumbar los comandos que ya están
         }
-        const signature = definitions.map((definition) => definition.name).join('\n');
-        if (signature === currentRows) return false;
-        for (const dispose of rows.splice(0)) {
-          try {
-            dispose();
-          } catch {
-            /* ya retirada */
-          }
-        }
-        for (const definition of definitions) {
-          try {
-            rows.push(registry.register(definition));
-          } catch {
-            /* una fila que no se puede registrar no se lleva las demás */
-          }
-        }
-        currentRows = signature;
-        return true;
       };
 
-      refreshPendingRows = registerRows;
+      /**
+       * Monta las filas de un agente bajo **su** contexto, que es lo que las hace suyas y sólo suyas.
+       * Dentro de un mismo agente el conjunto no se toca si no cambió: re-registrar lo mismo emitiría
+       * `commands/change` en vano y haría parpadear el menú.
+       */
+      const mountFor = (agent) => {
+        // `scopeOf` lee el ámbito del `exec` del agente, que es el mismo camino que usan las herramientas:
+        // una regla, una implementación. Llamarla con el agente pelado devolvía `undefined` y el montaje
+        // se caía en silencio — sin filas para nadie, que es peor que con filas de más.
+        const cwd = scopeOf({ agent });
+        if (typeof cwd !== 'string' || cwd.trim() === '' || perAgent.has(agent)) return;
+        // El plugin guarda **sus propias** retiradas: el harness avisa de que descargar el plugin no
+        // libera por su cuenta lo registrado bajo `agent.ctx`, así que la limpieza no puede depender de
+        // lo que devuelva el `inject` ni del orden en que el marco recorra los efectos.
+        const entry = { applied: '', refresh: null, dispose: null, clear: null };
+        // Un solo efecto bajo `agent.ctx`: cuando el agente muere, sus filas se van con él. Y el plugin
+        // conserva el disposer porque descargarse él **no** retira por su cuenta lo registrado ahí.
+        entry.dispose = agent.ctx.effect(() => {
+          let inner = null;
+          try {
+            inner = agent.ctx.inject(['commands'], (scopedRows) => {
+              const rowsRegistry = scopedRows?.commands ?? agent.ctx.commands;
+              if (rowsRegistry === undefined || typeof rowsRegistry.register !== 'function') return undefined;
+              const rows = [];
+              const apply = () => {
+                const definitions = composeFor(cwd);
+                if (definitions === null) return;
+                const signature = definitions.map((definition) => definition.name).join('\n');
+                if (signature === entry.applied) return;
+                for (const dispose of rows.splice(0)) {
+                  try {
+                    dispose();
+                  } catch {
+                    /* ya retirada */
+                  }
+                }
+                for (const definition of definitions) {
+                  try {
+                    rows.push(rowsRegistry.register(definition));
+                  } catch {
+                    /* una fila que no se puede registrar no se lleva las demás */
+                  }
+                }
+                entry.applied = signature;
+              };
+              const clear = () => {
+                for (const dispose of rows.splice(0)) {
+                  try {
+                    dispose();
+                  } catch {
+                    /* ya retirada */
+                  }
+                }
+                entry.applied = '';
+              };
+              entry.refresh = apply;
+              entry.clear = clear;
+              apply();
+              return clear;
+            });
+          } catch {
+            /* sin filas propias quedan el comando con argumentos y la tarjeta: nunca se queda sin vía */
+          }
+          return () => {
+            try {
+              if (typeof inner === 'function') inner();
+            } catch {
+              /* ya retirado */
+            }
+          };
+        });
+        perAgent.set(agent, entry);
+      };
+
+      refreshPendingRows = () => {
+        let touched = false;
+        for (const entry of perAgent.values()) {
+          if (typeof entry.refresh === 'function') {
+            entry.refresh();
+            touched = true;
+          }
+        }
+        return touched;
+      };
+
       try {
-        for (const command of skillCommands({ root, catalog, onListed: registerRows })) base.push(registry.register(command));
+        for (const command of skillCommands({ root, catalog, onListed: refreshPendingRows })) base.push(registry.register(command));
       } catch {
         // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.
       }
-      registerRows();
+
+      // El alta del agente es donde el plugin conoce el ámbito sin que un humano lo declare: su `cwd`.
+      let offCreated = null;
+      try {
+        offCreated = ctx.on('agent/created', (agent) => mountFor(agent));
+      } catch {
+        /* sin el alta no hay filas por sesión; los comandos con argumentos siguen funcionando */
+      }
 
       return () => {
         refreshPendingRows = () => false;
-        for (const dispose of [...base, ...rows]) {
+        try {
+          if (typeof offCreated === 'function') offCreated();
+        } catch {
+          /* ya retirado */
+        }
+        for (const entry of perAgent.values()) {
+          // Las filas primero, con las retiradas que guarda el propio plugin: el ámbito del agente no se
+          // desmonta solo al descargarse el plugin, y una fila viva apunta a una sesión que ya no está.
+          try {
+            entry.clear?.();
+          } catch {
+            /* ya retiradas */
+          }
+          try {
+            entry.dispose?.();
+          } catch {
+            /* ya retirado */
+          }
+        }
+        perAgent.clear();
+        for (const dispose of base) {
           try {
             if (typeof dispose === 'function') dispose();
           } catch {
