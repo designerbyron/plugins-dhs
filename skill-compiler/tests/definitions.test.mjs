@@ -14,7 +14,7 @@ import { after, describe, it } from 'node:test';
 
 import { approve, projectKey, propose } from '../lib/compiler.mjs';
 import { PROTOCOL, PROVIDER_RANK, skillPropose, skillProvider, skillReview, scopeOf } from '../lib/definitions.mjs';
-import { cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
+import { buenaRevision, cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
 
@@ -32,6 +32,41 @@ describe('PROTOCOL', () => {
 
   it('es corto: entra en el prompt de todas las sesiones y se paga entero cada vez', () => {
     assert.equal(PROTOCOL.length < 1200, true, `demasiado largo: ${PROTOCOL.length} caracteres`);
+  });
+
+  /**
+   * El tope de 1.200 caracteres es el contrato; el **presupuesto de trabajo** es el de la medición del
+   * 2026-10-15 (941 caracteres · 240 tokens con la vara del harness, `@deepseek-ai/dsh-token-meter`). Se fija
+   * aquí para que volver a engordarlo se vea en esta prueba y no en la factura de cada sesión: el protocolo
+   * entra en el prompt de TODAS las sesiones, así que cada carácter se paga siempre.
+   */
+  it('se queda en el presupuesto de trabajo, no sólo por debajo del tope', () => {
+    assert.equal(PROTOCOL.length <= 950, true,
+      `fuera del presupuesto: ${PROTOCOL.length} caracteres (objetivo ~900, tope 1200)`);
+  });
+
+  /**
+   * El otro criterio que quedaba flojo —«lo resuelto se reutilizará»— no discrimina nada. Una skill cuesta
+   * contexto en cada sesión, así que lo que la justifica es una **evidencia señalable**; las cuatro que se
+   * nombran salen de los casos reales del almacén, no de una lista inventada.
+   */
+  it('nombra las cuatro evidencias que justifican proponer', () => {
+    assert.match(PROTOCOL, /contrato/, 'un contrato descubierto a base de pruebas');
+    assert.match(PROTOCOL, /trampa ya pagada/);
+    assert.match(PROTOCOL, /orden operativo/);
+    assert.match(PROTOCOL, /valor exacto/);
+    // Y el freno explícito al criterio flojo: una posibilidad no es una evidencia.
+    assert.match(PROTOCOL, /podría reutilizarse/);
+    assert.match(PROTOCOL, /No basta/, 'el freno tiene que estar dicho, no insinuado');
+  });
+
+  it('no repite lo que ya explica la descripción de skill_vendor', () => {
+    // La vía tiene que seguir nombrada —es una decisión, no un adorno—, pero el proceso del vendorizado
+    // (original verbatim, no copiar ni instalar del origen) vive en su herramienta: pagarlo dos veces es
+    // pagarlo en cada sesión por nada.
+    assert.match(PROTOCOL, /skill_vendor/);
+    assert.equal(/verbatim/.test(PROTOCOL), false, 'el detalle de la copia es de skill_vendor');
+    assert.equal(/no copies ni instales/.test(PROTOCOL), false);
   });
 
   /**
@@ -54,6 +89,22 @@ describe('PROTOCOL', () => {
     assert.match(definition.description, /superseded\//);
     // El criterio es «se reutilizará», no «tarea compleja»: el freno anterior no mencionaba la actualización.
     assert.equal(/never for a simple query/.test(definition.description), false);
+  });
+
+  /**
+   * La descripción de la herramienta es lo que el modelo lee **al elegirla**, y era el otro sitio donde el
+   * criterio flojo vivía («a procedure you will need again» es una predicción, no una evidencia). Aquí se
+   * exige que nombre las cuatro evidencias y que diga en voz alta lo que **no** vale.
+   */
+  it('exige una evidencia concreta, no una posibilidad', () => {
+    const definition = skillPropose({ root: '/no/usado' });
+    const descripcion = definition.description;
+    assert.match(descripcion, /only with evidence/, 'el «sólo con evidencia» tiene que estar');
+    for (const evidencia of ['contract discovered the hard way', 'trap already paid for', 'operational order', 'exact value']) {
+      assert.match(descripcion, new RegExp(evidencia), `falta una de las cuatro evidencias: ${evidencia}`);
+    }
+    assert.match(descripcion, /"It could be reused" is not evidence/, 'y el freno a «podría reutilizarse»');
+    assert.match(descripcion, /narrating the session/, 'contar la sesión tampoco es una evidencia');
   });
 });
 
@@ -86,7 +137,7 @@ describe('skill_propose', () => {
     const s = sandbox();
     const result = tool(s).execute(goodInput({
       id: 'session-recovery-state',
-      description: 'Rebuilding the state of a lost or closed session.',
+      description: 'Rebuilding the state of a lost or closed session, from its log.',
       whenToUse: 'Cuando una sesión se cerró y hay que reconstruir su estado.',
     }), fakeExec(CWD));
     assert.equal(result.status, 'conflict');
@@ -117,7 +168,8 @@ describe('skill_propose', () => {
     const t = tool(s);
     t.execute(goodInput(), fakeExec(CWD));
     approve('measured-decision-check', projectKey(CWD), { root: s.root });
-    const second = t.execute(goodInput({ body: `${goodInput().body}\n\n4. Un paso más.\n` }), fakeExec(CWD));
+    // Un parche de una skill viva exige su revisión: sin ella la puerta lo rechaza (Fase 3).
+    const second = t.execute(goodInput({ body: `${goodInput().body}\n\n4. Un paso más.\n`, revision: buenaRevision() }), fakeExec(CWD));
     assert.equal(second.status, 'proposed');
     assert.equal(second.updatesApproved, true);
     assert.match(second.summary, /reemplazará una skill ya aprobada/);

@@ -71,8 +71,8 @@ describe('activación', () => {
     // podido cargar, esto estaría vacío.
     const propose = seen.tools.find((t) => t.name === 'skill_propose');
     assert.deepEqual(Object.keys(propose.parameters.properties).sort(),
-      ['body', 'description', 'evidence', 'id', 'tags', 'whenToUse']);
-    assert.deepEqual([...propose.parameters.required].sort(), ['body', 'description', 'id']);
+      ['body', 'description', 'evidence', 'id', 'references', 'revision', 'tags', 'whenToUse']);
+    assert.deepEqual([...propose.parameters.required].sort(), ['body', 'description', 'id', 'whenToUse']);
 
     assert.equal(seen.providers.length, 1, 'el proveedor de skills tiene que quedar registrado');
     disposeAll();
@@ -168,7 +168,7 @@ describe('activación', () => {
 
     // Una pendiente en cada proyecto: el defecto reportado fue verlas todas mezcladas en el menú.
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
-    propose({ ...goodInput(), id: 'pendiente-del-otro-proyecto', description: 'Otra cosa distinta, para el otro proyecto.' },
+    propose({ ...goodInput(), id: 'pendiente-del-otro-proyecto', description: 'Otra cosa distinta de la anterior, pensada para el otro proyecto.' },
       { root: s.root, curated: s.curated, cwd: OTRO });
 
     // Nadie ha montado todavía: sin sesión no hay filas, ni en el global ni por agente.

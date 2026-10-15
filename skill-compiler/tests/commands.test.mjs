@@ -145,7 +145,7 @@ describe('comandos · /skill-propuestas', () => {
     const s = sandbox();
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     approve('measured-decision-check', KEY, { root: s.root });
-    propose(goodInput({ id: 'otro-tema-distinto', description: 'Otra cosa sin relación con lo anterior.', whenToUse: 'Cuando haga falta otra cosa.' }), { root: s.root, curated: s.curated, cwd: CWD });
+    propose(goodInput({ id: 'otro-tema-distinto', description: 'Otra cosa sin relación con lo anterior, con su propio detalle.', whenToUse: 'Cuando haga falta otra cosa.' }), { root: s.root, curated: s.curated, cwd: CWD });
 
     const { byName } = commands(s.root);
     const result = byName['skill-propuestas'].handler({ agent, rawInput: '' });
@@ -409,7 +409,7 @@ describe('comandos · filas de pendientes', () => {
   it('el resultado de decidir trae la lista al día, para no tener que volver a pedirla', () => {
     const s = sandbox();
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
-    propose(goodInput({ id: 'otro-tema-distinto', description: 'Otra cosa sin relación con lo anterior.', whenToUse: 'Cuando haga falta otra cosa.' }),
+    propose(goodInput({ id: 'otro-tema-distinto', description: 'Otra cosa sin relación con lo anterior, con su propio detalle.', whenToUse: 'Cuando haga falta otra cosa.' }),
       { root: s.root, curated: s.curated, cwd: CWD });
     const { byName } = commands(s.root);
 

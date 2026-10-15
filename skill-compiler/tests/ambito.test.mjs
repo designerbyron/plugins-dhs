@@ -29,7 +29,7 @@ import {
   ambito, approve, disable, enable, folderHash, isOurs, listForProject, projectKey, propose,
   publishToLibrary, restore, retire, retired,
 } from '../lib/compiler.mjs';
-import { GOOD_BODY, cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
+import { GOOD_BODY, buenaRevision, cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
 
@@ -110,7 +110,7 @@ describe('ámbito · aprobar para todos los proyectos', () => {
     assert.equal(publishToLibrary(id, KEY, { root: s.root }).ok, true);
 
     // Otra versión, publicada otra vez: la anterior tiene que quedar con su fecha.
-    const segunda = propuesta(s, { body: `${goodInput().body}\n\n4. Cuarta línea, para que la versión cambie de verdad.` });
+    const segunda = propuesta(s, { body: `${goodInput().body}\n\n4. Cuarta línea, para que la versión cambie de verdad.`, revision: buenaRevision() });
     assert.equal(segunda, id, 'es el mismo id: una actualización');
     const otra = publishToLibrary(id, KEY, { root: s.root });
     assert.equal(otra.ok, true, JSON.stringify(otra));
@@ -173,7 +173,7 @@ describe('ámbito · cambiar de sitio una ya aprobada', () => {
     assert.equal(existsSync(join(s.curated, id)), false, 'y sale de la biblioteca: una sola copia efectiva');
 
     // La constancia se apartó, así que volver a publicarla no choca con ella.
-    const ida = propuesta(s, { body: `${goodInput().body}\n\n5. Una línea más.` });
+    const ida = propuesta(s, { body: `${goodInput().body}\n\n5. Una línea más.`, revision: buenaRevision() });
     const otra = ambito(ida, KEY, { to: 'global', root: s.root });
     assert.equal(otra.ok, true, JSON.stringify(otra));
   });
@@ -312,7 +312,7 @@ describe('ámbito · una skill publicada se puede seguir mejorando', () => {
     assert.equal(approveProposal({ root: s.root, key: KEY, id, scope: 'global' }).kind, 'success');
 
     const otra = propose(
-      goodInput({ body: `${GOOD_BODY}\n4. Una línea más, para que la versión cambie.` }),
+      goodInput({ body: `${GOOD_BODY}\n4. Una línea más, para que la versión cambie.`, revision: buenaRevision() }),
       { root: s.root, curated: s.curated, cwd: CWD },
     );
     assert.equal(otra.status, 'proposed', JSON.stringify(otra));
@@ -325,7 +325,7 @@ describe('ámbito · una skill publicada se puede seguir mejorando', () => {
     ajena(s, 'de-otra-herramienta');
 
     const r = propose(
-      goodInput({ id: 'de-otra-herramienta', description: 'Intento de ocupar un identificador ajeno.' }),
+      goodInput({ id: 'de-otra-herramienta', description: 'Intento de ocupar un identificador que ya usa otra herramienta.' }),
       { root: s.root, curated: s.curated, cwd: CWD },
     );
     assert.equal(r.status, 'conflict', JSON.stringify(r));

@@ -27,7 +27,7 @@ const RAW = 'https://raw.githubusercontent.com/acme/skills/main/measured/SKILL.m
 const UPSTREAM_SKILL = [
   '---',
   'name: measured-decisions',
-  'description: "Decide with measured evidence instead of impressions."',
+  'description: "Decide with measured evidence instead of impressions, every time."',
   'whenToUse: "Cuando una decisión necesite un número medido."',
   '---',
   '',
@@ -222,7 +222,7 @@ describe('adaptUpstream', () => {
   it('toma el id y la descripción del origen', () => {
     const r = adapt();
     assert.equal(r.id, 'measured-decisions');
-    assert.equal(r.description, 'Decide with measured evidence instead of impressions.');
+    assert.equal(r.description, 'Decide with measured evidence instead of impressions, every time.');
     assert.equal(r.whenToUse, 'Cuando una decisión necesite un número medido.');
   });
 
@@ -327,7 +327,7 @@ describe('vendor', () => {
     const s = sandbox();
     const colision = UPSTREAM_SKILL
       .replace('name: measured-decisions', 'name: session-state-recovery')
-      .replace(/^description: .*$/m, 'description: "Rebuild state after a lost or closed session."');
+      .replace(/^description: .*$/m, 'description: "Rebuild state after a lost or closed session, from its own log."');
     const result = await vendor({ url: RAW }, { root: s.root, cwd: CWD, curated: s.curated, now: 't', fetchImpl: fakeFetch(routes(colision)) });
     assert.equal(result.status, 'conflict');
     assert.equal(result.conflicts[0].id, 'session-state-recovery');

@@ -16,6 +16,7 @@
  *   node bin/skill-compiler.mjs approve <id>              # activar en ESTE proyecto (exige que `check` pase)
  *   node bin/skill-compiler.mjs approve <id> --global     # activar para TODOS tus proyectos
  *   node bin/skill-compiler.mjs scope <id> --local|--global  # cambiar de ámbito una ya aprobada
+ *   node bin/skill-compiler.mjs active                  # qué se está sirviendo de verdad en este directorio
  *   node bin/skill-compiler.mjs reject <id>               # apartar sin borrar
  *   node bin/skill-compiler.mjs disable <id>              # apagar: reversible, se conserva entera
  *   node bin/skill-compiler.mjs enable <id>               # volver a encender
@@ -27,6 +28,12 @@
  *   node bin/skill-compiler.mjs upstream <id>             # ¿se movió el origen?
  *   node bin/skill-compiler.mjs provenance <id>           # procedencia guardada, entera
  *   node bin/skill-compiler.mjs doctor                    # ¿están las dependencias en su sitio?
+ *   node bin/skill-compiler.mjs audit [--json] [--estado X] [--todo]
+ *                                                       # audita TODO el almacén (solo lectura)
+ *   node bin/skill-compiler.mjs repair <id>               # PREPARA la corrección de una skill viva (no activa)
+ *   node bin/skill-compiler.mjs promote <id> [--nivel 1,2] [--dry]
+ *                                                       # activa una corrección con pruebas; sin --nivel no activa nada
+ *   node bin/skill-compiler.mjs history [<id>]            # qué se promocionó, con qué pruebas y por qué
  *   node bin/skill-compiler.mjs review [--port N]         # página local para aprobar y rechazar
  *
  * Opciones: `--project-key <clave>` para actuar sobre otro proyecto, `--force` para aprobar aunque
@@ -39,8 +46,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  ambito, approve, checkProposal, defaultRoot, disable, enable, listForProject, locate, overview, pending,
-  projectKey, reject, restore, retire, retired, retiredRoot,
+  ambito, approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate,
+  overview, pending, projectKey, reject, restore, retire, retired, retiredRoot,
 } from '../lib/compiler.mjs';
 import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
 
@@ -69,6 +76,13 @@ for (let i = 1; i < argv.length; i++) {
   if (arg === '--note') { flags.note = argv[++i]; continue; }
   if (arg === '--url') { flags.url = argv[++i]; continue; }
   if (arg === '--port') { flags.port = argv[++i]; continue; }
+  // Las de `audit`: el informe entero en JSON, acotar por estado, o incluir también las que pasan.
+  if (arg === '--json') { flags.json = true; continue; }
+  if (arg === '--todo') { flags.todo = true; continue; }
+  if (arg === '--estado') { flags.estado = argv[++i]; continue; }
+  // Las de la promoción: qué niveles se autorizan, y ver las pruebas sin escribir nada.
+  if (arg === '--nivel') { flags.nivel = argv[++i]; continue; }
+  if (arg === '--dry') { flags.dry = true; continue; }
   if (arg.startsWith('--')) { process.stderr.write(`Opción desconocida: ${arg}\n`); process.exit(2); }
   positional.push(arg);
 }
@@ -508,6 +522,182 @@ switch (command) {
       ? '\ntodo en su sitio: el plugin puede activarse\n'
       : `\n${bad} problema(s): con esto el plugin falla al activarse\n`);
     process.exit(bad === 0 ? 0 : 1);
+  }
+
+  case 'audit': {
+    // Auditoría integral, en SOLO LECTURA: mira el almacén entero con la misma puerta que decide una
+    // aprobación y dice qué incumple cada skill, con qué valor, contra qué umbral y por dónde se arregla.
+    // No repara nada: señalar es lo que se le pide. Es el primer paso para decidir qué se corrige.
+    const { auditarAlmacen, resumenDeAuditoria } = await import('../lib/audit.mjs');
+    const estados = flags.estado !== undefined ? String(flags.estado).split(',').map((e) => e.trim()) : null;
+    const informe = auditarAlmacen({ root, curated: curatedLibraryRoot(), estados });
+
+    if (flags.json) {
+      process.stdout.write(`${JSON.stringify(informe, null, 2)}\n`);
+      process.exit(informe.totals.error + informe.totals.unreadable > 0 ? 1 : 0);
+    }
+
+    const salida = [`\nauditoría del almacén — solo lectura`, '', resumenDeAuditoria(informe), ''];
+
+    if (informe.byRule.length > 0) {
+      salida.push('por regla (primero lo que más arregla):');
+      for (const regla of informe.byRule) {
+        salida.push(`  [${regla.severity}] ${regla.rule} × ${regla.count} · ${regla.skills.length} skill(s)`);
+        salida.push(`         corrige: ${regla.fix}`);
+      }
+      salida.push('');
+    }
+
+    if (informe.contenedores.length > 0) {
+      salida.push('en el contenedor:');
+      for (const c of informe.contenedores) salida.push(`  [${c.severity}] ${c.message}`);
+      salida.push('');
+    }
+
+    // El detalle: por defecto lo que NO pasa, que es lo que hay que mirar. `--todo` incluye las que pasan.
+    const conHallazgo = informe.skills.filter((s) => flags.todo || s.status !== 'PASS');
+    if (conHallazgo.length > 0) {
+      salida.push(`detalle (${conHallazgo.length} de ${informe.totals.total}):`);
+      for (const skill of conHallazgo) {
+        const m = skill.medidas;
+        salida.push(`\n  ${skill.status.padEnd(10)} ${skill.key}  [${skill.estadoLegible}]`);
+        salida.push(`             descripción ${m ? m.description : '?'} · disparador ${m ? m.whenToUse : '?'} · cuerpo ${m ? m.body : '?'} · secciones ${m ? m.secciones : '?'}`);
+        for (const f of skill.findings) {
+          if (!flags.todo && f.severity === 'info') continue;
+          const detalle = f.threshold !== null ? ` (observado ${JSON.stringify(f.observed)}, umbral ${JSON.stringify(f.threshold)})` : ` (observado ${JSON.stringify(f.observed)})`;
+          salida.push(`    · [${f.severity}] ${f.rule}${detalle}`);
+          salida.push(`      ${f.message}`);
+          salida.push(`      corrige: ${f.fix}`);
+        }
+      }
+      salida.push('');
+    }
+
+    salida.push(informe.totals.error + informe.totals.unreadable > 0
+      ? `${informe.totals.error + informe.totals.unreadable} skill(s) con error: esto es un diagnóstico, no una reparación — nada se ha modificado`
+      : 'ninguna skill con error');
+    process.stdout.write(`${salida.join('\n')}\n`);
+    process.exit(informe.totals.error + informe.totals.unreadable > 0 ? 1 : 0);
+  }
+
+  case 'repair': {
+    // Prepara la corrección de una skill viva a partir de lo que la auditoría encontró. **No activa nada**:
+    // deja la propuesta lista (o dice por qué no se puede) para que la revise una persona o la promocione
+    // el motor si su nivel está autorizado.
+    const { reparar } = await import('../lib/repair.mjs');
+    const id = positional[0];
+    if (!id) usage(2);
+    const key = scope();
+    const r = reparar(id, key, { root, curated: curatedLibraryRoot(), cwd: process.cwd() });
+    if (r.status === 'missing') { process.stderr.write(`${r.reason}\n`); process.exit(1); }
+    const lineas = [];
+    lineas.push(`\nreparar ${id} — proyecto ${key}`);
+    if (r.status === 'nothing-to-do') {
+      lineas.push(`  nada que reparar: ${r.reason}`, '');
+      process.stdout.write(`${lineas.join('\n')}\n`);
+      break;
+    }
+    lineas.push(`  base: ${r.base.state} (huella ${String(r.base.hash).slice(0, 12)})`);
+    lineas.push(`  nivel de la corrección: ${r.nivel}${r.nivel === 1 ? ' (mecánica)' : r.nivel === 2 ? ' (semántica acotada)' : ''}`);
+    if (r.reparaciones?.length) {
+      lineas.push('  reparaciones:');
+      for (const rep of r.reparaciones) lineas.push(`    · [n${rep.nivel}] ${rep.regla}: ${rep.describe}`);
+    }
+    if (r.movidas?.length) lineas.push(`  material movido: ${r.movidas.map((m) => `${m.titulo} -> ${m.ruta}`).join(', ')}`);
+    if (r.status === 'blocked') {
+      lineas.push('  BLOQUEADA — no se ha creado ninguna propuesta:');
+      for (const b of r.bloqueos) lineas.push(`    · ${b.rule}: ${b.motivo}`);
+      lineas.push(`    ${r.reason}`);
+    } else if (r.status !== 'proposed') {
+      lineas.push(`  NO SE HA CREADO NINGUNA PROPUESTA (${r.status}):`);
+      for (const e of r.errors ?? []) lineas.push(`    · ${e}`);
+      for (const x of r.conflicts ?? []) lineas.push(`    · choca con ${x.id} (${x.reason})`);
+      if (r.reason) lineas.push(`    ${r.reason}`);
+      lineas.push('    Nada se ha modificado.');
+    } else {
+      lineas.push(`  diff: +${r.diff?.lineas?.anadidas?.length ?? 0}/-${r.diff?.lineas?.eliminadas?.length ?? 0} línea(s) · forma: ${r.forma.bytesAntes} -> ${r.forma.bytesDespues} bytes (${r.forma.transformaciones.join(', ') || 'sin cambios de forma'})`);
+      const check = checkProposal(id, key, { root, curated: curatedLibraryRoot() });
+      lineas.push(`  puerta de la propuesta: ${check.ok ? 'en verde' : `ROJA — ${check.errors[0]}`}`);
+      lineas.push('', `  siguiente: node bin/skill-compiler.mjs promote ${id} --nivel ${r.nivel}   (activar, con pruebas)`);
+      lineas.push(`             node bin/skill-compiler.mjs show ${id}                        (leerla entera)`);
+    }
+    if (r.sinReparacion?.length) {
+      lineas.push('', '  no reparable por el motor:');
+      for (const s of r.sinReparacion) lineas.push(`    · ${s.rule}: ${s.motivo ?? 'sin catálogo'}`);
+    }
+    process.stdout.write(`${lineas.join('\n')}\n`);
+    break;
+  }
+
+  case 'promote': {
+    // Aplica y activa una corrección YA preparada. Por defecto **no activa nada solo**: hay que decir qué
+    // niveles están autorizados, y el 3 no se autoriza nunca por aquí.
+    const { promover } = await import('../lib/promote.mjs');
+    const id = positional[0];
+    if (!id) usage(2);
+    const key = scope();
+    const niveles = flags.nivel !== undefined
+      ? String(flags.nivel).split(',').map((n) => Number(n.trim())).filter((n) => Number.isFinite(n))
+      : [];
+    if (niveles.includes(3)) {
+      process.stderr.write('el nivel 3 no se promociona automáticamente: esos cambios (seguridad, permisos, secretos, aislamiento, facturación) los aprueba una persona con `approve`. Quita el 3 de --nivel.\n');
+      process.exit(2);
+    }
+    if (flags.dry) {
+      // Sólo las pruebas: la información de la decisión, sin escribir nada.
+      const { pruebasDeRegresion } = await import('../lib/promote.mjs');
+      const { readFileSync: leer, existsSync: hay } = await import('node:fs');
+      const { join: unir } = await import('node:path');
+      const metaFile = unir(root, 'projects', key, 'proposed', id, 'meta.json');
+      if (!hay(metaFile)) { process.stderr.write(`no hay ninguna propuesta ${id} en ${key}\n`); process.exit(1); }
+      const meta = JSON.parse(leer(metaFile, 'utf8'));
+      const r = pruebasDeRegresion(id, key, meta, { root, curated: curatedLibraryRoot() });
+      process.stdout.write([`\npruebas de regresión de ${id} — sin escribir nada`, ...r.pruebas.map((p) => `  ${p.ok ? 'ok  ' : 'FALLA'} ${p.nombre.padEnd(22)} ${p.detalle}`), `\n  resultado: ${r.ok ? 'pasa' : 'NO pasa'}`, ''].join('\n'));
+      process.exit(r.ok ? 0 : 1);
+    }
+    const r = promover(id, key, { root, curated: curatedLibraryRoot(), cwd: process.cwd(), niveles });
+    const texto = [`\npromover ${id} — proyecto ${key}`, `  nivel de la corrección: ${r.nivel ?? '?'}`];
+    if (r.regresion) for (const p of r.regresion.pruebas) texto.push(`  ${p.ok ? 'ok  ' : 'FALLA'} ${p.nombre.padEnd(22)} ${p.detalle}`);
+    texto.push('');
+    if (r.status === 'promoted') {
+      texto.push(`  PROMOVIDA: ${String(r.hashAnterior).slice(0, 12)} -> ${String(r.hashResultante).slice(0, 12)}`);
+      texto.push(`  la versión anterior queda apartada y entera en ${r.superseded ?? '(sin versión anterior)'}`);
+    } else if (r.status === 'reverted') {
+      texto.push(`  REVERTIDA (${r.reason})`);
+      texto.push(`  la versión anterior está de vuelta, con su huella ${String(r.hashRestaurado).slice(0, 12)}`);
+    } else if (r.status === 'pending') {
+      texto.push(`  sin activar: ${r.reason}`);
+      if (r.nivel <= 2) texto.push(`  para activarla: node bin/skill-compiler.mjs promote ${id} --nivel ${r.nivel}`);
+      else texto.push(`  esta corrección exige aprobación humana: node bin/skill-compiler.mjs approve ${id}`);
+    } else {
+      texto.push(`  ${r.status.toUpperCase()}: ${r.reason}`);
+    }
+    if (r.status !== 'promoted' && r.status !== 'reverted') texto.push('  nada se ha modificado');
+    texto.push('');
+    process.stdout.write(texto.join('\n'));
+    process.exit(r.status === 'promoted' || r.status === 'pending' || r.status === 'reverted' ? 0 : 1);
+  }
+
+  case 'history': {
+    const { historial, ciclos } = await import('../lib/promote.mjs');
+    const key = scope();
+    const filas = historial(key, { root, id: positional[0] ?? null });
+    if (filas.length === 0) { process.stdout.write(`\nSin promociones registradas en ${key}.\n`); break; }
+    const texto = [`\nhistorial de correcciones — ${key}`];
+    for (const f of filas) {
+      texto.push(`  ${f.at}  ${(f.decision ?? '?').padEnd(24)} ${f.id}  nivel ${f.nivel}`);
+      texto.push(`      reglas: ${f.reglas.join(', ') || '(sin reglas)'} · pruebas: ${f.pruebas.join(' ')}`);
+      if (f.anterior || f.resultado) texto.push(`      ${String(f.anterior).slice(0, 12)} -> ${String(f.resultado ?? '(sin resultado)').slice(0, 12)}`);
+      if (f.why) texto.push(`      motivo: ${f.why}`);
+    }
+    const repetidas = ciclos({ key, root });
+    if (repetidas.length > 0) {
+      texto.push('', '  POSIBLES CICLOS (la misma corrección, una y otra vez):');
+      for (const c of repetidas) texto.push(`    · ${c.id} (${c.reglas}): ${c.promociones} promociones, la última ${c.ultima}`);
+    }
+    texto.push('');
+    process.stdout.write(texto.join('\n'));
+    break;
   }
 
   case 'review': {

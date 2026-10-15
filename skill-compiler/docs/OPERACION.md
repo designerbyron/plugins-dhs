@@ -210,6 +210,10 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 | `upstream <id>` | ¿Se movió el origen? | No se pudo comprobar, o no es vendorizada |
 | `provenance <id>` | La procedencia guardada, entera | No es vendorizada |
 | `doctor` | Comprueba que las dependencias del harness están declaradas, instaladas y **se cargan**, que las cuatro herramientas compilan, que la proyección cumple el contrato y proyecta contra el registro real, que los comandos se declaran, y **ejecuta las puertas de contrato** de las herramientas, la proyección, el catálogo y el modo automático | Algo falta, no carga, o una puerta se pone roja |
+| `audit [--json] [--estado X] [--todo]` | **Audita el almacén entero en solo lectura**: todas las skills, en todos sus estados, medidas con la misma puerta que decide una aprobación. Dice por skill la regla que incumple, el valor observado, el umbral, la severidad y la corrección recomendada, con identificadores estables (`estado/proyecto/id`). Por defecto muestra lo que no pasa; `--todo` incluye también lo que pasa, `--estado` acota a uno o varios estados (separados por comas) y `--json` da el informe entero | Una skill tiene error o no se pudo leer (sale con 1; con 0, todo pasa). **No repara nada**: señala |
+| `repair <id>` | **Prepara** la corrección de una skill viva a partir de lo que la auditoría encontró. Dice el nivel (1 mecánico · 2 semántico acotado · 3 criterio humano) y, si el motor no puede arreglar lo que bloquea, **no crea ninguna propuesta**. No activa nada | No hay versión viva con ese id, o la corrección bloquea en criterio humano |
+| `promote <id> [--nivel 1,2] [--dry]` | **Activa** una corrección ya preparada, con nueve pruebas de regresión antes y verificación por huella después. Sin `--nivel` **no activa nada**; el 3 no se puede autorizar aquí. `--dry` corre las pruebas sin escribir | Alguna prueba falla (no activa), el cerrojo está tomado, o el nivel no está autorizado |
+| `history [<id>]` | Qué se promocionó, con qué pruebas, de qué huella a cuál y por qué; y avisa de las correcciones repetidas (posibles ciclos) | — |
 | `review [--port N]` | **Sirve una página local** con las pendientes, su validación y botones de aprobar y rechazar. Escucha solo en `127.0.0.1` y exige un token de un solo uso que se imprime al arrancar | El puerto está ocupado, o falta el token |
 | `where` | El ámbito de este directorio y dónde está el almacén | — |
 
@@ -217,6 +221,16 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 que se ven iguales desde fuera y se arreglan distinto: que falte una dependencia (`npm install`), que no se
 pueda cargar por un *peer* sin instalar, y que un esquema de herramienta no compile. El porqué de todo
 esto, en [`DEPENDENCIAS.md`](DEPENDENCIAS.md).
+
+El ciclo entero, en tres comandos: **`audit`** dice qué incumple cada skill → **`repair`** prepara la corrección que el motor sabe hacer (y se calla cuando lo que falta es criterio humano) → **`promote`** la activa si su nivel está autorizado y todo pasa, con la versión anterior apartada y la vuelta atrás comprobada. `history` cuenta lo que pasó.
+
+**`audit` es el primer comando que hay que ejecutar cuando hay que decidir qué se corrige.** No arregla
+nada —ni normaliza, ni aprueba, ni toca un `meta.json`—: escribe el diagnóstico y deja el almacén exactamente
+como estaba, así que se puede ejecutar tantas veces como haga falta. Es reproducible: dos ejecuciones del
+mismo estado dan el mismo informe byte a byte (sin fechas, y con el orden puesto por la clave de cada skill,
+no por el recorrido del disco). Y **no se cae**: una carpeta denegada o un `SKILL.md` ilegible son un
+hallazgo de esa skill; las demás se auditan igual. Los detalles de qué mide cada regla y con qué umbral, en
+[`POLITICA-DE-ACTUALIZACION.md`](POLITICA-DE-ACTUALIZACION.md).
 
 ## Qué se ve en la interfaz
 

@@ -29,7 +29,7 @@ import { defineTool, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools';
 
 import { approve, projectKey, propose } from '../lib/compiler.mjs';
 import { skillPropose, skillReview, skillUpstreamCheck, skillVendor } from '../lib/definitions.mjs';
-import { cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
+import { buenaRevision, cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
 import { after } from 'node:test';
 
 after(cleanupSandboxes);
@@ -40,7 +40,7 @@ const RAW = 'https://raw.githubusercontent.com/acme/skills/main/measured/SKILL.m
 const UPSTREAM_SKILL = [
   '---',
   'name: measured-decisions',
-  'description: "Decide with measured evidence instead of impressions."',
+  'description: "Decide with measured evidence instead of impressions, every time."',
   '---',
   '',
   '# Measured decisions',
@@ -98,7 +98,7 @@ describe('contrato de salida · skill_propose', () => {
     const tool = factory(s);
     const value = await judge(tool, 'actualiza propuesta', async () => {
       tool.execute(goodInput(), fakeExec(CWD));
-      return tool.execute(goodInput({ body: `${goodInput().body}\n\n4. Un paso más.\n` }), fakeExec(CWD));
+      return tool.execute(goodInput({ body: `${goodInput().body}\n\n4. Un paso más.\n`, revision: buenaRevision() }), fakeExec(CWD));
     });
     assert.equal(value.updatesProposal, true, 'la rama tiene que salir con updatesProposal');
   });
@@ -109,7 +109,7 @@ describe('contrato de salida · skill_propose', () => {
     const value = await judge(tool, 'reemplaza aprobada', async () => {
       tool.execute(goodInput(), fakeExec(CWD));
       approve('measured-decision-check', projectKey(CWD), { root: s.root });
-      return tool.execute(goodInput({ body: `${goodInput().body}\n\n4. Un paso más.\n` }), fakeExec(CWD));
+      return tool.execute(goodInput({ body: `${goodInput().body}\n\n4. Un paso más.\n`, revision: buenaRevision() }), fakeExec(CWD));
     });
     assert.equal(value.updatesApproved, true);
   });
@@ -118,7 +118,7 @@ describe('contrato de salida · skill_propose', () => {
     const s = sandbox();
     const value = await judge(factory(s), 'conflict', (tool) => tool.execute(goodInput({
       id: 'session-recovery-state',
-      description: 'Rebuilding the state of a lost or closed session.',
+      description: 'Rebuilding the state of a lost or closed session, from its log.',
       whenToUse: 'Cuando una sesión se cerró y hay que reconstruir su estado.',
     }), fakeExec(CWD)));
     assert.equal(value.status, 'conflict');
@@ -222,7 +222,7 @@ describe('contrato de salida · skill_vendor', () => {
     const s = sandbox();
     const colision = UPSTREAM_SKILL
       .replace('name: measured-decisions', 'name: session-state-recovery')
-      .replace(/^description: .*$/m, 'description: "Rebuild state after a lost or closed session."');
+      .replace(/^description: .*$/m, 'description: "Rebuild state after a lost or closed session, from its own log."');
     const value = await judge(factory(s, fakeFetch(routes(colision))), 'conflict', (tool) => tool.execute({ url: RAW }, fakeExec(CWD)));
     assert.equal(value.status, 'conflict');
   });

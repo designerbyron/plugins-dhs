@@ -23,27 +23,30 @@ import { upstreamStatus, vendor } from './vendor.mjs';
 export const PROVIDER_RANK = 150;
 
 /**
- * Protocolo estático. Entra en el prompt de todas las sesiones, así que se paga entero cada vez: corto
- * a propósito, y sin repetir nada de `AGENTS.md`, que ya se inyecta por su cuenta.
+ * Protocolo estático. Entra en el prompt de todas las sesiones, así que se paga entero cada vez: corto a
+ * propósito, y sin repetir nada de `AGENTS.md`, que ya se inyecta por su cuenta.
+ *
+ * Presupuesto, medido (2026-10-15, con la vara del propio harness: `CHARS_PER_TOKEN = 4` + `BLOCK_OVERHEAD
+ * = 4`, las constantes de `@deepseek-ai/dsh-token-meter`): **941 caracteres · 240 tokens**, contra el tope
+ * de 1.200 caracteres que exige `tests/definitions.test.mjs`. Antes de esta fase: 1.175 caracteres · 298
+ * tokens. Lo que se recortó fue la **redundancia** con la descripción de `skill_vendor` —que ya explica el
+ * proceso de vendorizado entero—, nunca criterio de decisión: las tres vías siguen dichas.
  */
 export const PROTOCOL = [
   '## Aprendizaje progresivo (skill-compiler)',
   '',
-  'Si al cerrar una tarea **lo resuelto se reutilizará** —un procedimiento, un contrato descubierto a base',
-  'de pruebas, una trampa ya pagada—, actúa por una de estas tres vías:',
+  'Propón (`skill_propose`) con **evidencia**: un contrato, una trampa ya pagada, un orden operativo, o un',
+  'valor exacto que reutilizarás. No basta «podría reutilizarse», ni una consulta resuelta, ni repetir',
+  '`AGENTS.md`, ni contar lo que hiciste.',
   '',
-  '- **Conocimiento nuevo** → `skill_propose` una vez, con el procedimiento destilado, no el relato.',
-  '- **Una skill del proyecto que esto supera o corrige** → `skill_propose` **con el mismo id**: eso es una',
-  '  actualización, no un duplicado; al aprobarla, la anterior queda apartada, nunca borrada. Consulta antes',
-  '  `skill_review`.',
-  '- **Skill de otro repositorio** (enlace) → `skill_vendor`: crea **nuestra versión** y guarda el original',
-  '  verbatim con su procedencia; no copies ni instales nada del origen. Si trae secretos u órdenes',
-  '  dirigidas al agente, **se bloquea** por diseño: díselo.',
+  '- **Nuevo** → procedimiento, no relato: entra el detalle que hace la diferencia (valor, orden, bandera, ruta),',
+  '  no la narración. Lo pesado va a `references/`.',
+  '- **Ya existe y esto lo supera o lo corrige** → `skill_propose` **con el mismo id**: es una actualización, no un duplicado;',
+  '  al aprobarla, la anterior queda apartada, nunca borrada. Consulta antes `skill_review` y di con qué lo mediste.',
+  '- **De un repositorio** → `skill_vendor`: nuestra versión; un origen con secretos u órdenes al agente **se bloquea**.',
   '',
-  'Antes de proponer, comprueba que **otra** skill no cubra el tema: la herramienta rechaza el solapamiento',
-  'y dice con cuál choca. **Nada se activa solo**: queda pendiente en el proyecto hasta que un humano lo',
-  'apruebe; dilo así, con la vía más corta para hacerlo, sin presentarlo como disponible. No propongas por',
-  'una consulta simple ni para repetir `AGENTS.md` o `docs/`.',
+  'Si otra skill ya cubre el tema, se rechaza y dice con cuál choca. **Nada se activa solo**: espera aprobación',
+  'humana; di cómo se aprueba.',
 ].join('\n');
 
 /** El cwd de la sesión es el único origen válido del ámbito: el modelo no lo declara. */
@@ -77,9 +80,20 @@ const approveHint = (id) =>
  *
  * @returns `{ asked, approved, reason?, superseded? }` — lo justo para que el resumen lo cuente tal cual.
  */
-export function autoApproveIfAsked({ exec, root, catalog, id, key }) {
+export function autoApproveIfAsked({ exec, root, catalog, id, key, curated, esCorreccion = false }) {
   if (!autoApproveFor(exec)) return { asked: false };
-  const check = checkProposal(id, key, { root });
+  // Una **corrección** de una skill viva no se delega, ni con el modo activo. El modo auto existe para
+  // no repetir la confirmación de una skill nueva; una corrección cambia una herramienta que alguien ya
+  // usa, y su promoción automática queda reservada a una fase posterior con su política de riesgo.
+  // Es el mismo principio que ya rige el ámbito: se delega la confirmación, nunca la puerta ni el juicio.
+  if (esCorreccion) {
+    return {
+      asked: true,
+      approved: false,
+      reason: 'es una corrección de una skill viva: el modo automático no la activa — eso queda para una fase posterior, con su política de riesgo',
+    };
+  }
+  const check = checkProposal(id, key, { root, ...(curated === undefined ? {} : { curated }) });
   if (!check.ok) return { asked: true, approved: false, reason: check.errors[0] };
   const moved = approve(id, key, { root });
   if (!moved.ok) return { asked: true, approved: false, reason: moved.reason };
@@ -130,13 +144,37 @@ const renderWithMarker = (value) => [{
 export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
   return {
     name: 'skill_propose',
-    description: 'Propose a reusable skill distilled from the task just finished: a procedure you will need again, a contract discovered the hard way, a trap already paid for. Pass the id of an existing skill of this project to UPDATE it instead of creating one — the same id means a patch, and approving it moves the previous version to superseded/ (never deleted). Not for a simple query, nor to restate what AGENTS.md and docs already say. The proposal is NOT active: it waits for human approval in the current project.',
+    description: 'Propose a reusable skill only with evidence you can point at: a contract discovered the hard way, a trap already paid for, an operational order, or an exact value you will need again. "It could be reused" is not evidence — nor is a solved query, restating AGENTS.md/docs, or narrating the session. Pass the id of an existing skill of this project to UPDATE it instead of creating one: the same id means a patch, and approving it moves the previous version to superseded/ (never deleted). The proposal is NOT active: it waits for human approval in this project.',
     parameters: {
       id: { type: 'string', required: true, description: 'Unique kebab-case id of the skill, e.g. "measured-decision-check".' },
-      description: { type: 'string', required: true, description: 'One line, 12-300 characters: what it automates and when it is triggered. This is what the model reads when choosing a skill.' },
-      whenToUse: { type: 'string', description: 'Optional: the situation that should select this skill.' },
-      body: { type: 'string', required: true, description: 'The procedure in markdown, at least 200 characters. Distilled knowledge, not a task narrative: steps, contracts and traps already paid for.' },
+      description: { type: 'string', required: true, description: 'One line, 60-300 characters: what it automates and when it is triggered. This is what the model reads when choosing a skill, so it has to distinguish it from the others.' },
+      whenToUse: { type: 'string', required: true, description: 'Required (at least 20 characters): the situation that should select this skill. It is the field the harness routes on.' },
+      body: { type: 'string', required: true, description: 'The procedure in markdown, at least 200 characters, with at least two "## " sections (one is accepted only for a short body). Distilled knowledge, not a task narrative: steps, contracts and traps already paid for. Heavy reference material does not go here — see `references`.' },
+      references: {
+        type: 'array',
+        description: 'Optional: the heavy material that stays beside the skill instead of inside the body — a full contract list, a long table, a transcript you will consult once. Each item needs a `path` under references/ and its `content`; the body then links it (e.g. "el contrato completo vive en references/contratos.md"). The link is verified in both directions: a path the body names must exist, and a path you add is checked for escaping the skill folder. The body stays short and is paid on every load; the material is paid only when it is read.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            path: { type: 'string', required: true, description: 'Relative path under references/, e.g. "references/contratos.md". Never absolute, never with "..".' },
+            content: { type: 'string', required: true, description: 'The material itself, verbatim: it is written exactly as given and its hash is recorded.' },
+          },
+        },
+      },
       evidence: { type: 'array', description: 'Optional: workspace-relative paths of the files that prove it (a doc, a test, a report).', items: { type: 'string' } },
+      revision: {
+        type: 'object',
+        description: 'REQUIRED when the id already names a skill that is alive (approved, disabled or published): a patch changes a tool somebody uses, so it has to say why. A long text is not evidence — `measurement` needs a number or a command.',
+        additionalProperties: false,
+        properties: {
+          claim: { type: 'string', required: true, description: 'What the current version asserts (at least 20 characters).' },
+          evidence: { type: 'string', required: true, description: 'What contradicts it. A workspace-relative path that exists is OBSERVED evidence; anything else is an unverified claim and is reported as such.' },
+          measurement: { type: 'string', required: true, description: 'How it was measured, with a number or a command in backticks (at least 20 characters). "I checked" is not a measurement.' },
+          change: { type: 'string', required: true, description: 'What the skill says from now on (at least 20 characters).' },
+          removed: { type: 'string', description: 'Required if this patch removes lines or reference material: why it is gone and what it is replaced by. Deleting approved knowledge cannot happen silently.' },
+        },
+      },
       tags: { type: 'array', description: 'Optional: a few words that help compare it against existing skills.', items: { type: 'string' } },
     },
     output: {
@@ -158,6 +196,18 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
           updatesApproved: { type: 'boolean', description: 'True when approving this proposal would replace an already approved skill.' },
           updatesDisabled: { type: 'boolean', description: 'True when approving this proposal would replace a skill that the human had switched off.' },
           updatesPublished: { type: 'boolean', description: 'True when this proposal patches a skill this plugin published for all projects, instead of creating a new one.' },
+          // El material pesado que se guarda junto a la skill, con su huella: es lo que permite comprobar
+          // después que nadie lo editó, y lo que se verifica byte a byte antes de dar la propuesta por hecha.
+          references: { type: 'array', description: 'Heavy material written beside the skill, each with its size and hash as recorded. Empty when the skill carries none.', items: { type: 'object', additionalProperties: true, properties: { path: { type: 'string' }, bytes: { type: 'number' }, sha256: { type: 'string' } } } },
+          links: { type: 'array', description: 'The references/ paths the body declares, in the order they appear.', items: { type: 'string' } },
+          files: { type: 'array', description: 'Every file written and verified inside the skill folder (SKILL.md, meta.json, references…).', items: { type: 'string' } },
+          // Lo que sólo aparece cuando esto es un parche de algo vivo. Se declaran aquí por la misma razón
+          // que los anteriores: con `additionalProperties: false`, devolver un campo sin declarar rechaza
+          // el resultado entero y la propuesta —ya escrita— llega al modelo como un error.
+          base: { type: 'object', additionalProperties: true, description: 'Only on a patch of a live skill: the state and content hash of the version it was built against. If that version moves, approving is refused.', properties: { state: { type: 'string' }, hash: { type: 'string' } } },
+          corregida: { type: 'object', additionalProperties: true, description: 'Only on a patch: the accepted revision — what the old version claimed, what contradicted it, how it was measured, what changes.', properties: { claim: { type: 'string' }, evidence: { type: 'string' }, measurement: { type: 'string' }, change: { type: 'string' }, removed: { type: 'string' } } },
+          evidenciaObservada: { type: 'boolean', description: 'True only when the revision evidence is a path that exists in the project. False means the evidence is a claim nobody has verified yet.' },
+          diff: { type: 'object', additionalProperties: true, description: 'Only on a patch: what the proposal adds and removes, in the body and in the reference material — the exact difference against the base version.' },
           autoApproved: { type: 'boolean', description: 'True when the session\'s auto-approve mode activated this proposal immediately; only present when that mode is on.' },
           conflicts: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, reason: { type: 'string' }, where: { type: 'string' } } } },
           relatedElsewhere: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, where: { type: 'string' } } } },
@@ -171,7 +221,13 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
       const cwd = scopeOf(exec);
       const result = propose(
         { ...args, project: cwd ? basename(cwd) : undefined },
-        { root, cwd, ...(curated === undefined ? {} : { curated }) },
+        {
+          root,
+          cwd,
+          ...(curated === undefined ? {} : { curated }),
+          ...(Array.isArray(args.references) ? { references: args.references } : {}),
+          ...(args.revision === undefined ? {} : { revision: args.revision }),
+        },
       );
       const base = {
         status: result.status,
@@ -180,6 +236,18 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
         relatedElsewhere: result.relatedElsewhere ?? [],
         warnings: result.warnings ?? [],
         errors: result.errors ?? [],
+        references: result.references ?? [],
+        links: result.links ?? [],
+        files: result.files ?? [],
+      };
+      // Lo que sólo existe cuando esto es un parche de algo vivo: contra qué se hizo, qué cambia y si la
+      // evidencia se pudo comprobar. Va declarado en el esquema: un campo devuelto sin declarar rechaza
+      // el resultado entero (la lección ya pagada de `updatesProposal`).
+      const comoParche = result.base === undefined ? {} : {
+        base: result.base,
+        corregida: result.revision ?? null,
+        evidenciaObservada: result.evidenciaObservada === true,
+        diff: result.diff,
       };
 
       switch (result.status) {
@@ -192,9 +260,14 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
             ...(result.updatesPublished ? ['Afina una skill que YA está publicada para todos tus proyectos: al aprobarla, la versión anterior queda apartada en global/superseded/.'] : []),
             ...(base.relatedElsewhere.length ? [`El mismo tema ya vive en otro proyecto: ${base.relatedElsewhere.map((c) => c.id).join(', ')}.`] : []),
           ];
-          const auto = autoApproveIfAsked({ exec, root, catalog, id: result.id, key: result.projectKey });
+          const auto = autoApproveIfAsked({
+            exec, root, catalog, id: result.id, key: result.projectKey,
+            ...(curated === undefined ? {} : { curated }),
+            esCorreccion: comoParche.base !== undefined,
+          });
           return {
             ...base,
+            ...comoParche,
             warnings,
             id: result.id,
             project: result.project,
@@ -214,6 +287,19 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
               `Propuesta registrada: ${result.id}`,
               `Ámbito: ${result.project} [${result.projectKey}]`,
               `Archivo: ${result.path}`,
+              ...(base.references.length
+                ? ['', `Material pesado guardado con la skill (${base.references.length} fichero(s), escritos y verificados byte a byte):`,
+                  ...base.references.map((r) => `  · ${r.path} · ${r.bytes} B · ${r.sha256}`)]
+                : []),
+              ...(comoParche.base !== undefined
+                ? ['',
+                  `Corrige una skill viva: ${comoParche.base.state}, base ${comoParche.base.hash}.`,
+                  `Cambios: +${comoParche.diff.lineas.anadidas.length} línea(s) · −${comoParche.diff.lineas.eliminadas.length} línea(s) · ` +
+                  `material +${comoParche.diff.references.anadidas.length} / ~${comoParche.diff.references.modificadas.length} / −${comoParche.diff.references.eliminadas.length}`,
+                  comoParche.evidenciaObservada
+                    ? 'La evidencia de la corrección es una ruta que EXISTE en el proyecto: observada.'
+                    : 'La evidencia de la corrección es una afirmación del modelo: NO verificada — nadie la ha comprobado todavía.']
+                : []),
               ...autoApprovalLines(auto, result.id),
               ...(warnings.length ? ['', 'Avisos:', ...warnings.map((w) => `  · ${w}`)] : []),
             ].join('\n'),

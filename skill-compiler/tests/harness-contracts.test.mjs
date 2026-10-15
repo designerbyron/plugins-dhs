@@ -65,10 +65,19 @@ describe('contratos con el harness', () => {
   it('el modelo ve los parámetros que el plugin declara, y los obligatorios son obligatorios', () => {
     const tool = defineTool(skillPropose({ root: 'x', curated: [] }));
     const properties = tool.parameters.properties;
-    for (const key of ['id', 'description', 'body', 'whenToUse', 'evidence', 'tags']) {
+    for (const key of ['id', 'description', 'body', 'whenToUse', 'evidence', 'tags', 'references']) {
       assert.equal(key in properties, true, `falta el parámetro ${key}`);
     }
-    assert.deepEqual([...tool.parameters.required].sort(), ['body', 'description', 'id']);
+    // Los obligatorios son los que la puerta de calidad no puede dejar pasar vacíos: `whenToUse` entró
+    // aquí en la v2.0.0 porque es el campo con el que el harness decide cuándo aparece una skill, y una
+    // skill sin él no se selecciona. Si la herramienta no lo marcara obligatorio, el modelo no lo
+    // enviaría y la puerta rechazaría cada propuesta: contrato y puerta dicen lo mismo o no sirven.
+    assert.deepEqual([...tool.parameters.required].sort(), ['body', 'description', 'id', 'whenToUse']);
+    // Y el material pesado se declara con su forma: `path` y `content`, sin campos libres.
+    const items = properties.references.items;
+    assert.equal(items.type, 'object');
+    assert.deepEqual(Object.keys(items.properties).sort(), ['content', 'path']);
+    assert.deepEqual([...items.required].sort(), ['content', 'path'], 'sin `path` y `content` el material no se puede escribir');
   });
 
   it('todo paquete que se importa está declarado como dependencia', () => {

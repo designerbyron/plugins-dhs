@@ -91,11 +91,30 @@ export function projectKey(cwd) {
 }
 
 // ── validación de la entrada ─────────────────────────────────────────────────────────────────────
+//
+// Tres familias de reglas, y conviene no mezclarlas porque se arreglan de distinta manera:
+//   · **Formato**: lo que hace que el fichero sea válido para el harness (id, una línea, longitudes).
+//     Un fallo aquí es un error de forma y se corrige reescribiendo el campo.
+//   · **Calidad**: lo que hace que la skill sirva para lo que se paga por ella (estructura, vínculo de
+//     sus referencias). Un fallo aquí significa que la skill no se podrá usar, o que promete material
+//     que no está.
+//   · **Tamaño**: lo que cuesta. El cuerpo se carga entero cada vez que se invoca, así que tiene
+//     presupuesto: aviso al pasar de 8.000 caracteres y error al pasar de 24.000, con la vía dicha
+//     (lo pesado va a `references/`, y la Fase 0 del 2026-10-15 demostró que el modelo las alcanza).
 
 const ID_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
-const MIN_BODY = 200;
+/** El cuerpo se carga entero: por debajo de esto no hay nada que avisar. */
+const BODY_BUDGET = 8_000;
+/** Y por encima de esto no es un procedimiento, es un libro: el exceso va a `references/`. */
+const BODY_MAX = 24_000;
+/** Un cuerpo pequeño puede ser una lista sin secciones; uno grande tiene que estar estructurado. */
+const SMALL_BODY = 1_500;
+const MIN_DESCRIPTION = 60;
 const MAX_DESCRIPTION = 300;
-const MIN_DESCRIPTION = 12;
+const MIN_WHEN_TO_USE = 20;
+const MIN_BODY = 200;
+/** La carpeta canónica del material pesado de una skill: lo que el modelo resuelve contra la base. */
+const REFERENCE_DIR = 'references/';
 
 /** Formas de credencial y de ruta de usuario que una skill NUNCA debe llevar consigo. */
 const SECRET_SHAPES = [
@@ -115,32 +134,250 @@ const PERSONAL_PATH_SHAPES = [
 const ABSOLUTE_PATH_SHAPES = [/[A-Za-z]:\\[^\s"']+/, /(?:^|\s)\/(?:usr|opt|etc|var|srv|mnt)\/[^\s"']+/];
 
 /**
- * Validate a proposal before it touches disk.
- * @returns `{ ok, errors, warnings }` — errors reject, warnings travel with the proposal.
+ * Una ruta de referencia dentro de un texto: `references/algo`, sin espacios. El lookbehind impide que
+ * `upstream/references/x` cuente como vínculo nuestro (ese espacio es del origen y lo reescribe el
+ * adaptador del vendorizado).
  */
-export function validateInput(input) {
+const REFERENCE_INLINE_RE = /(?<![\w./\\-])references[\\/][^\s)\]"'`,;:]*[^\s)\]"'`,;:.]/g;
+
+/** Una ruta relativa, siempre con `/`, sin `./` inicial y sin barras dobles. */
+export function normalizeRel(path) {
+  return String(path ?? '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/{2,}/g, '/');
+}
+
+/**
+ * Las rutas bajo `references/` que el **cuerpo** declara, sin duplicados y en el orden en que aparecen.
+ *
+ * Un vínculo con **espacios** en el nombre se declara entre backticks —es la forma de escribir una ruta
+ * en markdown—, y así se captura entera: sin esa convención no habría manera de saber dónde acaba la
+ * ruta y una referencia con espacios no se podría verificar, que es justo lo que hay que impedir.
+ * Las que van desnudas se cortan en el primer espacio, y ese es su límite.
+ */
+export function declaredReferences(body) {
+  const texto = String(body ?? '');
+  const encontradas = [];
+  // Primero las que van entre backticks (pueden llevar espacios); su hueco se tacha para que la
+  // segunda pasada no las vuelva a encontrar a medias.
+  const resto = texto.replace(/`([^`\n]*)`/g, (entero, dentro) => {
+    const candidata = normalizeRel(dentro.trim());
+    if (candidata.startsWith(REFERENCE_DIR) && candidata.length > REFERENCE_DIR.length) encontradas.push(candidata);
+    return ' '.repeat(entero.length);
+  });
+  for (const m of resto.match(REFERENCE_INLINE_RE) ?? []) encontradas.push(m);
+  return [...new Set(encontradas.map(normalizeRel))];
+}
+
+/**
+ * El vínculo de las referencias de una skill: cada ruta que el cuerpo declara tiene que resolverse
+ * **dentro** de la carpeta de la skill, sobre un fichero regular, y estar presente (aportada en esta
+ * propuesta o ya en la carpeta). Y ninguna ruta —declarada o aportada— puede salir de la carpeta.
+ *
+ * Una sola regla para las dos puertas: `propose` la aplica con lo que va a escribir, y `checkProposal`
+ * con lo que hay en el disco, así que aprobar también caza una referencia rota metida a mano.
+ *
+ * @param body - cuerpo de la skill.
+ * @param proposed - `[{ path, content }]` que se van a escribir junto al `SKILL.md`.
+ * @param present - rutas relativas de ficheros que ya viven en la carpeta de la skill.
+ * @param dirs - rutas relativas que en la carpeta son directorios (no valen como referencia).
+ * @returns `{ errors, warnings, findings, links, files }` — `links` es lo que el cuerpo declara, `files` lo aportado.
+ */
+
+/**
+ * Acumula los hallazgos de una validación.
+ *
+ * El **mensaje** es la cara visible (lo que ya leen el modelo, la CLI y la interfaz, palabra por palabra),
+ * y el **objeto** es lo que se puede auditar: qué regla, qué se observó, contra qué umbral, con qué
+ * severidad y por dónde se arregla. Los dos salen de aquí, así que no hay dos versiones de la misma regla:
+ * la prosa se compone del hallazgo, nunca al revés.
+ */
+function acumulador() {
   const errors = [];
   const warnings = [];
+  const findings = [];
+  const add = (severity, hallazgo) => {
+    findings.push({ severity, observed: null, threshold: null, fix: '', ...hallazgo });
+    // `info` sólo vive en el informe: un aviso que no pide nada no debe engordar la lista de avisos.
+    if (severity === 'error') errors.push(hallazgo.message);
+    else if (severity === 'warn') warnings.push(hallazgo.message);
+  };
+  return { errors, warnings, findings, add };
+}
+
+export function checkReferences({ body = '', proposed = [], present = [], dirs = [], noComprobables = [] } = {}) {
+  const { errors, warnings, findings, add } = acumulador();
+  const files = [];
+  const vistos = new Set();
+
+  for (const item of proposed) {
+    const ruta = normalizeRel(item?.path);
+    const contenido = typeof item?.content === 'string' ? item.content : '';
+    if (!ruta.startsWith(REFERENCE_DIR) || ruta.length <= REFERENCE_DIR.length) {
+      add('error', {
+        rule: 'reference-path',
+        observed: ruta,
+        threshold: REFERENCE_DIR,
+        message: `references: «${item?.path ?? ''}» tiene que ser una ruta relativa que empiece por «${REFERENCE_DIR}» (por ejemplo «${REFERENCE_DIR}contratos.md»)`,
+        fix: `Mueve el material a «${REFERENCE_DIR}…» (una ruta relativa dentro de la carpeta de la skill)`,
+      });
+      continue;
+    }
+    if (ruta.split('/').includes('..')) {
+      add('error', {
+        rule: 'reference-escape',
+        observed: ruta,
+        message: `references: «${ruta}» sale de la carpeta de la skill («..»): una referencia sólo puede vivir dentro`,
+        fix: 'Quita el «..»: una referencia no puede apuntar fuera de la carpeta de la skill',
+      });
+      continue;
+    }
+    if (ruta.endsWith('/')) {
+      add('error', {
+        rule: 'reference-not-a-file',
+        observed: ruta,
+        message: `references: «${ruta}» es una carpeta, no un fichero: aporta el fichero concreto`,
+        fix: 'Aporta el fichero con su nombre completo, no la carpeta',
+      });
+      continue;
+    }
+    if (vistos.has(ruta)) {
+      add('error', {
+        rule: 'reference-duplicate',
+        observed: ruta,
+        message: `references: «${ruta}» está repetida: dos contenidos distintos en la misma ruta`,
+        fix: 'Deja una sola entrada por ruta, con el contenido que deba quedarse',
+      });
+      continue;
+    }
+    if (contenido.trim().length === 0) {
+      add('error', {
+        rule: 'reference-empty',
+        observed: ruta,
+        threshold: 1,
+        message: `references: «${ruta}» va vacía: una referencia sin contenido no conserva nada, quita el vínculo del cuerpo o aporta el material`,
+        fix: 'Aporta el contenido del material, o quita del cuerpo el enlace a esa ruta',
+      });
+      continue;
+    }
+    vistos.add(ruta);
+    files.push({ path: ruta, content: contenido, bytes: Buffer.byteLength(contenido), sha256: createHash('sha256').update(contenido).digest('hex').slice(0, 16) });
+  }
+
+  const presentes = new Set([...present.map(normalizeRel), ...files.map((f) => f.path)]);
+  const directorios = new Set(dirs.map((d) => normalizeRel(d).replace(/\/+$/, '')));
+  // Carpetas que la auditoría no pudo leer: un vínculo que caiga dentro no se puede juzgar, y decir que
+  // «falta» sería afirmar algo que no se ha medido.
+  const ciegas = noComprobables.map((d) => normalizeRel(d).replace(/\/+$/, '')).filter((d) => d.length > 0);
+  const links = declaredReferences(body);
+  for (const ruta of links) {
+    if (!ruta.startsWith(REFERENCE_DIR)) continue; // el vínculo es de `references/`, no de todo el árbol
+    if (ruta.split('/').includes('..')) {
+      add('error', {
+        rule: 'link-escape',
+        observed: ruta,
+        message: `el cuerpo declara «${ruta}», que sale de la carpeta de la skill: corrige la ruta`,
+        fix: 'Corrige la ruta del cuerpo para que apunte dentro de la carpeta de la skill',
+      });
+      continue;
+    }
+    if (directorios.has(ruta.replace(/\/+$/, ''))) {
+      add('error', {
+        rule: 'link-is-directory',
+        observed: ruta,
+        message: `el cuerpo declara «${ruta}», que es un directorio y no un fichero: enlaza el fichero concreto`,
+        fix: 'Enlaza el fichero concreto dentro de esa carpeta',
+      });
+      continue;
+    }
+    if (!presentes.has(ruta)) {
+      const ciega = ciegas.find((d) => ruta === d || ruta.startsWith(`${d}/`));
+      if (ciega) {
+        add('info', {
+          rule: 'link-unverifiable',
+          observed: ruta,
+          message: `no se pudo comprobar el vínculo «${ruta}»: la carpeta «${ciega}» no se pudo leer`,
+          fix: 'Revisa los permisos de esa carpeta y vuelve a auditar',
+        });
+        continue;
+      }
+      add('error', {
+        rule: 'link-missing',
+        observed: ruta,
+        threshold: 'fichero existente',
+        message: `el cuerpo declara «${ruta}» y ese fichero no está: aporta su contenido en «references» o corrige la ruta (un vínculo roto es conocimiento que se pierde)`,
+        fix: `Aporta «${ruta}» con su contenido, o corrige la ruta del cuerpo`,
+      });
+    }
+  }
+
+  if (links.length > 0 && files.length > 0) {
+    add('warn', {
+      rule: 'reference-budget',
+      observed: files.length,
+      threshold: links.length,
+      message: `la skill lleva ${files.length} referencia(s) de ${links.length} declarada(s): el cuerpo corto se paga entero, el material pesado sólo cuando se necesita`,
+      fix: 'Nada: es informativo',
+    });
+  }
+  return { errors, warnings, findings, links, files };
+}
+
+/**
+ * Validate a proposal before it touches disk.
+ * @returns `{ ok, errors, warnings, findings, references, links }` — errors reject, warnings travel with
+ *   the proposal, y `findings` es lo mismo con la forma que necesita una auditoría.
+ */
+export function validateInput(input, { references = [], cwd = null, present = [], dirs = [], noComprobables = [] } = {}) {
+  const { errors, warnings, findings, add } = acumulador();
   const id = typeof input?.id === 'string' ? input.id.trim() : '';
   const description = typeof input?.description === 'string' ? input.description.trim() : '';
   const whenToUse = typeof input?.whenToUse === 'string' ? input.whenToUse.trim() : '';
   const body = typeof input?.body === 'string' ? input.body.trim() : '';
 
-  if (!ID_RE.test(id)) errors.push('id debe ser kebab-case y empezar por letra: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$');
-  if (id.length > 64) errors.push('id demasiado largo (máximo 64)');
-  if (description.length < MIN_DESCRIPTION) errors.push(`description demasiado corta (mínimo ${MIN_DESCRIPTION} caracteres)`);
-  if (description.length > MAX_DESCRIPTION) errors.push(`description demasiado larga (máximo ${MAX_DESCRIPTION}): es lo que el modelo lee al elegir`);
-  if (/[\r\n]/.test(description)) errors.push('description debe ser una sola línea');
-  if (body.length < MIN_BODY) errors.push(`body demasiado corto (mínimo ${MIN_BODY} caracteres): una skill es un procedimiento, no un titular`);
+  if (!ID_RE.test(id)) add('error', { rule: 'id-format', observed: id, message: 'id debe ser kebab-case y empezar por letra: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$', fix: 'Renombra la skill a kebab-case, por ejemplo «medir-antes-de-decidir»' });
+  if (id.length > 64) add('error', { rule: 'id-max', observed: id.length, threshold: 64, message: 'id demasiado largo (máximo 64)', fix: 'Acorta el id a 64 caracteres o menos' });
+  if (description.length < MIN_DESCRIPTION) add('error', { rule: 'description-min', observed: description.length, threshold: MIN_DESCRIPTION, message: `description demasiado corta (mínimo ${MIN_DESCRIPTION} caracteres): es lo que el modelo lee para elegir, y por debajo de eso no distingue nada`, fix: `Reescribe la descripción con al menos ${MIN_DESCRIPTION} caracteres: qué automatiza y cuándo se usa` });
+  if (description.length > MAX_DESCRIPTION) add('error', { rule: 'description-max', observed: description.length, threshold: MAX_DESCRIPTION, message: `description demasiado larga (máximo ${MAX_DESCRIPTION}): es lo que el modelo lee al elegir`, fix: `Recorta la descripción a ${MAX_DESCRIPTION} caracteres o menos` });
+  if (/[\r\n]/.test(description)) add('error', { rule: 'description-multiline', observed: 'salto de línea', message: 'description debe ser una sola línea', fix: 'Quita el salto de línea de la descripción' });
+  if (whenToUse.length < MIN_WHEN_TO_USE) add('error', { rule: 'whenToUse-min', observed: whenToUse.length, threshold: MIN_WHEN_TO_USE, message: `whenToUse es obligatorio (mínimo ${MIN_WHEN_TO_USE} caracteres): es el campo con el que el harness decide cuándo aparece esta skill`, fix: `Escribe el disparador de la skill (mínimo ${MIN_WHEN_TO_USE} caracteres)` });
+  if (/[\r\n]/.test(whenToUse)) add('error', { rule: 'whenToUse-multiline', observed: 'salto de línea', message: 'whenToUse debe ser una sola línea', fix: 'Quita el salto de línea de whenToUse' });
+  if (body.length < MIN_BODY) add('error', { rule: 'body-min', observed: body.length, threshold: MIN_BODY, message: `body demasiado corto (mínimo ${MIN_BODY} caracteres): una skill es un procedimiento, no un titular`, fix: 'Escribe el procedimiento completo: pasos, contratos y trampas' });
+  if (body.length > BODY_MAX) add('error', { rule: 'body-max', observed: body.length, threshold: BODY_MAX, message: `body demasiado largo (${body.length} > ${BODY_MAX} caracteres): lo pesado va a «${REFERENCE_DIR}» y el cuerpo lo enlaza — así el detalle se conserva y no se paga en cada carga`, fix: `Mueve el material de consulta a «${REFERENCE_DIR}…» y enlázalo desde el cuerpo` });
+  else if (body.length > BODY_BUDGET) add('warn', { rule: 'body-budget', observed: body.length, threshold: BODY_BUDGET, message: `body de ${body.length} caracteres: se carga entero cada vez que la skill se invoca; lo que sea material de consulta gana en «${REFERENCE_DIR}»`, fix: `Lo que sea de consulta, a «${REFERENCE_DIR}…»` });
+
+  const encabezados = (body.match(/^##[^#\n]/gm) ?? []).length;
+  if (encabezados === 0) add('error', { rule: 'body-no-sections', observed: 0, threshold: 1, message: 'el body no tiene ninguna sección («## …»): un procedimiento se lee por partes, y sin secciones no hay dónde buscar el detalle', fix: 'Añade secciones «## …» al cuerpo' });
+  else if (encabezados < 2 && body.length > SMALL_BODY) add('error', { rule: 'body-sections-min', observed: encabezados, threshold: 2, message: `el body tiene ${encabezados} sección(es) y ${body.length} caracteres: a partir de ${SMALL_BODY} hacen falta al menos 2 («## …»), para que el detalle sea localizable`, fix: 'Divide el cuerpo en al menos dos secciones «## …»' });
+  else if (encabezados < 2) add('warn', { rule: 'body-sections-soft', observed: encabezados, threshold: 2, message: `body corto (${body.length} caracteres) con una sola sección: se admite, pero una segunda sección lo hace localizable cuando crezca`, fix: 'Opcional: una segunda sección' });
 
   const haystack = `${description}\n${whenToUse}\n${body}`;
-  for (const [re, label] of SECRET_SHAPES) if (re.test(haystack)) errors.push(`parece contener una credencial (${label}): una skill no lleva secretos nunca`);
-  for (const [re, label] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) errors.push(`contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`);
-  for (const re of ABSOLUTE_PATH_SHAPES) if (re.test(haystack)) { warnings.push('contiene rutas absolutas: si la skill debe viajar, parametrízalas'); break; }
+  for (const [re, label] of SECRET_SHAPES) if (re.test(haystack)) add('error', { rule: 'secret', observed: label, message: `parece contener una credencial (${label}): una skill no lleva secretos nunca`, fix: 'Quita la credencial y sustitúyela por una referencia al almacén de secretos' });
+  for (const [re, label] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) add('error', { rule: 'personal-path', observed: label, message: `contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`, fix: 'Sustituye la ruta personal por $DSH_HOME o una ruta relativa' });
+  for (const re of ABSOLUTE_PATH_SHAPES) if (re.test(haystack)) { add('warn', { rule: 'absolute-path', observed: 'ruta absoluta', message: 'contiene rutas absolutas: si la skill debe viajar, parametrízalas', fix: 'Parametriza la ruta absoluta o documéntala como del puesto' }); break; }
+
+  // Las referencias: forma de las que se aportan, y que el vínculo del cuerpo se resuelva de verdad.
+  // `present` y `dirs` llegan cuando la puerta mira el disco (`checkProposal`), no cuando se propone.
+  const refs = checkReferences({ body, proposed: references, present, dirs, noComprobables });
+  errors.push(...refs.errors);
+  warnings.push(...refs.warnings);
+  findings.push(...refs.findings);
+
+  // La evidencia es lo que hace auditable el conocimiento. Sin evidencia **no** se avisa: un aviso que
+  // sale siempre deja de significar algo, y esa es la regla de la casa. Lo que sí se dice es una
+  // evidencia declarada que no está donde dice, porque eso es una promesa que no se puede comprobar.
+  const evidence = Array.isArray(input?.evidence) ? input.evidence.filter((e) => typeof e === 'string' && e.trim().length > 0) : [];
+  if (evidence.length > 0 && typeof cwd === 'string' && cwd.trim().length > 0) {
+    const perdidas = evidence.filter((e) => !existsSync(resolve(cwd, e)));
+    if (perdidas.length > 0) add('warn', {
+      rule: 'evidence-missing',
+      observed: perdidas.join(', '),
+      message: `la evidencia no está en el proyecto: ${perdidas.join(', ')} — se conserva igual, pero una ruta que no existe no prueba nada`,
+      fix: 'Aporta la evidencia declarada o corrige su ruta',
+    });
+  }
 
   // No se exige encabezado de nivel 1 en el body: `renderSkill` compone el título a partir de la
   // descripción, así que el documento final siempre lo lleva.
-  return { ok: errors.length === 0, errors, warnings };
+  return { ok: errors.length === 0, errors, warnings, findings, references: refs.files, links: refs.links };
 }
 
 // ── anti-solapamiento ────────────────────────────────────────────────────────────────────────────
@@ -224,7 +461,318 @@ export function checkOverlap(candidate, existing, { threshold = THRESHOLD, scope
   };
 }
 
-// ── lectura de lo que ya existe ──────────────────────────────────────────────────────────────────
+// ── actualizar con evidencia: la revisión, el diff y la versión base ─────────────────────────────
+//
+// Un parche de algo **vivo** no es una propuesta nueva: cambia una herramienta que alguien ya usa. Por eso
+// la puerta le exige tres cosas que a una propuesta nueva no se le piden:
+//   1. **Evidencia**: qué afirmaba la versión anterior, qué la contradice, con qué se midió y qué cambia.
+//      Un texto largo no es una medición: la medición tiene un número o un comando.
+//   2. **Base identificada**: contra qué versión exacta se preparó, para no aplicarla encima de otra cosa.
+//   3. **Diff**: qué se añade, qué se modifica y qué se elimina — y una eliminación tiene que estar
+//      justificada y no puede evaporar material sin dejar rastro.
+
+/** Mínimos de la revisión. Cortos a propósito: la forma se exige por campos, no por longitud. */
+const MIN_REVISION_FIELD = 20;
+/** Una medición se reconoce por un número o por un comando entre backticks. Sin eso, es una opinión. */
+const MEASUREMENT_RE = /\d|`[^`]+`/;
+
+/**
+ * Diff de líneas por conjuntos: qué líneas aparecen y cuáles desaparecen. No pretende ser posicional
+ * —eso sería un diff de verdad, con su algoritmo y su coste— sino exacto en lo que afirma: una línea que
+ * estaba y ya no está **está eliminada**, y una que no estaba y está **está añadida**.
+ *
+ * Los dos lados se comparan **canónicos**: sin CR, sin espacios al final de línea y sin línea vacía
+ * final. Si no, un salto de más al final del fichero se leería como una eliminación de contenido, y la
+ * puerta pediría justificar algo que no desapareció.
+ *
+ * @returns `{ anadidas, eliminadas }` — listas de líneas.
+ */
+export function diffLines(antes = '', despues = '') {
+  const canonico = (t) => String(t).replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').replace(/\n+$/, '');
+  const cuenta = (texto) => {
+    const m = new Map();
+    for (const l of canonico(texto).split('\n')) m.set(l, (m.get(l) ?? 0) + 1);
+    return m;
+  };
+  const a = cuenta(antes);
+  const b = cuenta(despues);
+  const anadidas = [];
+  const eliminadas = [];
+  for (const [linea, n] of b) {
+    for (let i = 0; i < n - (a.get(linea) ?? 0); i++) anadidas.push(linea);
+  }
+  for (const [linea, n] of a) {
+    for (let i = 0; i < n - (b.get(linea) ?? 0); i++) eliminadas.push(linea);
+  }
+  return { anadidas, eliminadas };
+}
+
+/**
+ * Diff del material que acompaña a la skill: añadido, modificado y eliminado, con las huellas.
+ * @param base - `[{ path, sha256 }]` de la versión vigente (del `meta.json` de la aprobada).
+ * @param nuevas - `[{ path, content, sha256 }]` de la propuesta.
+ */
+export function referencesDiff(base = [], nuevas = []) {
+  const porRuta = (lista) => new Map(lista.map((r) => [normalizeRel(r.path), r]));
+  const antes = porRuta(base);
+  const despues = porRuta(nuevas);
+  const anadidas = [];
+  const modificadas = [];
+  const eliminadas = [];
+  for (const [ruta, r] of despues) {
+    const previa = antes.get(ruta);
+    if (previa === undefined) anadidas.push({ path: ruta, sha256: r.sha256 });
+    else if (previa.sha256 !== r.sha256) modificadas.push({ path: ruta, antes: previa.sha256, despues: r.sha256 });
+  }
+  for (const [ruta, r] of antes) if (!despues.has(ruta)) eliminadas.push({ path: ruta, sha256: r.sha256 });
+  return { anadidas, modificadas, eliminadas };
+}
+
+/**
+ * La puerta de la revisión: exige la forma entera y que la medición sea una medición.
+ *
+ * @param revision - lo que declaró el modelo.
+ * @param diff - el diff real contra la versión vigente (`{ lineas, references }`).
+ * @param cwd - proyecto de la sesión, para comprobar si la evidencia es **observable**.
+ * @returns `{ ok, errors, warnings, observada, valor }`
+ */
+export function checkRevision(revision, { diff = null, cwd = null } = {}) {
+  const errors = [];
+  const warnings = [];
+  const valor = revision && typeof revision === 'object' && !Array.isArray(revision) ? revision : null;
+  if (valor === null) {
+    return {
+      ok: false,
+      errors: ['un parche de una skill viva exige «revision»: qué afirmaba la versión anterior, qué evidencia la contradice, con qué se midió y qué cambia'],
+      warnings,
+      observada: false,
+      valor: null,
+    };
+  }
+  const campo = (nombre) => (typeof valor[nombre] === 'string' ? valor[nombre].trim() : '');
+  const claim = campo('claim');
+  const evidence = campo('evidence');
+  const measurement = campo('measurement');
+  const change = campo('change');
+
+  // La evidencia se distingue por lo que se **puede comprobar**, no por lo larga que sea: una ruta corta
+  // que existe (`package.json`) es la mejor evidencia posible, y una ruta larga que no está es una
+  // afirmación. Así que primero se mira si es una ruta y si existe; sólo lo que no se puede comprobar
+  // tiene que explicarse con palabras.
+  const sinEspacios = evidence.length > 0 && !/\s/.test(evidence);
+  const pareceRuta = sinEspacios && (/[\\/]/.test(evidence) || /\.[A-Za-z0-9]{1,8}$/.test(evidence));
+  const existe = pareceRuta && typeof cwd === 'string' && cwd.trim().length > 0 && existsSync(resolve(cwd, evidence));
+
+  if (claim.length < MIN_REVISION_FIELD) errors.push(`revision.claim es obligatorio (mínimo ${MIN_REVISION_FIELD} caracteres): qué afirmaba la skill que se corrige`);
+  if (evidence.length === 0) {
+    errors.push(`revision.evidence es obligatorio (mínimo ${MIN_REVISION_FIELD} caracteres): qué contradice esa afirmación — una ruta, un informe, una salida`);
+  } else if (!existe) {
+    if (evidence.length < MIN_REVISION_FIELD) errors.push(`revision.evidence es obligatorio (mínimo ${MIN_REVISION_FIELD} caracteres): qué contradice esa afirmación — una ruta, un informe, una salida`);
+    else if (pareceRuta) warnings.push(`la evidencia «${evidence}» no está en el proyecto: queda como afirmación NO verificada, no como medición observada`);
+    else warnings.push('la evidencia no es una ruta del proyecto: queda como afirmación NO verificada');
+  }
+  if (measurement.length < MIN_REVISION_FIELD) errors.push(`revision.measurement es obligatorio (mínimo ${MIN_REVISION_FIELD} caracteres): con qué se midió`);
+  else if (!MEASUREMENT_RE.test(measurement)) errors.push('revision.measurement no contiene ninguna medición: hace falta un número o un comando entre backticks — una afirmación del modelo no es una medición');
+  if (change.length < MIN_REVISION_FIELD) errors.push(`revision.change es obligatorio (mínimo ${MIN_REVISION_FIELD} caracteres): qué dice la skill a partir de ahora`);
+  const observada = existe;
+
+  // Lo que se elimina tiene que estar justificado, y el material no puede evaporarse en silencio.
+  const lineasEliminadas = diff?.lineas?.eliminadas?.length ?? 0;
+  const refsEliminadas = diff?.references?.eliminadas ?? [];
+  if (lineasEliminadas > 0 || refsEliminadas.length > 0) {
+    const removed = campo('removed');
+    const que = [];
+    if (lineasEliminadas > 0) que.push(`${lineasEliminadas} línea(s) del cuerpo`);
+    if (refsEliminadas.length > 0) que.push(`${refsEliminadas.length} referencia(s) (${refsEliminadas.map((r) => r.path).join(', ')})`);
+    if (removed.length < MIN_REVISION_FIELD) {
+      errors.push(`esta propuesta elimina ${que.join(' y ')}: justifícalo en revision.removed (mínimo ${MIN_REVISION_FIELD} caracteres) — borrar conocimiento aprobado no puede pasar en silencio`);
+    }
+  }
+
+  return { ok: errors.length === 0, errors, warnings, observada, valor: { claim, evidence, measurement, change, removed: campo('removed') } };
+}
+
+/** Estados en los que una skill está **viva**: lo que el modelo puede leer o recuperar hoy. */
+const ESTADOS_VIVOS = ['approved', 'disabled'];
+
+/**
+ * La versión vigente de una skill según su id: de quién es, dónde vive y **su huella de contenido**.
+ *
+ * Es lo que identifica la base de un parche. Se mira el proyecto y, después, lo publicado para todos
+ * proyectos (la biblioteca curada), que es la otra forma de estar vivo que tiene una skill nuestra.
+ *
+ * @returns `{ state, dir, hash, references, body }` o `null` si no hay nada vivo con ese id.
+ */
+export function vigenteDe(id, key, { root = defaultRoot(), curated = curatedLibraryRoot() } = {}) {
+  for (const estado of ESTADOS_VIVOS) {
+    const dir = join(root, 'projects', key, estado, id);
+    if (existsSync(join(dir, 'SKILL.md'))) return leerVigente(dir, estado);
+  }
+  const cartel = join(curated, id);
+  if (existsSync(join(cartel, 'SKILL.md')) && isOurs(cartel)) return leerVigente(cartel, 'published');
+  return null;
+}
+
+function leerVigente(dir, state) {
+  const { body } = parseFrontmatter(readFileSync(join(dir, 'SKILL.md'), 'utf8'));
+  const references = [];
+  try {
+    const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
+    for (const r of meta.references ?? []) references.push({ path: normalizeRel(r.path), sha256: r.sha256 });
+  } catch { /* sin meta no hay lista de referencias, pero la huella del contenido sigue valiendo */ }
+  // El cuerpo se lee **como se escribe**: `renderSkill` compone un título de nivel 1 a partir de la
+  // descripción, así que el primer `# …` del documento no es parte del procedimiento. Compararlo contra
+  // el cuerpo que entra en una propuesta marcaría como perdido algo que nunca estuvo ahí.
+  const cuerpo = cuerpoSinTitulo(body);
+  return { state, dir, hash: folderHash(dir), references, body: cuerpo };
+}
+
+/**
+ * El cuerpo de una skill tal y como se **mide**: sin el título de nivel 1, que `renderSkill` compone a
+ * partir de la descripción. Sin esto, la misma skill mediría distinto al proponerla (cuerpo sin título) y
+ * al auditarla (documento entero): dos varas para la misma regla.
+ */
+export function cuerpoSinTitulo(body) {
+  return String(body ?? '').replace(/^\s*#\s+.*\r?\n/, '').trimStart();
+}
+
+/**
+ * Audita **una** carpeta de skill, en el estado donde esté: la puerta completa (formato, estructura,
+ * presupuesto, vínculo de referencias) más la integridad del material contra lo que registró su
+ * `meta.json`. Sólo lee, y **nunca lanza**: un fichero ilegible es un hallazgo, no una excepción que se
+ * lleve por delante el resto.
+ *
+ * Vive aquí, y no en el auditor, porque es exactamente lo que comprueba la puerta de aprobar: si fueran
+ * dos implementaciones, la auditoría podría decir una cosa y la puerta otra.
+ *
+ * @returns `{ findings, errors, warnings, meta, unreadable }`
+ */
+export function auditarCarpeta(dir, { cwd = null, id = null } = {}) {
+  const findings = [];
+  const errors = [];
+  const warnings = [];
+  const anota = (severity, hallazgo) => {
+    findings.push({ severity, observed: null, threshold: null, fix: '', ...hallazgo });
+    (severity === 'error' ? errors : warnings).push(hallazgo.message);
+  };
+  const file = join(dir, 'SKILL.md');
+  if (!existsSync(file)) {
+    anota('error', { rule: 'skill-missing', observed: dir, message: `no hay SKILL.md en ${dir}`, fix: 'La carpeta no es una skill: retírala o aporta su SKILL.md' });
+    return { findings, errors, warnings, meta: null, unreadable: false, references: [], links: [] };
+  }
+  let texto = null;
+  try {
+    texto = readFileSync(file, 'utf8');
+  } catch (error) {
+    // Error de acceso o de lectura: se registra y se sigue. Perder el resto de la auditoría por un
+    // fichero ilegible sería peor que el propio fichero roto.
+    anota('error', {
+      rule: 'unreadable',
+      observed: error.code ?? error.message,
+      message: `no se pudo leer el SKILL.md: ${error.message}`,
+      fix: 'Revisa los permisos de ese fichero (y que no sea una carpeta)',
+    });
+    return { findings, errors, warnings, meta: null, unreadable: true, references: [], links: [] };
+  }
+  let meta = null;
+  try {
+    meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
+  } catch { /* sin meta legible no hay integridad que comprobar; el resto sigue */ }
+
+  const { data, body } = parseFrontmatter(texto);
+  const cuerpo = cuerpoSinTitulo(body);
+  const arbol = treeOfConErrores(dir);
+  // Lo que no se pudo leer se dice **primero**: sin esa carpeta, cualquier juicio posterior sobre su
+  // contenido sería una afirmación sin medir.
+  for (const problema of arbol.errores) {
+    anota('error', {
+      rule: 'unreadable',
+      observed: `${problema.ruta || '.'} (${problema.code})`,
+      message: `no se pudo leer «${problema.ruta || 'la carpeta de la skill'}»: ${problema.code}`,
+      fix: 'Revisa los permisos de esa carpeta (y que no sea un fichero donde se espera una carpeta)',
+    });
+  }
+  const description = typeof data.description === 'string' ? data.description : '';
+  const whenToUse = typeof data.whenToUse === 'string' ? data.whenToUse : '';
+  const medidas = {
+    description: description.length,
+    whenToUse: whenToUse.length,
+    body: cuerpo.length,
+    secciones: (cuerpo.match(/^##[^#\n]/gm) ?? []).length,
+  };
+  const result = validateInput({
+    id: data.name ?? id ?? basename(dir),
+    description,
+    whenToUse,
+    evidence: Array.isArray(meta?.evidence) ? meta.evidence : [],
+    body: cuerpo,
+  }, {
+    present: arbol.files.filter((f) => f !== 'SKILL.md' && f !== 'meta.json'),
+    dirs: arbol.dirs,
+    noComprobables: arbol.errores.map((e) => e.ruta),
+    cwd,
+  });
+  findings.push(...result.findings);
+  errors.push(...result.errors);
+  warnings.push(...result.warnings);
+
+  // Integridad: lo que una propuesta declaró tener sigue siendo lo que hay. Sin esto, una edición a mano
+  // del material pesado viajaría a `approved/` —o se serviría— sin que nadie lo hubiera leído.
+  for (const ref of meta?.references ?? []) {
+    const ruta = normalizeRel(ref.path);
+    if (!arbol.files.includes(ruta)) {
+      anota('error', { rule: 'reference-missing-file', observed: ruta, message: `la referencia «${ruta}» ya no está en la carpeta de la skill`, fix: `Repón «${ruta}» o quita el vínculo del cuerpo` });
+      continue;
+    }
+    let sha = null;
+    try {
+      sha = createHash('sha256').update(readFileSync(join(dir, ruta))).digest('hex').slice(0, 16);
+    } catch (error) {
+      anota('error', { rule: 'unreadable', observed: error.code ?? error.message, message: `no se pudo leer la referencia «${ruta}»: ${error.message}`, fix: 'Revisa los permisos de ese fichero' });
+      continue;
+    }
+    if (sha !== ref.sha256) {
+      anota('error', {
+        rule: 'reference-integrity',
+        observed: `${ruta} ${sha}`,
+        threshold: `${ruta} ${ref.sha256}`,
+        message: `la referencia «${ruta}» cambió después de proponerse (huella distinta)`,
+        fix: `Vuelve a proponer la skill con el material actual, o repón «${ruta}»`,
+      });
+    }
+  }
+  return { findings, errors, warnings, meta, unreadable: false, references: result.references, links: result.links, medidas };
+}
+
+/** El diff completo de una propuesta contra la versión vigente: cuerpo y material. */
+export function diffContra(base, { body, references = [] }) {
+  return {
+    lineas: diffLines(base?.body ?? '', body ?? ''),
+    references: referencesDiff(base?.references ?? [], references),
+  };
+}
+
+/**
+ * ¿La propuesta elimina material del que había? Se comprueba de verdad: el contenido del fichero que
+ * desaparece tiene que seguir **entero** en la propuesta (en el cuerpo o en otra referencia). Si se
+ * evapora, la propuesta se rechaza: el material pesado existe para que el detalle no se pierda.
+ */
+export function materialPreservado(baseDir, eliminadas, { body = '', references = [] } = {}) {
+  const faltan = [];
+  const contenidos = [body, ...references.map((r) => (typeof r.content === 'string' ? r.content : ''))];
+  for (const ref of eliminadas) {
+    let texto = '';
+    try {
+      texto = readFileSync(join(baseDir, ref.path), 'utf8');
+    } catch {
+      faltan.push(`${ref.path} (no se pudo leer su contenido para comprobar que sigue vivo)`);
+      continue;
+    }
+    const intacto = contenidos.some((c) => c.includes(texto));
+    if (!intacto) faltan.push(`${ref.path}`);
+  }
+  return faltan;
+}
 
 /** Frontmatter YAML mínimo: `clave: valor`, listas `[a, b]` y un nivel anidado bajo `metadata:`. */
 export function parseFrontmatter(text) {
@@ -253,11 +801,24 @@ export function parseFrontmatter(text) {
   return { data, body: text.slice(match[0].length) };
 }
 
-/** Inventario de skills de un árbol `<raíz>/<id>/SKILL.md`. Nunca lanza por una entrada mala. */
+/**
+ * Inventario de skills de un árbol `<raíz>/<id>/SKILL.md`. **Nunca lanza por una entrada mala.**
+ *
+ * La promesa es del contrato, y costaba cumplirla: si la carpeta no se puede leer —un fichero donde
+ * debería haber una carpeta, una ACL denegada, un disco que se fue—, `readdirSync` lanza y la excepción
+ * se llevaba por delante la herramienta entera (`propose` inventaría antes de escribir). Un almacén
+ * tocado a mano no puede impedir proponer: el inventario devuelve lo que puede y sigue.
+ */
 export function scanTree(root, where) {
   const out = [];
-  if (!existsSync(root)) return out;
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
+  const entradas = (dir) => {
+    try {
+      return readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+  };
+  for (const entry of entradas(root)) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
     const file = join(root, entry.name, 'SKILL.md');
     if (!existsSync(file)) continue;
@@ -311,7 +872,12 @@ export function overview({ root = defaultRoot() } = {}) {
 export function listProjects(root = defaultRoot()) {
   const dir = join(root, 'projects');
   if (!existsSync(dir)) return [];
-  return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name);
+  try {
+    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name);
+  } catch {
+    // Un `projects/` ilegible no puede tumbar la herramienta que sólo venía a inventariar.
+    return [];
+  }
 }
 
 // ── composición del SKILL.md ─────────────────────────────────────────────────────────────────────
@@ -359,30 +925,116 @@ export function renderSkill({ id, description, whenToUse, body, project, project
 
 // ── escritura: proponer, aprobar, rechazar ───────────────────────────────────────────────────────
 
+/**
+ * Los ficheros y las carpetas de un árbol, con rutas relativas y `/` (una sola forma de escribir una
+ * ruta, para que comparar sea comparar y no traducir).
+ */
+export function treeOf(dir) {
+  const { files, dirs } = arbolDe(dir);
+  return { files, dirs };
+}
+
+/**
+ * El mismo árbol, pero **diciendo lo que no pudo leer**.
+ *
+ * `treeOf` salta en silencio lo que no puede listar, y para inventariar un árbol que se va a escribir eso
+ * está bien. Para **auditar** no: una carpeta denegada no puede quedar fuera del informe, porque entonces
+ * un vínculo a un fichero que sí está saldría como «ese fichero no está» — un diagnóstico falso sobre algo
+ * que la propia auditoría no pudo mirar. Aquí se devuelven los errores para que se digan.
+ *
+ * @returns `{ files, dirs, errores }` — `errores` es `[{ ruta, code }]`.
+ */
+export function treeOfConErrores(dir) {
+  return arbolDe(dir);
+}
+
+function arbolDe(dir, rel = '', acc = { files: [], dirs: [], errores: [] }) {
+  let entradas = [];
+  try {
+    entradas = readdirSync(join(dir, rel), { withFileTypes: true });
+  } catch (error) {
+    acc.errores.push({ ruta: rel, code: error.code ?? error.message });
+    return { files: [...acc.files].sort(), dirs: [...acc.dirs].sort(), errores: acc.errores };
+  }
+  for (const entry of entradas) {
+    const next = rel === '' ? entry.name : `${rel}/${entry.name}`;
+    if (entry.isDirectory()) {
+      acc.dirs.push(next);
+      arbolDe(dir, next, acc);
+    } else acc.files.push(next);
+  }
+  return { files: [...acc.files].sort(), dirs: [...acc.dirs].sort(), errores: acc.errores };
+}
+
+/**
+ * Escribe la carpeta de una skill **verificando lo escrito antes de publicarla**.
+ *
+ * El `rename` es atómico, pero eso sólo garantiza que no se vea a medias: no garantiza que lo escrito
+ * sea lo declarado. Así que se escribe en una carpeta temporal, se lee de vuelta **fichero a fichero**,
+ * se compara byte a byte y se comprueba que el conjunto de ficheros es exactamente el previsto; sólo
+ * entonces se mueve a su sitio. Si la verificación falla no queda nada: ni la skill a medias ni el
+ * material de una skill que no llegó a existir.
+ *
+ * @returns `{ ok, files, reason? }` — `files` son las rutas relativas escritas y verificadas.
+ */
 function writeAtomic(dir, files) {
+  // Una sola forma de nombrar cada fichero: las claves se normalizan antes de escribir y de verificar,
+  // así que comparar es comparar. Dos claves que normalicen a la misma ruta se rechazan en vez de
+  // colapsarse en silencio: sería una pérdida de contenido silenciosa.
+  const declarados = new Map(Object.entries(files).map(([n, c]) => [String(n).replace(/\\/g, '/'), c]));
+  if (declarados.size !== Object.keys(files).length) {
+    return { ok: false, reason: 'dos ficheros de la propuesta apuntan a la misma ruta: revisa los nombres' };
+  }
   const tmp = `${dir}.tmp-${randomUUID().slice(0, 8)}`;
   rmSync(tmp, { recursive: true, force: true });
-  mkdirSync(tmp, { recursive: true });
-  for (const [name, content] of Object.entries(files)) {
-    const target = join(tmp, name);
-    mkdirSync(dirname(target), { recursive: true }); // el vendorizado guarda `upstream/` dentro
-    writeFileSync(target, content);
+  try {
+    mkdirSync(tmp, { recursive: true });
+    for (const [name, content] of declarados) {
+      const target = join(tmp, name);
+      mkdirSync(dirname(target), { recursive: true }); // el vendorizado guarda `upstream/` dentro
+      writeFileSync(target, content);
+    }
+    const esperadas = [...declarados.keys()].sort();
+    const escritas = treeOf(tmp).files;
+    if (esperadas.length !== escritas.length || esperadas.some((n, i) => n !== escritas[i])) {
+      return { ok: false, reason: `la escritura no coincide con lo declarado: esperado ${esperadas.join(', ')} · escrito ${escritas.join(', ')}` };
+    }
+    for (const ruta of esperadas) {
+      const leido = readFileSync(join(tmp, ruta));
+      if (!leido.equals(Buffer.from(declarados.get(ruta)))) {
+        return { ok: false, reason: `la escritura de «${ruta}» no coincide con su contenido declarado` };
+      }
+    }
+    // La publicación también dentro de la guarda: un error de acceso aquí (una carpeta que no se puede
+    // crear, un destino ocupado por un fichero) tiene que salir como motivo, no como excepción suelta
+    // que se lleve por delante la herramienta que la llamó.
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dirname(dir), { recursive: true });
+    renameSync(tmp, dir);
+  } catch (error) {
+    rmSync(tmp, { recursive: true, force: true });
+    return { ok: false, reason: `no se pudo escribir la skill: ${error.message}` };
   }
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dirname(dir), { recursive: true });
-  renameSync(tmp, dir);
+  return { ok: true, files: treeOf(dir).files };
 }
 
 /**
  * Write a proposal. Idempotent by construction: the same id rewrites its own directory and nothing
  * else, so proposing twice leaves one proposal and never duplicates the library.
  */
-export function propose(input, { root = defaultRoot(), cwd, now = new Date().toISOString(), curated = curatedLibraryRoot(), extraFiles = {}, metaExtra = {} } = {}) {
-  const validation = validateInput(input);
+export function propose(input, { root = defaultRoot(), cwd, key = null, now = new Date().toISOString(), curated = curatedLibraryRoot(), extraFiles = {}, metaExtra = {}, references = [], revision } = {}) {
+  const validation = validateInput(input, { references, cwd });
   if (!validation.ok) return { status: 'invalid', errors: validation.errors, warnings: validation.warnings };
+  // La revisión es parte de la propuesta, como la evidencia: se acepta en el input o aparte, y la
+  // herramienta la pasa aparte porque es un parámetro suyo. Leerla de los dos sitios evita que una
+  // llamada interna (o una prueba) se quede sin ella por dónde la puso.
+  const revisionDeclarada = revision ?? input?.revision ?? null;
 
-  const key = projectKey(cwd);
-  if (key === null) return { status: 'no-project', errors: ['no se pudo determinar el proyecto: la sesión no tiene un cwd utilizable'], warnings: [] };
+  // La clave del proyecto se puede pasar explícitamente. Hace falta cuando quien propone **no** es una sesión
+  // (la CLI con `--project-key`, el motor de reparación): derivarla del `cwd` grababa la propuesta en un
+  // proyecto y la puerta la buscaba en otro, que es un desajuste silencioso y caro de encontrar.
+  const clave = key ?? projectKey(cwd);
+  if (clave === null) return { status: 'no-project', errors: ['no se pudo determinar el proyecto: la sesión no tiene un cwd utilizable'], warnings: [] };
 
   const candidate = {
     id: input.id.trim(),
@@ -390,49 +1042,116 @@ export function propose(input, { root = defaultRoot(), cwd, now = new Date().toI
     whenToUse: (input.whenToUse ?? '').trim(),
     tags: Array.isArray(input.tags) ? input.tags : [],
   };
-  const overlap = checkOverlap(candidate, existingSkills({ root, curated }), { scope: key });
+  const overlap = checkOverlap(candidate, existingSkills({ root, curated }), { scope: clave });
   if (!overlap.ok) return { status: 'conflict', conflicts: overlap.conflicts, warnings: validation.warnings };
-  const updatesApproved = existsSync(join(root, 'projects', key, 'approved', candidate.id));
+
+  // ── Actualizar algo vivo: evidencia, base y diff ───────────────────────────────────────────────
+  //
+  // Se mira la versión **vigente** —aprobada, apagada o publicada— y se identifica por su huella de
+  // contenido. Con eso: se exige la revisión, se calcula el diff real y se comprueba que lo que
+  // desaparece no se evapora. Sin base viva, esto es una propuesta nueva y nada de esto aplica.
+  const base = vigenteDe(candidate.id, clave, { root, curated });
+  let diff = null;
+  let revisionValidada = null;
+  let evidenciaObservada = false;
+  if (base !== null) {
+    diff = diffContra(base, { body: input.body ?? '', references: validation.references });
+    const check = checkRevision(revisionDeclarada, { diff, cwd });
+    if (!check.ok) return { status: 'invalid', errors: check.errors, warnings: [...validation.warnings, ...check.warnings] };
+    revisionValidada = check.valor;
+    evidenciaObservada = check.observada;
+    validation.warnings.push(...check.warnings);
+    // Lo eliminado tiene que seguir existiendo en alguna parte de la propuesta. Una línea menos se
+    // justifica; un fichero de material que desaparece sin dejar rastro, no.
+    if (diff.references.eliminadas.length > 0) {
+      const perdidos = materialPreservado(base.dir, diff.references.eliminadas, { body: input.body ?? '', references: validation.references });
+      if (perdidos.length > 0) {
+        return {
+          status: 'invalid',
+          errors: [`su contenido se pierde al eliminar: ${perdidos.join(', ')} — consérvalo (en el cuerpo o en otra referencia) o propón una skill nueva que no lo prometa`],
+          warnings: validation.warnings,
+        };
+      }
+    }
+  } else if (revisionDeclarada !== null && revisionDeclarada !== undefined) {
+    validation.warnings.push('se recibió «revision» pero no hay ninguna skill viva con ese id: no se aplica');
+  }
+  const updatesApproved = existsSync(join(root, 'projects', clave, 'approved', candidate.id));
   // Si ya existía una propuesta con ese id, esto es un parche de lo propuesto, no una creación.
   // La diferencia importa: es lo que el usuario ve en la interfaz y lo que le dice si su biblioteca
   // creció o si se afinó lo que ya había.
-  const updatesProposal = existsSync(join(root, 'projects', key, 'proposed', candidate.id));
+  const updatesProposal = existsSync(join(root, 'projects', clave, 'proposed', candidate.id));
   // Una versión **apagada** también se reemplaza al aprobar (`move` la aparta), así que el humano tiene
   // que saberlo: sin esto, proponer sobre algo apagado se anunciaba como «creada» y la aprobación
   // reemplazaba en silencio una skill que alguien había apagado a propósito.
-  const updatesDisabled = existsSync(join(root, 'projects', key, 'disabled', candidate.id));
+  const updatesDisabled = existsSync(join(root, 'projects', clave, 'disabled', candidate.id));
   // Y lo **publicado** para todos los proyectos: aprobar esto reemplaza la versión que ya se sirve en
   // todas las sesiones (la anterior queda apartada en `global/superseded/`). Sin decirlo, el humano
   // creería que está creando algo nuevo cuando en realidad está cambiando lo que ve en todas partes.
   const updatesPublished = isOurs(join(curated, candidate.id));
 
   const project = input.project ?? cwd;
-  const dir = join(root, 'projects', key, 'proposed', candidate.id);
+  const dir = join(root, 'projects', clave, 'proposed', candidate.id);
   const skill = renderSkill({
-    ...candidate, body: input.body.trim(), project, projectKey: key, evidence: input.evidence ?? [],
+    ...candidate, body: input.body.trim(), project, projectKey: clave, evidence: input.evidence ?? [],
     createdAt: now, upstream: input.upstream ?? null, localNote: input.localNote ?? '',
   });
+  // El material pesado viaja **con** la skill: el cuerpo lo enlaza, la puerta ya comprobó que el vínculo
+  // se resuelve, y la Fase 0 midió que el modelo lo alcanza desde la carpeta. Lo que se guarda en el
+  // registro es su huella, que es lo que permite detectar después una edición a mano.
+  const referencias = validation.references.map(({ path, bytes, sha256 }) => ({ path, bytes, sha256 }));
+  const archivosReferencia = Object.fromEntries(validation.references.map((r) => [r.path, r.content]));
   const meta = {
     id: candidate.id,
     project,
-    projectKey: key,
+    projectKey: clave,
     state: 'proposed',
     createdAt: now,
     description: candidate.description,
     whenToUse: candidate.whenToUse,
     evidence: input.evidence ?? [],
     warnings: validation.warnings,
+    ...(referencias.length ? { references: referencias, links: validation.links } : {}),
+    // La identidad de la versión sobre la que se construyó y lo que cambia respecto de ella. Se guardan
+    // aquí porque son la prueba que se volverá a comprobar al aprobar: si la vigente se movió, esta
+    // propuesta ya no describe un cambio sobre nada real.
+    ...(base !== null
+      ? {
+        base: { state: base.state, hash: base.hash },
+        revision: revisionValidada,
+        diff: {
+          lineas: { anadidas: diff.lineas.anadidas.length, eliminadas: diff.lineas.eliminadas.length },
+          references: diff.references,
+        },
+      }
+      : {}),
     ...metaExtra,
   };
-  writeAtomic(dir, { 'SKILL.md': skill, 'meta.json': `${JSON.stringify(meta, null, 2)}\n`, ...extraFiles });
+  const escrito = writeAtomic(dir, { 'SKILL.md': skill, 'meta.json': `${JSON.stringify(meta, null, 2)}\n`, ...archivosReferencia, ...extraFiles });
+  // Nada a medias: si la verificación de la escritura falla, la propuesta no existe y no queda basura.
+  if (!escrito.ok) return { status: 'invalid', errors: [escrito.reason], warnings: validation.warnings };
   return {
     status: 'proposed',
     id: candidate.id,
     project,
-    projectKey: key,
+    projectKey: clave,
     path: join(dir, 'SKILL.md'),
     warnings: validation.warnings,
     sha256: createHash('sha256').update(skill).digest('hex'),
+    references: referencias,
+    links: validation.links,
+    files: escrito.files,
+    ...(base !== null
+      ? {
+        base: { state: base.state, hash: base.hash },
+        revision: revisionValidada,
+        evidenciaObservada,
+        diff: {
+          lineas: { anadidas: diff.lineas.anadidas, eliminadas: diff.lineas.eliminadas },
+          references: diff.references,
+        },
+      }
+      : {}),
     updatesApproved,
     updatesProposal,
     updatesDisabled,
@@ -812,17 +1531,35 @@ export function retired(key, { root = defaultRoot(), backupRoot = null } = {}) {
  * @param root - raíz del almacén.
  * @returns `{ ok, errors, warnings, file }`; `ok` en falso significa que no se puede aprobar.
  */
-export function checkProposal(id, key, { root = defaultRoot() } = {}) {
-  const file = join(root, 'projects', key, 'proposed', id, 'SKILL.md');
-  if (!existsSync(file)) return { ok: false, errors: [`no existe una propuesta ${id} en ${key}`], warnings: [] };
-  const { data, body } = parseFrontmatter(readFileSync(file, 'utf8'));
-  const result = validateInput({
-    id: data.name ?? id,
-    description: data.description ?? '',
-    whenToUse: data.whenToUse ?? '',
-    body: body.trim(),
-  });
-  return { ...result, file };
+export function checkProposal(id, key, { root = defaultRoot(), curated = curatedLibraryRoot() } = {}) {
+  const dir = join(root, 'projects', key, 'proposed', id);
+  const file = join(dir, 'SKILL.md');
+  if (!existsSync(file)) return { ok: false, errors: [`no existe una propuesta ${id} en ${key}`], warnings: [], findings: [], meta: null };
+  // La puerta mira el disco, no la petición: así caza además lo que se editó a mano después de proponer.
+  // Y es **la misma** función que audita una skill guardada: una regla, una implementación.
+  const { findings, errors, warnings, meta } = auditarCarpeta(dir, { id });
+
+  // ── La base: ¿es todavía la versión sobre la que se preparó esto? ───────────────────────────────
+  //
+  // Una corrección se prepara **contra algo concreto**. Si ese algo se movió mientras la propuesta
+  // esperaba —otra aprobación, una edición a mano, un cambio de ámbito—, aplicarla encima sería
+  // aplicar un cambio que ya no describe la realidad: se rechaza y se pide reconciliar.
+  const integridad = [];
+  if (meta?.base) {
+    const vigente = vigenteDe(id, key, { root, curated });
+    if (vigente === null) {
+      integridad.push(`la versión sobre la que se preparó esta corrección (${meta.base.state}, huella ${meta.base.hash}) ya no está: vuelve a proponerla sobre lo que haya ahora`);
+    } else if (vigente.hash !== meta.base.hash) {
+      integridad.push(`la versión vigente cambió desde que se preparó esta corrección (base ${meta.base.hash} ≠ vigente ${vigente.hash}): vuelve a proponer sobre la versión nueva, o la corrección se aplicaría sobre algo que ya no existe`);
+    }
+  }
+  // Y si la propuesta elimina material, la justificación tiene que seguir ahí (se pueda leer).
+  if ((meta?.diff?.references?.eliminadas?.length ?? 0) > 0 && (meta?.revision?.removed ?? '').trim().length === 0) {
+    integridad.push('esta propuesta elimina material y no lleva la justificación exigida («revision.removed»): no se aprueba sin decir por qué');
+  }
+
+  const todos = [...errors, ...integridad];
+  return { ok: todos.length === 0, errors: todos, warnings, findings, file, dir, meta };
 }
 
 /**

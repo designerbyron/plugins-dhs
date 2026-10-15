@@ -14,10 +14,14 @@ Cómo está organizado, cómo se amplía sin romperlo, y qué reglas hacen que e
 | `lib/commands.mjs` | Los cinco comandos humanos: listar, leer, aprobar, rechazar y el modo automático — y las tres acciones compartidas que usan tanto el comando con argumentos como la fila del menú. Sobre `lib/compiler.mjs`, sin decisiones propias | **Sí**, camino por camino |
 | `lib/pending-rows.mjs` | Las filas del menú `/`: una por pendiente y verbo, sin argumentos, con nombres que cumplen la gramática del registro de comandos y sin repetirse entre proyectos | **Sí**, con la gramática del contrato |
 | `lib/auto-approve.mjs` | El pliegue del modo «aprobar en esta sesión» desde los `command/run` del log | **Sí**, es Node puro |
+| `lib/audit.mjs` | La auditoría de solo lectura: recorre el almacén entero, mide cada skill con la puerta y devuelve un informe reproducible, sin escribir nada | **Sí**, sobre una caja de arena |
+| `lib/repair.mjs` | El motor de reparación: el catálogo cerrado de reparaciones por regla (con su nivel), las transformaciones mecánicas y la preparación de la propuesta | **Sí**, es Node puro |
+| `lib/review.mjs` | La página local de revisión: sirve las pendientes con su validación y sus botones de aprobar y rechazar, sólo en `127.0.0.1` y con token de un solo uso | **Sí**, levantándola en una prueba |
+| `lib/promote.mjs` | La promoción: las pruebas de regresión, el cerrojo por skill, la verificación por huella después de escribir, la reversión y el diario | **Sí**, sobre una caja de arena |
 | `lib/definitions.mjs` | El protocolo y las definiciones de las cuatro herramientas y del proveedor, como objetos planos | **Sí**, con un `exec` falso |
 | `index.js` | El adaptador Cordis: elige los puntos de extensión y registra. **~120 líneas** | No: importa `@deepseek-ai/dsh-tools` |
 | `client.js` | La pieza de interfaz del navegador (engranaje, píldora, idioma, estilos) | No: es un artefacto de navegador. Se comprueba su **forma**, no su dibujo |
-| `bin/skill-compiler.mjs` | La CLI humana, incluido **aprobar** | Sí, manualmente |
+| `bin/skill-compiler.mjs` | La CLI humana, incluido **aprobar** (y `audit`, `repair`, `promote`, `history`) | Sí, y también por el CLI real en las pruebas |
 | `tools/ico-to-png.mjs` | Extrae el PNG de un `.ico` para usarlo como icono (el harness no acepta `.ico`) | Sí, manualmente |
 | `package.json` · `cordis.patch.yml` | El bundle que instala el gestor de plugins, y la declaración del artefacto de cliente | — |
 

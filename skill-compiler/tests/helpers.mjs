@@ -48,7 +48,10 @@ export function cleanupSandboxes() {
   savedDshHome = null;
 }
 
-/** Un cuerpo que supera el mínimo y se lee como procedimiento. */
+/**
+ * Un cuerpo que supera el mínimo, con las dos secciones que la puerta de calidad exige a partir de
+ * 1.500 caracteres, y que se lee como procedimiento: es el patrón de una skill bien formada.
+ */
 export const GOOD_BODY = [
   '## When to Use',
   '',
@@ -61,13 +64,35 @@ export const GOOD_BODY = [
   '3. Cerrar solo si las dos medidas coinciden.',
 ].join('\n');
 
+/** La descripción de prueba, por encima del mínimo de 60 caracteres que exige la puerta. */
+export const GOOD_DESCRIPTION = 'Decide with measured evidence instead of impressions, every single time.';
+
 export const goodInput = (over = {}) => ({
   id: 'measured-decision-check',
-  description: 'Decide with measured evidence instead of impressions.',
+  description: GOOD_DESCRIPTION,
   whenToUse: 'Cuando una decisión necesite un número medido.',
   body: GOOD_BODY,
   ...over,
 });
+
+/**
+ * Una revisión válida: lo que la puerta exige cuando el parche toca una skill **viva**. Sin esto, un
+ * parche se rechaza — y esa es la regla que la Fase 3 implementa, así que las pruebas de actualización
+ * parten de aquí en vez de inventar cuatro campos cada vez.
+ *
+ * La evidencia va como **texto**, no como ruta, a propósito: así estas pruebas no dependen de que exista
+ * un fichero en el proyecto de nadie, y el caso «afirmación no verificada» queda además ejercitado.
+ */
+export const buenaRevision = (over = {}) => ({
+  claim: 'La versión anterior afirmaba que el orden de los pasos no importaba.',
+  evidence: 'La salida de la suite en la sesión del 2026-10-15, recogida en el informe del acto',
+  measurement: 'Medido con `node --test`: 3 fallos antes, 0 después en la misma máquina.',
+  change: 'Ahora el procedimiento declara el orden como parte del contrato.',
+  ...over,
+});
+
+/** Un parche válido de una skill viva: el mismo id, con su revisión. */
+export const patchInput = (over = {}) => goodInput({ revision: buenaRevision(), ...over });
 
 /** Un `exec` falso con la forma que el harness entrega a una herramienta. */
 export const fakeExec = (cwd) => ({ agent: { session: { header: { cwd } } } });

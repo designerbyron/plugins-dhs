@@ -4,6 +4,98 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [2.0.0] — 2026-10-15
+
+**Una skill nace optimizada, se corrige con evidencia y se puede auditar.** Pedido así: *«asegurarme que
+desde que se propone una skill esta sea realmente optimizada, ya que estas deben ser fáciles de comprender y
+no sobrecargar de contexto y tampoco perderlo, ya que el conocimiento tiene un costo y se paga por él»*, y
+además *«el aprendizaje/update patches sea automático pero con buenos criterios, ya que en cierto momento el
+modelo declara cosas que después admite que se equivocó, entonces debería poder corregirse y a la skill sin
+problemas»*.
+
+Es **`mayor`** por el criterio del repositorio, y por dos motivos a la vez: cambia el **contrato de una
+herramienta** (`skill_propose`) y cambia el **formato del almacén** (aparecen `journal.jsonl`, `locks/` y el
+bloque `repair` en `meta.json`).
+
+**Nace bien: el contrato de una propuesta pide lo que hace útil a una skill.**
+
+- **`whenToUse` pasa a ser obligatorio.** Es el campo con el que el harness decide *cuándo* aparece la skill
+  ante el modelo; sin él, una skill existe y no se elige nunca. Las skills anteriores a esta versión no lo
+  tienen, y eso es exactamente lo que la auditoría reporta hoy en seis de ellas (§ *Diagnóstico*).
+- **El disparador exige evidencia concreta**: un contrato, una trampa ya pagada, un orden operativo o un valor
+  exacto. «Podría reutilizarse» deja de ser motivo.
+- **La puerta mide forma, no sólo longitud**: descripción ≥60 (que distinga, no que exista), ≥2 secciones para
+  que el procedimiento se lea por partes, y **presupuesto**: aviso a 8.000 caracteres y error a 24.000, porque
+  el cuerpo entero se paga en cada invocación. Lo pesado viaja en `references/` y el cuerpo lo enlaza.
+- **El vínculo se comprueba de verdad**: una referencia que el cuerpo declara y no está es un **error**, y el
+  material aportado se guarda con su huella. Un enlace roto es conocimiento que se pierde.
+- **El protocolo del agente quedó en ~940 caracteres** (tope 1.200), sin perder ni uno de sus criterios de
+  decisión: el detalle que no cabe se va a `references/`, que es donde se lee cuando hace falta.
+
+**Se corrige con evidencia: `revision` y la versión base.**
+
+- Un parche de una skill **viva** exige una justificación estructurada: qué afirmaba la skill, **qué evidencia
+  concreta** la contradice, **con qué se midió** (hace falta un número o un comando, una opinión no vale) y
+  qué dice a partir de ahora. Quitar algo exige decirlo y demostrar que sigue conservado.
+- La propuesta identifica la **versión sobre la que se construyó**, por su huella. Si esa versión se movió
+  mientras la propuesta esperaba, la aprobación se **rechaza** y se pide reconciliar: aplicar un cambio sobre
+  algo que ya no existe es aplicar un cambio que nadie ha revisado.
+- El diff es exacto —líneas y material, con sus huellas— y **una referencia que cambia después de proponerse
+  es un error de integridad**, no un detalle.
+
+**El motor repara y promociona, con la política por niveles como comportamiento real y no como documento.**
+
+- **`bin/skill-compiler.mjs repair <id>`** mira lo que la auditoría encontró y **prepara** la corrección:
+  nivel 1 (forma canónica: saltos, espacios finales, salto final — deterministas, idempotentes y comprobados
+  como inocuos), nivel 2 (mover el material pesado a `references/`, entero y con su vínculo) o nivel 3
+  (criterio humano: descripciones, disparadores, secretos, permisos). **Lo que exigiría inventar conocimiento
+  no se repara**: una referencia que nadie escribió se declara, con el motivo.
+- **`promote <id> --nivel 1,2`** es lo único que activa, y **por defecto no activa nada**: la lista de niveles
+  autorizados está vacía y el nivel 3 no se puede autorizar por ahí ni pidiéndolo.
+- Antes de activar corren **nueve pruebas**: la puerta, la vigencia de la base, la conservación del inventario
+  del conocimiento, el alcance real de lo escrito, el tamaño del diff, que **no se pierda ni un fichero**, la
+  reversibilidad, los ciclos sin progreso y la preservación del material retirado. Cada una puede parar la
+  promoción, y todas quedan en el registro.
+- **Un cerrojo por skill** impide que dos procesos actúen a la vez, y si está tomado lo dice con su dueño y su
+  fecha en vez de esperar en silencio.
+- **Verificación después de escribir**: la versión publicada se relee y se compara **por huella** con lo
+  propuesto. Si no cuadra, se **deshace**: la versión que no cuadró se aparta —nunca se borra— y la anterior
+  vuelve a su sitio **con su misma huella**, comprobada.
+- **La decisión queda registrada** (`journal.jsonl`): nivel, reglas, base, diff, pruebas y resultado. Y
+  `history` lo muestra. Un integrador puede añadir sus propias comprobaciones, pero **sólo pueden añadir
+  problemas**: nada externo puede autorizar lo que el motor no autorizó. Tampoco el texto de una skill: sus
+  instrucciones no cambian la política, y hay una prueba que lo demuestra con una skill que se declara
+  autorizada a promocionarse sola.
+
+**Y se puede auditar: `audit`, de solo lectura.**
+
+- Recorre el almacén entero —todos los proyectos, todos sus estados y la biblioteca global— con **la misma
+  puerta** que decide una aprobación, y devuelve por skill, por hallazgo: la regla, el valor observado, el
+  umbral, la severidad y la corrección recomendada, con identificadores estables (`estado/proyecto/id`).
+- **No escribe nada** (la prueba compara la huella del árbol entero antes y después), **es reproducible** (dos
+  ejecuciones dan el mismo informe byte a byte: el orden lo pone la clave, no el disco, y no viaja ninguna
+  fecha) y **no se cae**: una carpeta denegada o un `SKILL.md` ilegible son un hallazgo de esa skill, y un
+  vínculo dentro de una carpeta que no se pudo leer se declara **no comprobable** en vez de «falta el
+  fichero» —que sería afirmar algo que no se ha medido—.
+
+**Lo medido**, porque ninguna de estas piezas se declara por existir:
+
+- **395 pruebas en verde** (eran 276), la suite **hermética** con la huella del almacén idéntica antes y
+  después, y `doctor` en verde.
+- El **nivel 1 promociona** con la anterior apartada y su huella comprobada; el **nivel 2 mueve 25.000
+  caracteres de material a `references/`** sin perder una línea del inventario; la **reversión** devuelve la
+  versión anterior con su huella exacta cuando una comprobación posterior falla; el **cerrojo** rechaza la
+  segunda operación; el **ciclo** se para a la cuarta vuelta idéntica.
+- Las herramientas del modelo se ejecutan **de verdad** en las pruebas (con el `defineTool` del harness, no
+  con un doble), y una propuesta inválida no deja **ni una carpeta**.
+- **El almacén real no se ha tocado en ningún momento**: 26 skills auditadas, 8 conformes, 7 con avisos, 11 con
+  error. El diagnóstico de esas 11 —causa raíz, y las dos con vínculos rotos una a una— está en
+  [`skill-compiler/docs/DIAGNOSTICO-2026-10-15.md`](skill-compiler/docs/DIAGNOSTICO-2026-10-15.md). **Ninguna
+  se ha reparado**: reparar en masa lo que no pasa la puerta confundiría conformidad estructural con
+  comportamiento correcto, y reescribir descripciones y disparadores de skills que hoy se usan cambia cuándo
+  aparecen y qué se elige.
+
+
 ## [1.8.0] — 2026-10-15
 
 **El ámbito de una skill: local o global, y lo elige el humano.** Pedido así: *«necesita tener dos opciones al

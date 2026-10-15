@@ -24,6 +24,8 @@ skill es **nueva** o si se **actualizó** una existente.
 | [`docs/FEEDBACK-VISUAL.md`](docs/FEEDBACK-VISUAL.md) | La píldora de la interfaz: qué se ve, de dónde sale el estado, las reglas de diseño que la sostienen y lo que **no** está verificado |
 | [`docs/CONFIANZA.md`](docs/CONFIANZA.md) | El modelo de confianza: qué se controla ante contenido ajeno, qué **no** ocurre nunca, y el riesgo que no se puede mecanizar |
 | [`docs/OPERACION.md`](docs/OPERACION.md) | Referencia de uso: herramientas, CLI, variables, qué se ve en la interfaz, y qué hacer cuando algo no cuadra |
+| [`docs/DIAGNOSTICO-2026-10-15.md`](docs/DIAGNOSTICO-2026-10-15.md) | El diagnóstico medido de las 11 skills del almacén que no pasan la puerta: regla, valor observado, umbral, causa raíz, y quién tendría que firmar cada arreglo. **Diagnostica, no repara** |
+| [`docs/POLITICA-DE-ACTUALIZACION.md`](docs/POLITICA-DE-ACTUALIZACION.md) | Los tres niveles de riesgo de una actualización automática, sus salvaguardas y **cómo se comprueba cada criterio**, con el catálogo de reglas y umbrales que aplica `audit`: la automatización sigue siendo especificación, y lo que ya está implementado se dice por su nombre |
 | [`docs/DESARROLLO.md`](docs/DESARROLLO.md) | Cómo ampliarlo sin romperlo: mapa de ficheros, cómo añadir reglas, herramientas y piezas de interfaz, pruebas, versionado |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Historial de versiones |
 | [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md) | **Trabajo pendiente**: acciones en la tarjeta del resultado y decidir en lote (checkbox, paso a paso), con el contrato medido y las fases. Sin implementar |

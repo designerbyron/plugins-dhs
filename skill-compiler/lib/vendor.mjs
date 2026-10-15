@@ -297,6 +297,22 @@ export function adaptUpstream(primary, { source, files, skipped = [], now, id, d
     warnings.push('la descripción del origen superaba los 300 caracteres y se recortó');
   }
 
+  // El `whenToUse` es obligatorio en el contrato de nuestro compilador, y un origen externo puede no
+  // traerlo. Se **deriva** de la descripción —que es la frase que dice qué hace y cuándo— y se avisa,
+  // igual que con la descripción deducida: inventar un disparador en silencio sería peor que su ausencia,
+  // y vetar el origen por un campo que el formato ajeno no usa sería romper una capacidad por rigidez.
+  let finalWhenToUse = String(whenToUse ?? data.whenToUse ?? '').replace(/\s+/g, ' ').trim();
+  if (finalWhenToUse.length < 20) {
+    const derivado = finalDescription.length >= 20 ? finalDescription : '';
+    if (derivado) {
+      finalWhenToUse = derivado;
+      warnings.push('el origen no traía whenToUse: se dedujo de la descripción. Revísalo, es el campo con el que se elige la skill.');
+    } else {
+      finalWhenToUse = 'Cuando el trabajo encaje con lo que describe esta skill.';
+      warnings.push('el origen no traía ni descripción ni whenToUse: se puso un disparador genérico. Reescríbelo antes de aprobarla.');
+    }
+  }
+
   // El título de nivel 1 lo compone `renderSkill` a partir de la descripción: dos serían dos.
   let adapted = body.replace(/^\s*#\s+.*\r?\n/, '').trimStart();
 
@@ -313,7 +329,7 @@ export function adaptUpstream(primary, { source, files, skipped = [], now, id, d
   return {
     id: finalId,
     description: finalDescription,
-    whenToUse: whenToUse ?? data.whenToUse ?? '',
+    whenToUse: finalWhenToUse,
     body: adapted,
     warnings,
     upstreamName,

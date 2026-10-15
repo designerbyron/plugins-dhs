@@ -25,7 +25,7 @@ import { AUTO_COMMAND, autoApproveFromEvents, parseAutoCommand } from '../lib/au
 import { skillCommands } from '../lib/commands.mjs';
 import { approve, projectKey } from '../lib/compiler.mjs';
 import { autoApproveIfAsked, skillPropose, skillVendor } from '../lib/definitions.mjs';
-import { cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
+import { buenaRevision, cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
 
@@ -121,7 +121,7 @@ describe('modo automático · la delegación, en las dos vías', () => {
     assert.equal(/NO está activa/.test(value.summary), false, 'el resumen no puede mentir');
   });
 
-  it('un parche de una ya aprobada también, y la anterior queda apartada', () => {
+  it('un parche de una skill VIVA no se activa solo, ni con el modo encendido', () => {
     const s = sandbox();
     const catalog = fakeCatalog();
     const tool = skillPropose({ root: s.root, curated: s.curated, catalog });
@@ -131,13 +131,30 @@ describe('modo automático · la delegación, en las dos vías', () => {
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false, 'sin modo, espera decisión');
     assert.equal(approve('measured-decision-check', KEY, { root: s.root }).ok, true);
 
-    const patch = tool.execute(goodInput({ body: `${goodInput().body}\n\n4. Un paso más.\n` }), execWith(WITH_MODE_ON));
-    assert.equal(patch.autoApproved, true);
+    // Y ahora una corrección, con el modo encendido: cambia una herramienta que alguien ya usa, así que
+    // no se delega. El modo auto existe para no repetir la confirmación de una skill nueva, no para
+    // corregir por su cuenta (Fase 3: la promoción automática de correcciones queda para otra fase).
+    const patch = tool.execute(
+      goodInput({ body: `${goodInput().body}\n\n4. Un paso más, que corrige lo anterior.\n`, revision: buenaRevision() }),
+      execWith(WITH_MODE_ON),
+    );
+    assert.equal(patch.status, 'proposed', JSON.stringify(patch.errors));
+    assert.equal(patch.autoApproved, false, 'una corrección no se delega');
+    assert.match(patch.summary, /corrección de una skill viva/);
     assert.equal(patch.updatesApproved, true);
-    assert.match(patch.summary, /versión anterior|reemplazar/i);
-    // La anterior no se borra: se aparta con su fecha (`superseded/<id>-<fecha>`).
+
+    // Nada se movió: la aprobada sigue en pie, la corrección espera, y no hay nada apartado.
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), true);
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'proposed', 'measured-decision-check')), true);
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'superseded')), false, 'no se apartó nada');
+    assert.equal(catalog.count(), 0, 'el catálogo no cambió: nada se activó');
+
+    // Y cuando el humano decide, la anterior se aparta (nunca se borra).
+    const decidido = approve('measured-decision-check', KEY, { root: s.root });
+    assert.equal(decidido.ok, true, decidido.reason);
+    assert.equal(typeof decidido.superseded, 'string', 'la versión anterior tiene que quedar apartada');
     const apartadas = readdirSync(join(s.root, 'projects', KEY, 'superseded')).filter((name) => name.startsWith('measured-decision-check'));
-    assert.equal(apartadas.length, 1, 'la versión anterior tiene que quedar apartada, no borrada');
+    assert.equal(apartadas.length, 1);
   });
 
   it('una vendorización se activa sola igual', async () => {
@@ -146,7 +163,7 @@ describe('modo automático · la delegación, en las dos vías', () => {
     const RAW = 'https://raw.githubusercontent.com/acme/skills/main/measured/SKILL.md';
     const upstream = [
       '---', 'name: measured-decisions',
-      'description: "Decide with measured evidence instead of impressions."', '---', '',
+      'description: "Decide with measured evidence instead of impressions, every time."', '---', '',
       '# Measured decisions', '', '## When to Use', '',
       'Cuando hay que decidir algo con evidencia y no con impresiones del momento.', '',
       '## Procedure', '',
@@ -186,7 +203,7 @@ describe('modo automático · lo que NO se delega', () => {
 
     const value = tool.execute(goodInput({
       id: 'session-recovery-state',
-      description: 'Rebuilding the state of a lost or closed session.',
+      description: 'Rebuilding the state of a lost or closed session, from its log.',
       whenToUse: 'Cuando una sesión se cerró y hay que reconstruir su estado.',
     }), execWith(WITH_MODE_ON));
 
@@ -200,7 +217,14 @@ describe('modo automático · lo que NO se delega', () => {
     // Una propuesta tocada a mano hasta romperla: es el caso que la herramienta no puede producir sola.
     const dir = join(s.root, 'projects', KEY, 'proposed', 'rota-a-mano');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'SKILL.md'), ['---', 'name: rota-a-mano', 'description: "Una propuesta que alguien rompió después."', '---', '', 'Corto.'].join('\n'));
+    // Rota por **una sola** razón (el cuerpo), con el resto del contrato cumplido: así el motivo que
+    // reporta el modo automático es inequívoco y la prueba dice de verdad qué puerta no se saltó.
+    writeFileSync(join(dir, 'SKILL.md'), [
+      '---', 'name: rota-a-mano',
+      'description: "Una propuesta que alguien rompió después de haberla propuesto."',
+      'whenToUse: "Cuando alguien edite a mano una propuesta y la rompa."',
+      '---', '', 'Corto.',
+    ].join('\n'));
 
     const catalog = fakeCatalog();
     const result = autoApproveIfAsked({ exec: execWith(WITH_MODE_ON), root: s.root, catalog, id: 'rota-a-mano', key: KEY });

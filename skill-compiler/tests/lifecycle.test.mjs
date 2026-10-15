@@ -23,7 +23,7 @@ import {
   approve, disable, enable, folderHash, propose, retired, restore, retire, retiredRoot,
 } from '../lib/compiler.mjs';
 import { skillProvider } from '../lib/definitions.mjs';
-import { cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
+import { buenaRevision, cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
 
@@ -64,7 +64,7 @@ describe('apagar una skill', () => {
     const s = sandbox();
     const key = aprobada(s);
     disable(ID, key, { root: s.root });
-    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    propose(goodInput({ revision: buenaRevision() }), { root: s.root, curated: s.curated, cwd: CWD });
     approve(ID, key, { root: s.root });
 
     const r = enable(ID, key, { root: s.root });
@@ -76,7 +76,7 @@ describe('apagar una skill', () => {
     const s = sandbox();
     const key = aprobada(s);
     disable(ID, key, { root: s.root });
-    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    propose(goodInput({ revision: buenaRevision() }), { root: s.root, curated: s.curated, cwd: CWD });
 
     const r = approve(ID, key, { root: s.root });
     assert.equal(r.ok, true);
@@ -140,13 +140,15 @@ describe('retirar una skill', () => {
     const s = sandbox();
     const key = aprobada(s);
     disable(ID, key, { root: s.root });
-    const otra = propose({ ...goodInput(), description: 'Otra cosa completamente distinta que no solapa en nada de nada.' },
+    const otra = propose({ ...goodInput(), id: 'otra-idea-distinta', description: 'Otra cosa completamente distinta que no solapa en nada de nada, con su propio procedimiento.' },
       { root: s.root, curated: s.curated, cwd: CWD });
-    assert.equal(otra.status, 'proposed', 'una idea nueva sí entra');
-    // Y el mismo id se admite como actualización, no como duplicado.
-    const misma = propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
-    assert.equal(misma.status, 'proposed', JSON.stringify(misma));
+    assert.equal(otra.status, 'proposed', JSON.stringify(otra.errors), 'una idea nueva sí entra');
+    // Y el mismo id se admite como actualización, no como duplicado — con su evidencia, porque la
+    // apagada sigue siendo una skill viva (se puede volver a encender).
+    const misma = propose(goodInput({ revision: buenaRevision(), body: `${goodInput().body}\n\n4. Un paso más.\n` }), { root: s.root, curated: s.curated, cwd: CWD });
+    assert.equal(misma.status, 'proposed', JSON.stringify(misma.errors));
     assert.equal(misma.updatesDisabled, true, 'no choca con la apagada, y avisa de que la reemplazará');
     assert.equal(misma.updatesApproved, false, 'no está aprobada: está apagada, y son cosas distintas');
+    assert.equal(misma.base.state, 'disabled', 'y la base identificada es la apagada');
   });
 });

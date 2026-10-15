@@ -17,7 +17,7 @@ import {
   approve, checkOverlap, existingSkills, listForProject, overview, parseFrontmatter, pending,
   projectKey, propose, readSkill, reject, renderSkill, similarity, validateInput,
 } from '../lib/compiler.mjs';
-import { GOOD_BODY, cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
+import { GOOD_BODY, buenaRevision, cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
 
@@ -143,19 +143,19 @@ describe('renderSkill', () => {
 
 describe('checkOverlap', () => {
   it('mide parecido de tema y no de nombre exacto', () => {
-    const a = { id: 'session-state-recovery', description: 'Rebuild state after a lost or closed session.' };
-    const b = { id: 'session-recovery-state', description: 'Rebuilding the state of a closed session.' };
+    const a = { id: 'session-state-recovery', description: 'Rebuild state after a lost or closed session, from the log.' };
+    const b = { id: 'session-recovery-state', description: 'Rebuilding the state of a closed session, from the log.' };
     assert.equal(similarity(a, b) >= 0.5, true, `parecido insuficiente: ${similarity(a, b)}`);
   });
 
   it('no confunde dos temas distintos', () => {
-    const a = { id: 'session-state-recovery', description: 'Rebuild state after a lost or closed session.' };
+    const a = { id: 'session-state-recovery', description: 'Rebuild state after a lost or closed session, from the log.' };
     const b = { id: 'measured-decision-check', description: 'Decide with measured evidence instead of impressions.' };
     assert.equal(similarity(a, b) < 0.5, true, `falso positivo: ${similarity(a, b)}`);
   });
 
   it('da colisión dura por id ocupado', () => {
-    const r = checkOverlap({ id: 'session-state-recovery', description: 'otra cosa completamente distinta aqui' },
+    const r = checkOverlap({ id: 'session-state-recovery', description: 'otra cosa completamente distinta aqui y sin parentesco' },
       [{ id: 'session-state-recovery', description: 'x', where: 'biblioteca-curada' }]);
     assert.equal(r.ok, false);
     assert.equal(r.conflicts[0].reason, 'id-ocupado');
@@ -179,7 +179,7 @@ describe('propose', () => {
     const s = sandbox();
     const cwd = 'C:\\xampp\\htdocs\\saas-corporative';
     propose(goodInput(), { root: s.root, curated: s.curated, cwd });
-    const second = propose(goodInput({ body: `${GOOD_BODY}\n\n4. Un paso más.\n` }), { root: s.root, curated: s.curated, cwd });
+    const second = propose(goodInput({ body: `${GOOD_BODY}\n\n4. Un paso más.\n`, revision: buenaRevision() }), { root: s.root, curated: s.curated, cwd });
     assert.equal(second.status, 'proposed', JSON.stringify(second.conflicts ?? []));
 
     const dir = join(s.root, 'projects', projectKey(cwd), 'proposed');
@@ -195,7 +195,7 @@ describe('propose', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd });
     approve('measured-decision-check', key, { root: s.root });
 
-    const second = propose(goodInput({ body: `${GOOD_BODY}\n\n4. Un paso más.\n` }), { root: s.root, curated: s.curated, cwd });
+    const second = propose(goodInput({ body: `${GOOD_BODY}\n\n4. Un paso más.\n`, revision: buenaRevision() }), { root: s.root, curated: s.curated, cwd });
     assert.equal(second.status, 'proposed');
     assert.equal(second.updatesApproved, true, 'debe avisar de que reemplazará la aprobada');
 
@@ -217,7 +217,7 @@ describe('propose', () => {
     const s = sandbox();
     const r = propose(goodInput({
       id: 'session-recovery-state',
-      description: 'Rebuilding the state of a lost or closed session.',
+      description: 'Rebuilding the state of a lost or closed session, from its log.',
       whenToUse: 'Cuando una sesión se cerró y hay que reconstruir su estado.',
     }), { root: s.root, curated: s.curated, cwd: 'C:\\p' });
     assert.equal(r.status, 'conflict');
