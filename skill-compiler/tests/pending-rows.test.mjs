@@ -41,7 +41,7 @@ function proposeRaw(root, key, directory, name) {
 }
 
 describe('filas de pendientes · composición', () => {
-  it('una pendiente produce las tres filas, con nombres válidos y descripciones que se leen solas', () => {
+  it('una pendiente produce las cuatro filas, con nombres válidos y descripciones que se leen solas', () => {
     const s = sandbox();
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
 
@@ -49,6 +49,7 @@ describe('filas de pendientes · composición', () => {
     assert.deepEqual(rows.map((row) => row.name), [
       'skill-ver-measured-decision-check',
       'skill-aprobar-measured-decision-check',
+      'skill-globalizar-measured-decision-check',
       'skill-rechazar-measured-decision-check',
     ]);
     for (const row of rows) {
@@ -59,8 +60,8 @@ describe('filas de pendientes · composición', () => {
       assert.equal(row.key, KEY);
       assert.equal(row.id, 'measured-decision-check');
     }
-    // Los verbos, en el orden en que se usan.
-    assert.deepEqual(rows.map((row) => row.verb), ['ver', 'aprobar', 'rechazar']);
+    // Los verbos, en el orden en que se usan: leer, decidir (aquí o para todos), apartar.
+    assert.deepEqual(rows.map((row) => row.verb), ['ver', 'aprobar', 'globalizar', 'rechazar']);
   });
 
   it('sin pendientes no anuncia nada, y sin ámbito tampoco (no se inventa un proyecto)', () => {

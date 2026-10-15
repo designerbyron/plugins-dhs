@@ -180,7 +180,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     // Medido con el usuario delante: aprobó una skill y el bloque que tenía debajo siguió enseñándola
     // como pendiente. El texto de un resultado es el registro de lo que pasó, así que lo que se puede
     // decir es que hubo una decisión POSTERIOR, y eso viaja en la proyección (plegada del log).
-    assert.match(client, /const LIST_COMMANDS = \['skill-propuestas', 'skill-ver', 'skill-retiradas'\]/);
+    assert.match(client, /const LIST_COMMANDS = \['skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito'\]/);
     assert.match(client, /view\.decisionSeq/, 'el dato viene de la proyección, no de inventarlo');
     assert.match(client, /decision\.seq > seq/, 'la comparación es contra el seq del propio bloque');
     assert.match(client, /Number\.isFinite\(node\?\.seq\)/, 'sin seq en el nodo no se compara');

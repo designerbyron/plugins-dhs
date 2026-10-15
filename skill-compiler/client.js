@@ -61,8 +61,8 @@ window.__ModuleLoader__.load({
      * línea y usan la tarjeta del host, que para eso basta.
      */
     const COMMAND_NAMES = [
-      'skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar',
-      'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar', 'skill-retiradas',
+      'skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-globalizar', 'skill-ambito', 'skill-auto',
+      'skill-rechazar', 'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar', 'skill-retiradas',
     ];
     /** Todos los comandos del plugin empiezan así: es lo que distingue los suyos en el catálogo del host. */
     const COMMAND_PREFIX = 'skill-';
@@ -72,9 +72,9 @@ window.__ModuleLoader__.load({
      * un resultado es el registro de lo que pasó y no se reescribe, así que lo que se hace es decir que hay
      * una decisión posterior — eso lo sabe el log, y por eso viaja en la proyección.
      */
-    // Los comandos cuyos resultados traen una lista que decidir. `skill-globalizar` y `skill-ambito` entran
-    // aquí porque su resultado también deja filas: publicar y cambiar de ámbito son decisiones que se ofrecen
-    // en el propio bloque, no sólo en el menú.
+    // Los comandos cuyos resultados traen una lista que decidir. Los dos nuevos entran aquí porque su
+    // resultado deja pendientes que decidir igual: publicar y cambiar de ámbito son decisiones, y tras una
+    // decisión lo que queda se ofrece en el propio bloque, sin volver a pedir la lista.
     const LIST_COMMANDS = ['skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito'];
     /**
      * Dónde se recuerda un resultado cerrado.

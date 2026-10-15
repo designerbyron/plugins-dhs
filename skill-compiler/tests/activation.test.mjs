@@ -140,7 +140,7 @@ describe('activación', () => {
     // Y aprobar desde el harness avisa a esa misma capacidad: es lo que hace usable la skill al instante.
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     const aprobar = registered.find((c) => c.name === 'skill-aprobar');
-    const result = aprobar.handler({ agent: { session: { header: { cwd: CWD } } }, rawInput: 'measured-decision-check' });
+    const result = aprobar.handler({ agent: { session: { header: { cwd: CWD } } }, rawInput: 'measured-decision-check --local' });
     assert.equal(result.kind, 'success', JSON.stringify(result));
     assert.equal(invalidations, 2, 'aprobar tiene que avisar al catálogo');
     disposeAll();
@@ -172,7 +172,7 @@ describe('activación', () => {
       { root: s.root, curated: s.curated, cwd: OTRO });
 
     // Nadie ha montado todavía: sin sesión no hay filas, ni en el global ni por agente.
-    assert.equal(global.map.size, 9, 'el global tiene los comandos base y ninguna fila');
+    assert.equal(global.map.size, 11, 'el global tiene los comandos base y ninguna fila');
 
     // El montaje entra por el provider, que el registro llama con `{ cwd, agent }`: es la vía medida
     // contra el registro real, y no depende de que un evento alcance el contexto raíz.

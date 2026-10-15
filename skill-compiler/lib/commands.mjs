@@ -331,10 +331,10 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
     {
       name: 'skill-globalizar',
       description: 'Activa una skill propuesta para TODOS tus proyectos: la publica en la biblioteca de usuario, que el harness sirve en cualquier sesión.',
-      input: { hint: '--id <id>' },
+      input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
-        const id = String(rawInput ?? '').replace(/(?:^|\s*)(?:--id|\/skill-globalizar)\s*/g, '').trim();
+        const id = String(rawInput ?? '').trim();
         const result = approveProposal({ root, key, id, force: true, scope: 'global', catalog });
         if (result?.kind !== 'ok') return result;
         return ok([result.text, '', `Para dejarla sólo en este proyecto: /skill-ambito ${id} --local`].join('\n'));

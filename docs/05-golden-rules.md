@@ -42,6 +42,12 @@ rompió, se notó.
     sabe dónde vive lo **deriva**. Y los artefactos firmados con su hash no se reescriben, aunque tengan una
     ruta antigua dentro: reescribirlos rompería su autorización.
 
+18. **El ámbito de una skill lo declara el humano, y por defecto es el proyecto.** Lo que se comparte con
+    todos los proyectos se publica a propósito, en la biblioteca que el harness sirve (rango 400); un gesto
+    delegado —el modo automático— no amplía el alcance. La decisión tiene vuelta, y lo que escribió otra
+    herramienta no se pisa, ni se apaga, ni se retira: sólo se escribe si el destino no existe o si es
+    nuestro.
+
 ## Proceso
 
 11. **Medir antes de afirmar.** Un número medido antes que un adjetivo; lo no verificado se declara no

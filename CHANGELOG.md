@@ -16,6 +16,12 @@ momento de seleccionar una skill propuesta y preguntar antes de aprobar si desea
 - **Se elige, y si no se dice, se pregunta.** `/skill-aprobar <id>` sin ámbito responde con las dos opciones y
   el nombre de su fila; `--global` publica para todos los proyectos y `--local` en este. Las **filas del menú**
   son la misma elección con el ratón: `skill-aprobar-<id>` y `skill-globalizar-<id>`.
+- **El defecto de la suite que era un hueco de verdad**: el veto de solapamiento trataba la biblioteca curada
+  como territorio de nadie, así que el **mismo id** de una skill que ya habíamos publicado era un conflicto —
+  publicada una vez, el modelo no podía mejorarla en ningún proyecto. Lo que decide no es *dónde* está la otra,
+  sino **de quién es**: lo nuestro se actualiza (y se anuncia con `updatesPublished`); lo ajeno se veta, y al
+  modelo se le dice que la vía es otro id. Y el campo nuevo va declarado también en `skill_vendor`: sin eso,
+  `additionalProperties: false` rechaza el resultado entero (el mismo defecto que ya pasó con `updatesProposal`).
 - **En aprobación automática, local.** Un gesto delegado no debe publicar a todos tus proyectos: el modo auto
   delega la confirmación, no la puerta **ni el alcance**.
 - **La decisión tiene vuelta**: `/skill-ambito <id> --global|--local` mueve una ya aprobada en las dos
@@ -56,7 +62,7 @@ la idempotencia: `locate` devuelve `published`, y sin reconocerlo una segunda ap
   acababa de llegar algo. Ahora reintenta una vez y, si sigue sin verlas, lo **dice** con el camino
   alternativo (el texto del resultado y el menú «/») en vez de afirmar que no hay nada.
 
-257 pruebas en verde · suite hermética con huella idéntica · `doctor` verde.
+276 pruebas en verde · suite hermética con huella idéntica · `doctor` verde.
 
 ## [1.7.1] — 2026-10-14 — **primera versión estable**
 

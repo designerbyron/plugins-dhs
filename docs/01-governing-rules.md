@@ -91,7 +91,24 @@ una ruta absoluta.
   que identifica a una máquina o a una persona, no toda ruta absoluta: hay ejemplos legítimos con marcador).
   Es lo que impide que vuelva a colarse en el próximo fichero.
 
-## 9. Commits y publicación
+## 9. El ámbito de una skill lo declara el humano
+
+Una skill aprendida sirve, por defecto, **sólo en el proyecto donde se aprendió**. Lo que se comparte con
+todos los proyectos se publica **a propósito**, y esa decisión es humana: el modelo propone, y ni aprueba ni
+elige el alcance.
+
+- **El defecto es el proyecto.** Publicar para todos los proyectos —en la biblioteca de usuario del harness,
+  que es la raíz con rango 400— exige decirlo (`--global`, o su fila).
+- **Un gesto delegado no amplía el alcance.** En aprobación automática, siempre local: se delega la
+  confirmación, nunca la puerta **ni** el destino.
+- **La decisión tiene vuelta.** Cambiar de ámbito es un comando, en las dos direcciones, con su aviso al
+  catálogo y su gesto inverso.
+- **Lo compartido se respeta.** La biblioteca de usuario tiene skills de otras herramientas: sólo se escribe
+  si el destino no existe o si es nuestro, y **nada ajeno se pisa, ni se apaga, ni se retira**.
+- **Lo que decide un veto de solapamiento es de quién es la skill**, no dónde está: lo nuestro se actualiza
+  con el mismo id; lo ajeno se veta y se le dice al modelo cuál es la vía.
+
+## 10. Commits y publicación
 
 Un commit = una cosa. El mensaje dice qué cambió y qué lo demuestra. El push se decide y se declara; nunca
 `git add -A`. Los ficheros generados por pruebas no se commitean: si aparecen en `git status`, o el

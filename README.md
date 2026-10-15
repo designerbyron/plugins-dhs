@@ -12,7 +12,7 @@ absoluta** con el gestor de plugins del harness.
 
 | Plugin | Qué hace | Estado |
 |---|---|---|
-| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con ámbito de proyecto; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Estable · v1.7.2 · 257 pruebas en verde |
+| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con **ámbito** —de un proyecto o de todos, lo eliges tú al aprobar—; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Estable · v1.8.0 · 276 pruebas en verde |
 
 ## Por qué está en `htdocs`
 
@@ -124,7 +124,7 @@ y un compromiso.
 
 **Lo que lo sostiene**
 
-- 255 pruebas en verde, con la suite **hermética** que mide la huella del almacén real antes y después.
+- 276 pruebas en verde, con la suite **hermética** que mide la huella del almacén real antes y después.
 - Los contratos se comprueban contra los **paquetes reales** del harness (registro de skills, de comandos y de
   proyecciones), no contra dobles escritos a mano.
 - `doctor` verde: cada comprobación **ejecuta** el camino que vigila, no lo reimplementa.

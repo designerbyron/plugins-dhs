@@ -203,10 +203,15 @@ export function checkOverlap(candidate, existing, { threshold = THRESHOLD, scope
       continue;
     }
     if (other.id === candidate.id) {
-      // La biblioteca curada manda: una skill aprendida nunca la suplanta en silencio. Dentro del
-      // propio ámbito, en cambio, el mismo id es una ACTUALIZACIÓN (de la propuesta o de la aprobada),
-      // y por eso no se veta: se informa con `updatesApproved`.
-      if (other.where === 'biblioteca-curada') conflicts.push({ id: other.id, score: 1, where: other.where, reason: 'id-ocupado' });
+      // Lo que decide no es DÓNDE está la otra, sino DE QUIÉN ES. Una skill ajena de la biblioteca no se
+      // suplanta nunca en silencio: eso es un conflicto y se dice. Y lo que sí es nuestro —la propuesta,
+      // la aprobada, la aprobada del mismo proyecto y **lo que este plugin publicó en la biblioteca**— es
+      // una ACTUALIZACIÓN del mismo id, y no se veta: se informa con `updatesProposal`/`updatesApproved`.
+      // Sin esta distinción, una skill global quedaba congelada: publicada una vez, el modelo ya no podía
+      // mejorarla en ningún proyecto.
+      if (other.where === 'biblioteca-curada' && other.ours !== true) {
+        conflicts.push({ id: other.id, score: 1, where: other.where, reason: 'id-ocupado', ours: false });
+      }
       continue;
     }
     const score = similarity(candidate, other);
@@ -263,6 +268,9 @@ export function scanTree(root, where) {
         description: data.description || '',
         whenToUse: data.whenToUse || '',
         tags: Array.isArray(data.tags) ? data.tags : [],
+        // De quién es: la marca que `renderSkill` pone en el frontmatter. Es la distinción que decide si
+        // el mismo id es una actualización (nuestra) o una suplantación (de otra herramienta).
+        ours: data.metadata?.dsh?.origin === 'skill-compiler',
         where,
         path: file,
       });
@@ -393,6 +401,10 @@ export function propose(input, { root = defaultRoot(), cwd, now = new Date().toI
   // que saberlo: sin esto, proponer sobre algo apagado se anunciaba como «creada» y la aprobación
   // reemplazaba en silencio una skill que alguien había apagado a propósito.
   const updatesDisabled = existsSync(join(root, 'projects', key, 'disabled', candidate.id));
+  // Y lo **publicado** para todos los proyectos: aprobar esto reemplaza la versión que ya se sirve en
+  // todas las sesiones (la anterior queda apartada en `global/superseded/`). Sin decirlo, el humano
+  // creería que está creando algo nuevo cuando en realidad está cambiando lo que ve en todas partes.
+  const updatesPublished = isOurs(join(curated, candidate.id));
 
   const project = input.project ?? cwd;
   const dir = join(root, 'projects', key, 'proposed', candidate.id);
@@ -424,6 +436,7 @@ export function propose(input, { root = defaultRoot(), cwd, now = new Date().toI
     updatesApproved,
     updatesProposal,
     updatesDisabled,
+    updatesPublished,
     relatedElsewhere: overlap.relatedElsewhere,
   };
 }

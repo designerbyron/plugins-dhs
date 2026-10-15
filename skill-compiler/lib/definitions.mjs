@@ -114,7 +114,7 @@ function autoApprovalLines(auto, id) {
  * `none` es que no pasó nada, y el motivo está en la transcripción.
  */
 function outcomeOf(value) {
-  if (value.status === 'proposed') return value.updatesProposal || value.updatesApproved ? 'updated' : 'created';
+  if (value.status === 'proposed') return value.updatesProposal || value.updatesApproved || value.updatesPublished ? 'updated' : 'created';
   if (value.status === 'blocked') return 'blocked';
   if (value.status === 'conflict' || value.status === 'invalid' || value.status === 'no-project') return 'rejected';
   return 'none';
@@ -157,6 +157,7 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
           updatesProposal: { type: 'boolean', description: 'True when this proposal patches a version that already existed instead of creating a new one.' },
           updatesApproved: { type: 'boolean', description: 'True when approving this proposal would replace an already approved skill.' },
           updatesDisabled: { type: 'boolean', description: 'True when approving this proposal would replace a skill that the human had switched off.' },
+          updatesPublished: { type: 'boolean', description: 'True when this proposal patches a skill this plugin published for all projects, instead of creating a new one.' },
           autoApproved: { type: 'boolean', description: 'True when the session\'s auto-approve mode activated this proposal immediately; only present when that mode is on.' },
           conflicts: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, reason: { type: 'string' }, where: { type: 'string' } } } },
           relatedElsewhere: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, where: { type: 'string' } } } },
@@ -188,6 +189,7 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
             ...(result.updatesApproved ? ['Si se aprueba, reemplazará una skill ya aprobada (la anterior queda apartada, no se borra).'] : []),
             ...(result.updatesProposal ? ['Afina una propuesta que ya estaba pendiente: no crea una skill nueva.'] : []),
             ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-habilitar` en vez de aprobar esto.'] : []),
+            ...(result.updatesPublished ? ['Afina una skill que YA está publicada para todos tus proyectos: al aprobarla, la versión anterior queda apartada en global/superseded/.'] : []),
             ...(base.relatedElsewhere.length ? [`El mismo tema ya vive en otro proyecto: ${base.relatedElsewhere.map((c) => c.id).join(', ')}.`] : []),
           ];
           const auto = autoApproveIfAsked({ exec, root, catalog, id: result.id, key: result.projectKey });
@@ -201,8 +203,10 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
             updatesApproved: result.updatesApproved,
             // Aviso también aquí: reemplazar algo apagado no puede pasar en silencio.
             ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-habilitar` en vez de aprobar esto.'] : []),
+            ...(result.updatesPublished ? ['Afina una skill que YA está publicada para todos tus proyectos: al aprobarla, la versión anterior queda apartada en global/superseded/.'] : []),
             updatesProposal: result.updatesProposal,
             updatesDisabled: result.updatesDisabled,
+            updatesPublished: result.updatesPublished,
             ...(auto.asked ? { autoApproved: auto.approved } : {}),
             // Los avisos van TAMBIÉN en el resumen: un aviso que no se lee no es un aviso, y el resumen
             // es lo único que el modelo ve del resultado.
@@ -224,7 +228,11 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
               `Propuesta RECHAZADA por solapamiento: ${args.id}`,
               'No se escribió nada.',
               ...result.conflicts.map((c) => `  · choca con ${c.id} (${c.reason}, parecido ${c.score}) — en ${c.where}`),
-              'Mejora esa skill en vez de crear otra, o elige un tema que no exista todavía.',
+              // Ojo con la vía que se le ofrece al modelo: una skill de OTRA herramienta no se puede
+              // «mejorar» —no es nuestra— así que ahí la salida es otro id, y decirlo.
+              ...(result.conflicts.some((c) => c.ours === false)
+                ? ['Ese id lo ocupa una skill que no es de skill-compiler: no se toca ni se suplanta. Propón el mismo tema con otro id, o pide al humano que la retire si ya no la usa.']
+                : ['Mejora esa skill en vez de crear otra, o elige un tema que no exista todavía.']),
             ].join('\n'),
           };
         case 'invalid':
@@ -372,6 +380,7 @@ export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutM
           updatesProposal: { type: 'boolean', description: 'True when this vendoring patched a version that already existed instead of creating a new one.' },
           updatesApproved: { type: 'boolean', description: 'True when approving it would replace an already approved skill.' },
           updatesDisabled: { type: 'boolean', description: 'True when approving it would replace a skill that the human had switched off.' },
+          updatesPublished: { type: 'boolean', description: 'True when this vendoring patches a skill this plugin published for all projects, instead of creating a new one.' },
           autoApproved: { type: 'boolean', description: 'True when the session\'s auto-approve mode activated this result immediately; only present when that mode is on.' },
           findings: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { file: { type: 'string' }, line: { type: 'integer' }, label: { type: 'string' } } } },
           dirs: { type: 'array', items: { type: 'string' } },
@@ -409,9 +418,11 @@ export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutM
             // Re-vendorizar el mismo id es un parche de lo que ya había, y el usuario quiere verlo así.
             updatesProposal: result.updatesProposal,
             updatesDisabled: result.updatesDisabled,
+            updatesPublished: result.updatesPublished,
             updatesApproved: result.updatesApproved,
             // Aviso también aquí: reemplazar algo apagado no puede pasar en silencio.
             ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-habilitar` en vez de aprobar esto.'] : []),
+            ...(result.updatesPublished ? ['Afina una skill que YA está publicada para todos tus proyectos: al aprobarla, la versión anterior queda apartada en global/superseded/.'] : []),
             ...(auto.asked ? { autoApproved: auto.approved } : {}),
             summary: [
               `${result.updatesProposal || result.updatesApproved ? 'Nuestra versión ACTUALIZADA' : 'Nuestra versión creada'}: ${result.id}`,

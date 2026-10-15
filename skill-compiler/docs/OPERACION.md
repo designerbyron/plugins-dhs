@@ -147,8 +147,48 @@ al aprobarla la versión anterior **se aparta** en `superseded/<id>-<fecha>/` �
 historial de lo que se sabía no se pierde. La tarjeta del resultado lo dice («updated» en vez de «created»),
 y el protocolo pide al modelo mirar antes qué hay con `skill_review`.
 
-Para la actualización **curada** (una skill de la biblioteca global) el anti-solapamiento sí veta: una skill
-aprendida no suplanta en silencio a la biblioteca compartida.
+Para el anti-solapamiento, lo que decide no es **dónde** está la otra skill, sino **de quién es**. Lo que
+escribió este plugin —una propuesta, una aprobada, y también lo que publicó en la biblioteca de usuario— se
+actualiza con el mismo id sin problema. Lo que escribió **otra herramienta** sí se veta: no se suplanta en
+silencio, y el mensaje al modelo le dice que la vía es otro id, no «mejorar» algo que no es nuestro.
+
+## El ámbito: en este proyecto, o para todos tus proyectos
+
+Una skill aprendida sirve, por defecto, **sólo en el proyecto donde se aprendió**. Pero hay conocimiento que
+no es de un proyecto: y al aprobar se elige dónde vive.
+
+| Ámbito | Dónde vive | Quién lo sirve |
+|---|---|---|
+| **Local** (por defecto) | `$DSH_HOME/skill-compiler/projects/<clave>/approved/` | el plugin, sólo en ese proyecto · rango 150 |
+| **Global** | `$DSH_HOME/skills/<id>/` | el **harness**, en cualquier sesión · rango 400 |
+
+```sh
+/skill-aprobar <id>                 # sin decir el ámbito, pregunta: no aprueba a ciegas
+/skill-aprobar <id> --local         # sólo en este proyecto
+/skill-aprobar <id> --global        # para todos tus proyectos (lo publica en la biblioteca de usuario)
+/skill-globalizar <id>              # lo mismo, dicho de otra forma (es la fila del menú)
+/skill-ambito <id> --global|--local # cambiar de sitio una que ya aprobaste, en las dos direcciones
+```
+
+Y las **filas del menú `»/»`**: cada pendiente ofrece las cuatro —`skill-ver-<id>`, `skill-aprobar-<id>`,
+`skill-globalizar-<id>` y `skill-rechazar-<id>`— así que aprobar para todos es elegir la fila, sin recordar
+ninguna sintaxis.
+
+Tres cosas que conviene saber antes de publicar:
+
+- **La biblioteca de usuario es compartida.** Ahí escriben también otras herramientas, así que el plugin
+  **no pisa** nada que no sea suyo: si el id está ocupado por una skill ajena, lo dice y no toca el fichero.
+- **Publicar no es copiar: es verificar.** La huella del destino tiene que coincidir con la del origen; si no
+  coincidiera, no se retira el original y se avisa.
+- **Una sola copia efectiva.** Publicar **mueve** la skill: la saca del proyecto (deja la constancia en
+  `published/`) para que el mismo conocimiento no viaje dos veces al prompt con dos rangos distintos. Y si
+  cambias de idea, `/skill-ambito` la trae de vuelta.
+
+El resto del ciclo de vida vale igual para una global, con `--global` en la CLI: apagar (sale de la
+biblioteca a nuestro almacén, reversible), encender, retirar (respaldo fechado con su huella) y restaurar.
+
+**En aprobación automática, siempre local.** El modo de `/skill-auto` delega la confirmación, no la puerta
+**ni el alcance**: un gesto delegado no publica en todos tus proyectos por su cuenta.
 
 ## CLI (la usas tú)
 
