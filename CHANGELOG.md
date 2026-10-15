@@ -4,6 +4,35 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [1.8.0] — 2026-10-15
+
+**El ámbito de una skill: local o global, y lo elige el humano.** Pedido así: *«necesita tener dos opciones al
+momento de seleccionar una skill propuesta y preguntar antes de aprobar si desea que sea local o global»*.
+
+- **«Global» es lo que el harness lee como global**, medido en su código: resuelve cuatro raíces de skills y
+  una es la **biblioteca de usuario** (`$DSH_HOME/skills`), con rango 400. Publicar ahí no es inventar una
+  carpeta nueva: es dejar la skill donde el harness ya mira en cualquier sesión. El provider del plugin **no**
+  cambia —sigue sirviendo sólo el proyecto— y por eso no hay dos copias del mismo conocimiento.
+- **Se elige, y si no se dice, se pregunta.** `/skill-aprobar <id>` sin ámbito responde con las dos opciones y
+  el nombre de su fila; `--global` publica para todos los proyectos y `--local` en este. Las **filas del menú**
+  son la misma elección con el ratón: `skill-aprobar-<id>` y `skill-globalizar-<id>`.
+- **En aprobación automática, local.** Un gesto delegado no debe publicar a todos tus proyectos: el modo auto
+  delega la confirmación, no la puerta **ni el alcance**.
+- **La decisión tiene vuelta**: `/skill-ambito <id> --global|--local` mueve una ya aprobada en las dos
+  direcciones, con aviso al catálogo y gesto inverso.
+- **La biblioteca es compartida** (hoy tiene 21 skills que escribe Hermes), así que hay **puerta de identidad**:
+  sólo se escribe si el destino no existe o si es nuestro (`metadata.dsh.origin: skill-compiler`). Una skill
+  ajena con el mismo id **no se pisa**, y se dice.
+- **El ciclo de vida entero vale para una global**: apagar (sale de la biblioteca a nuestro almacén),
+  encender, retirar con respaldo fechado y huella, y restaurar con la huella comprobada. La constancia de que
+  salió del proyecto queda en `published/`, y el provider no la sirve: una sola copia efectiva.
+- **Toda publicación verifica la huella**: si la copia no coincide con el original, no se retira nada.
+
+Medido en una **arena** (con `DSH_HOME` aparte, nunca la biblioteca real): proponer → publicar → apagar →
+encender → traer a local → retirar → restaurar, con la huella idéntica al volver. La arena cazó dos defectos
+propios (un `rename` sin crear el padre, y la constancia de publicación pisándose entre ámbitos) y uno más en
+la idempotencia: `locate` devuelve `published`, y sin reconocerlo una segunda aprobación decía «no existe».
+
 ## [1.7.2] — 2026-10-14
 
 **El adorno mudo, y la lista que no se veía.** Defectos medidos en vivo, con la sesión del autor delante.

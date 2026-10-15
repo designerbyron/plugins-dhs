@@ -124,7 +124,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
   it('cubre los comandos que dejan un bloque en el flujo, incluidos los del ciclo de vida', () => {
     const declared = /COMMAND_NAMES = \[([^\]]+)\]/.exec(client)?.[1] ?? '';
     for (const name of [
-      'skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-auto', 'skill-rechazar',
+      'skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-globalizar', 'skill-ambito', 'skill-auto', 'skill-rechazar',
       'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar', 'skill-retiradas',
     ]) {
       assert.equal(declared.includes(`'${name}'`), true, `falta ${name} en COMMAND_NAMES`);

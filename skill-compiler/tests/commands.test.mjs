@@ -76,7 +76,10 @@ describe('gestión · el aviso al catálogo coincide con lo que cambió en disco
   };
 
   const CASOS = [
-    { nombre: 'skill-aprobar', estado: 'proposed', sufijo: ' --force', muta: true },
+    { nombre: 'skill-aprobar', estado: 'proposed', sufijo: ' --local --force', muta: true },
+    // Y sin decir el ámbito no aprueba: pregunta. Es lo pedido, y es una prueba de la clase: si alguien
+    // quitara la pregunta, el comando aprobaría en alguna parte sin que el humano lo haya dicho.
+    { nombre: 'skill-aprobar', estado: 'proposed', sufijo: '', muta: false },
     { nombre: 'skill-rechazar', estado: 'proposed', sufijo: '', muta: true },
     { nombre: 'skill-deshabilitar', estado: 'approved', sufijo: '', muta: true },
     { nombre: 'skill-habilitar', estado: 'disabled', sufijo: '', muta: true },

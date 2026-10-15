@@ -49,6 +49,10 @@ export const ROW_VERBS = Object.freeze([
     describe: (id, project) => `Activa «${id}» en ${project}, si pasa la puerta de validación. Aprobar es tuyo: el modelo no puede.`,
   }),
   Object.freeze({
+    verb: 'globalizar',
+    describe: (id, project) => `Activa «${id}» para TODOS tus proyectos: la publica en la biblioteca de usuario. Lo aprendido en ${project} es tuyo, no del proyecto.`,
+  }),
+  Object.freeze({
     verb: 'rechazar',
     describe: (id, project) => `Aparta «${id}» de ${project} sin borrarla: queda en rejected/.`,
   }),

@@ -41,6 +41,9 @@ export const TOOLS = { skill_propose: 'propose', skill_vendor: 'vendor' };
  */
 export const DECISION_COMMANDS = Object.freeze([
   Object.freeze({ prefix: 'skill-aprobar', kind: 'aprobar' }),
+  // Publicar es una aprobación más: cuenta como decisión propia, y el feedback lo dice así.
+  Object.freeze({ prefix: 'skill-globalizar', kind: 'aprobar' }),
+  Object.freeze({ prefix: 'skill-ambito', kind: 'aprobar' }),
   Object.freeze({ prefix: 'skill-rechazar', kind: 'rechazar' }),
 ]);
 

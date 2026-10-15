@@ -113,7 +113,7 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
 }
 
 /** Activa una propuesta, y sólo si pasa la puerta. `force` acepta los avisos; nunca salta los fallos. */
-export function approveProposal({ root = defaultRoot(), key, id, force = false, catalog } = {}) {
+export function approveProposal({ root = defaultRoot(), key, id, force = false, scope = 'project', catalog } = {}) {
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
   if (wanted === '') return bad('Falta el id. Uso: /skill-aprobar <id> [--force]');
@@ -121,6 +121,13 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   // Aprobar algo que ya está aprobado no es un fallo: es un acto que ya ocurrió. Decirlo con esas
   // palabras evita el «failed» que hacía pensar que la primera aprobación no había servido.
   const where = locate(wanted, key, { root });
+  if (scope === 'global' && (where === 'global' || where === 'published')) {
+    return ok([
+      `Ya estaba publicada: ${wanted} en la biblioteca de usuario`,
+      'No se ha cambiado nada.',
+      ...remaining(root, key),
+    ].join('\n'));
+  }
   if (where === 'approved') {
     return ok([
       `Ya estaba activa: ${wanted} [${key}]`,
@@ -154,7 +161,7 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     ].join('\n'));
   }
 
-  const moved = approve(wanted, key, { root });
+  const moved = approve(wanted, key, { root, scope });
   if (!moved.ok) return bad(`No se pudo aprobar ${wanted}: ${moved.reason}`);
 
   // El catálogo acaba de cambiar: sin este aviso, la skill no llega al agente hasta reiniciar.
@@ -285,14 +292,78 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
 
     {
       name: 'skill-aprobar',
-      description: 'Activa una skill propuesta de este proyecto, si pasa la puerta de validación. Aprobar es tuyo: el modelo no puede.',
-      input: { hint: '<id> [--force]' },
+      description: 'Activa una skill propuesta, si pasa la puerta de validación: en este proyecto, o para todos los tuyos si lo dices. Sin decir dónde, pregunta. Aprobar es tuyo: el modelo no puede.',
+      input: { hint: '<id> [--global|--local] [--force]' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
         const input = String(rawInput ?? '').trim();
         const force = /(?:^|\s)--force$/.test(input);
-        const id = input.replace(/(?:\s+--force)?$/, '').trim();
-        return approveProposal({ root, key, id, force, catalog });
+        const global = /(?:^|\s)--global(?:\s|$)/.test(input);
+        const local = /(?:^|\s)--local(?:\s|$)/.test(input);
+        const id = input.replace(/(?:\s+--(?:force|global|local))+$/, '').trim();
+
+        // Sin ámbito dicho, se pregunta —con las dos opciones y su nombre de fila— en vez de decidir por el
+        // humano. «Local» no es un defecto que se esconde: es una de las dos respuestas.
+        if (!global && !local && locate(id, key, { root }) === 'proposed') {
+          return ok([
+            `¿Dónde quieres que viva «${id}»?`,
+            '',
+            `  · En ESTE proyecto (${key}): /skill-aprobar ${id} --local`,
+            '      la sirve el plugin sólo en las sesiones de este proyecto.',
+            `  · Para TODOS tus proyectos: /skill-aprobar ${id} --global`,
+            '      se publica en la biblioteca de usuario y la sirve el harness en cualquier sesión.',
+            '',
+            'También valen sus filas del menú «/»: «skill-aprobar-<id>» y «skill-globalizar-<id>».',
+            'Con «--force» si la propuesta viene con avisos.',
+          ].join('\n'));
+        }
+
+        const scope = global ? 'global' : 'project';
+        const result = approveProposal({ root, key, id, force, scope, catalog });
+        if (result?.kind !== 'ok') return result;
+        const nota = scope === 'global'
+          ? `Se sirve en toda sesión de esta máquina (biblioteca de usuario). Para dejarla sólo en este proyecto: /skill-ambito ${id} --local`
+          : `Se sirve al modelo sólo en este proyecto. Para que la vean todos: /skill-aprobar ${id} --global`;
+        return ok([result.text, '', nota].join('\n'));
+      }),
+    },
+
+    {
+      name: 'skill-globalizar',
+      description: 'Activa una skill propuesta para TODOS tus proyectos: la publica en la biblioteca de usuario, que el harness sirve en cualquier sesión.',
+      input: { hint: '--id <id>' },
+      handler: guarded(({ agent, rawInput }) => {
+        const { key } = scopeOfAgent(agent);
+        const id = String(rawInput ?? '').replace(/(?:^|\s*)(?:--id|\/skill-globalizar)\s*/g, '').trim();
+        const result = approveProposal({ root, key, id, force: true, scope: 'global', catalog });
+        if (result?.kind !== 'ok') return result;
+        return ok([result.text, '', `Para dejarla sólo en este proyecto: /skill-ambito ${id} --local`].join('\n'));
+      }),
+    },
+
+    {
+      name: 'skill-ambito',
+      description: 'Cambia dónde vive una skill ya aprobada: en este proyecto o en la biblioteca de usuario, en las dos direcciones.',
+      input: { hint: '<id> --global | --local' },
+      handler: guarded(({ agent, rawInput }) => {
+        const { key } = scopeOfAgent(agent);
+        const input = String(rawInput ?? '').trim();
+        const to = /(?:^|\s)--global(?:\s|$)/.test(input) ? 'global' : /(?:^|\s)--local(?:\s|$)/.test(input) ? 'project' : null;
+        const id = input.replace(/(?:\s+--(?:global|local))+$/, '').trim();
+        if (id === '') return bad('Falta el id. Uso: /skill-ambito <id> --global|--local');
+        const moved = ambito(id, key, { root, to });
+        if (!moved.ok) return bad(`No se pudo cambiar el ámbito: ${moved.reason}`);
+        catalog?.notify();
+        return ok([
+          moved.scope === 'global'
+            ? `Ahora «${id}» vive en la biblioteca de usuario: la ven TODOS tus proyectos.`
+            : `Ahora «${id}» vive en este proyecto (${key}).`,
+          `  ${moved.path}`,
+          `  huella: ${moved.sha256}`,
+          moved.scope === 'global'
+            ? `Volver a este proyecto: /skill-ambito ${id} --local`
+            : `Publicarla para todos: /skill-ambito ${id} --global`,
+        ].join('\n'));
       }),
     },
 
@@ -454,6 +525,7 @@ export function targetCommands({ root = defaultRoot(), catalog, rows = [] } = {}
       }
       if (row.verb === 'ver') return viewProposal({ root, cwd, key, id: row.id });
       if (row.verb === 'aprobar') return approveProposal({ root, key, id: row.id, force: false, catalog });
+      if (row.verb === 'globalizar') return approveProposal({ root, key, id: row.id, force: false, scope: 'global', catalog });
       if (row.verb === 'rechazar') return rejectProposal({ root, key, id: row.id, catalog });
       return bad(`Fila desconocida: ${row.verb}`);
     }),

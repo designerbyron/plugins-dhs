@@ -111,7 +111,7 @@ describe('activación', () => {
 
     assert.deepEqual(registered.map((c) => c.name).sort(),
       [
-        'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-habilitar',
+        'skill-ambito', 'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar', 'skill-habilitar',
         'skill-propuestas', 'skill-rechazar', 'skill-retiradas', 'skill-ver',
       ]);
     for (const command of registered) {
@@ -183,7 +183,7 @@ describe('activación', () => {
     const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-aprobar-'));
     assert.deepEqual(filasDe(CWD), ['skill-aprobar-measured-decision-check'], 'la sesión ve lo suyo');
     assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
-    assert.equal(global.map.size, 9, 'las filas no se registran en el global: ahí se ofrecerían a todos');
+    assert.equal(global.map.size, 11, 'las filas no se registran en el global: ahí se ofrecerían a todos');
 
     // Decidir en una sesión no toca las filas de la otra.
     const fila = perAgent.get(CWD).map.get('skill-aprobar-measured-decision-check');

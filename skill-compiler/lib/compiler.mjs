@@ -20,7 +20,7 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, cpSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -30,11 +30,47 @@ export function defaultRoot() {
   return join(dshHome, 'skill-compiler');
 }
 
-/** La biblioteca curada, que solo se LEE: una propuesta jamás escribe aquí. */
+/**
+ * La **biblioteca de usuario**: la cuarta raíz que el harness resuelve para skills, con rango 400. Es la
+ * capa que ve **todo** proyecto de esta máquina.
+ *
+ * Se **lee** siempre —compone lo que el agente ve y con lo que se compara una propuesta— y se **escribe**
+ * sólo por una aprobación humana con ámbito global. Una **propuesta** sigue sin escribir aquí jamás: lo que
+ * escribe es una decisión, y pasa por `publishToLibrary` con su puerta.
+ *
+ * Aviso que el código asume: la carpeta es **compartida** con otras herramientas (hoy tiene skills que
+ * escribe Hermes), así que nada que no sea nuestro se pisa.
+ */
 export function curatedLibraryRoot() {
   const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
   return join(dshHome, 'skills');
 }
+
+/** El mismo directorio, con el nombre del papel que juega al aprobar: destino de publicación. */
+export function libraryRoot(opts = {}) {
+  return opts.library ?? curatedLibraryRoot();
+}
+
+export const SCOPES = Object.freeze(['project', 'global']);
+
+/** El ámbito pedido. Sin decir nada, el gesto conservador: el proyecto. */
+export function scopeOf(opts = {}) {
+  return opts.scope === 'global' ? 'global' : 'project';
+}
+
+/**
+ * ¿Esta carpeta de la biblioteca la escribió este plugin? La marca va en el frontmatter
+ * (`metadata.dsh.origin`), así que se lee del fichero y no de un registro aparte que podría mentir.
+ */
+export function isOurs(dir) {
+  const loaded = readSkill(join(dir, 'SKILL.md'));
+  return loaded !== null && loaded.metadata?.dsh?.origin === 'skill-compiler';
+}
+
+const no = (now) => (now instanceof Date ? now.toISOString() : String(now));
+const stamp = (now) => no(now).replace(/[:.]/g, '-');
+/** El mismo sello, para el respaldo, que usa el formato de carpeta por día del repositorio. */
+const dia = (now) => no(now).slice(0, 10);
 
 // ── identidad de proyecto ────────────────────────────────────────────────────────────────────────
 
@@ -437,7 +473,141 @@ function move(root, key, id, from, to) {
  * Aprobar es un acto humano, y por eso vive en la CLI y no en una herramienta del modelo: si fuera
  * una herramienta, el propio modelo podría auto-aprobarse su propuesta y la revisión sería decorativa.
  */
-export const approve = (id, key, opts = {}) => move(opts.root ?? defaultRoot(), key, id, 'proposed', 'approved');
+export const approve = (id, key, opts = {}) =>
+  (scopeOf(opts) === 'global' ? publishToLibrary(id, key, opts) : move(opts.root ?? defaultRoot(), key, id, 'proposed', 'approved'));
+
+/**
+ * Aprobar **para todos los proyectos**: la skill se publica en la biblioteca de usuario, que es la raíz que
+ * el harness sirve con rango 400, y la propuesta se archiva en el proyecto con la constancia de a dónde fue
+ * (`published/`). Una sola copia efectiva: el proyecto no la sirve también, o el mismo conocimiento viajaría
+ * dos veces al prompt con dos rangos distintos.
+ *
+ * Puerta, antes de escribir nada: si la biblioteca ya tiene ese id y **no** es nuestro, no se toca. La
+ * carpeta es compartida con otras herramientas y pisar una skill ajena sería destruir trabajo que no es de
+ * este plugin.
+ */
+export function publishToLibrary(id, key, { root = defaultRoot(), library = null, now = new Date() } = {}) {
+  const source = join(root, 'projects', key, 'proposed', id);
+  if (!existsSync(join(source, 'SKILL.md'))) return { ok: false, reason: `no hay ninguna propuesta con el id ${id} en ${key}` };
+  const cartel = join(library ?? curatedLibraryRoot(), id);
+  const exists = existsSync(cartel);
+  if (exists && !isOurs(cartel)) {
+    return { ok: false, reason: `la biblioteca de usuario ya tiene una skill «${id}» que no es de skill-compiler: no se pisa. Retírala tú, o aprueba esta en el proyecto` };
+  }
+  const hash = folderHash(source);
+  let superseded = null;
+  if (exists) {
+    // Una actualización no destruye la versión vigente: la aparta con su fecha, dentro de nuestro almacén.
+    superseded = join(root, 'global', 'superseded', `${id}-${stamp(now)}`);
+    try {
+      mkdirSync(dirname(superseded), { recursive: true });
+      cpSync(cartel, superseded, { recursive: true });
+    } catch (error) {
+      return { ok: false, reason: `no se pudo apartar la versión anterior: ${error.message}` };
+    }
+  }
+  try {
+    mkdirSync(cartel, { recursive: true });
+    cpSync(source, cartel, { recursive: true });
+  } catch (error) {
+    return { ok: false, reason: `no se pudo publicar: ${error.message}` };
+  }
+  // La huella del destino tiene que ser la del origen: publicar no puede cambiar lo que se publica.
+  if (folderHash(cartel) !== hash) {
+    return { ok: false, reason: `la copia publicada no coincide con la propuesta (huella distinta): revisa ${cartel}` };
+  }
+  const moved = moverConConstancia(root, key, id, 'proposed');
+  if (!moved.ok) return { ok: false, reason: moved.reason };
+  const metaFile = join(root, 'projects', key, 'published', id, 'meta.json');
+  try {
+    const meta = JSON.parse(readFileSync(metaFile, 'utf8'));
+    meta.published = { to: cartel, at: no(now), sha256: hash, projectKey: key, superseded };
+    writeFileSync(metaFile, `${JSON.stringify(meta, null, 2)}\n`);
+  } catch { /* el meta es accesorio: la publicación ya está hecha */ }
+  return { ok: true, id, projectKey: key, scope: 'global', path: join(cartel, 'SKILL.md'), library: cartel, sha256: hash, superseded };
+}
+
+/**
+ * Cambiar el ámbito de una skill ya aprobada, en las dos direcciones. Existe porque una decisión con vuelta
+ * no es una decisión a medias: si te equivocaste de ámbito, se corrige sin proponerla otra vez.
+ */
+export function ambito(id, key, { to, root = defaultRoot(), library = null, now = new Date() } = {}) {
+  if (to !== 'global' && to !== 'project') return { ok: false, reason: 'dime a dónde va: «--global» o «--local»' };
+  const cartel = join(library ?? curatedLibraryRoot(), id);
+  const enProyecto = join(root, 'projects', key, 'approved', id);
+  if (to === 'global') {
+    if (!existsSync(enProyecto)) return { ok: false, reason: `no hay ninguna skill aprobada con el id ${id} en ${key}` };
+    if (existsSync(cartel) && !isOurs(cartel)) return { ok: false, reason: `la biblioteca de usuario ya tiene una skill «${id}» que no es de skill-compiler: no se pisa` };
+    const hash = folderHash(enProyecto);
+    try {
+      mkdirSync(cartel, { recursive: true });
+      cpSync(enProyecto, cartel, { recursive: true });
+    } catch (error) {
+      return { ok: false, reason: `no se pudo mover a la biblioteca: ${error.message}` };
+    }
+    if (folderHash(cartel) !== hash) return { ok: false, reason: 'la copia no coincide con el original (huella distinta): no se retira nada' };
+    const moved = moverConConstancia(root, key, id, 'approved');
+    if (!moved.ok) return { ok: false, reason: moved.reason };
+    return { ok: true, id, projectKey: key, scope: 'global', path: join(cartel, 'SKILL.md'), library: cartel, sha256: hash };
+  }
+  if (!existsSync(cartel)) return { ok: false, reason: `no hay ninguna skill publicada con el id ${id}` };
+  if (existsSync(enProyecto)) return { ok: false, reason: `${id} ya está aprobada en ${key}: decide qué hacer con ella` };
+  const hash = folderHash(cartel);
+  try {
+    mkdirSync(dirname(enProyecto), { recursive: true });
+    cpSync(cartel, enProyecto, { recursive: true });
+  } catch (error) {
+    return { ok: false, reason: `no se pudo traer al proyecto: ${error.message}` };
+  }
+  if (folderHash(enProyecto) !== hash) return { ok: false, reason: 'la copia no coincide con el original (huella distinta): no se retira nada' };
+  // Ya no está publicada: la constancia de que salió se aparta, para que volver a publicarla no choque con ella.
+  const constancia = join(root, 'projects', key, 'published', id);
+  if (existsSync(constancia)) {
+    const apartada = join(root, 'projects', key, 'superseded', `${id}-constancia-${stamp(now)}`);
+    try {
+      mkdirSync(dirname(apartada), { recursive: true });
+      renameSync(constancia, apartada);
+    } catch { /* la constancia es accesorio: no impide el cambio de ámbito */ }
+  }
+  try {
+    const apartada = join(root, 'global', 'superseded', `${id}-localizado-${stamp(now)}`);
+    mkdirSync(dirname(apartada), { recursive: true });
+    renameSync(cartel, apartada);
+  } catch (error) {
+    return { ok: false, reason: `quedó en el proyecto pero no se pudo retirar de la biblioteca: ${error.message}` };
+  }
+  return { ok: true, id, projectKey: key, scope: 'project', path: join(enProyecto, 'SKILL.md'), sha256: hash };
+}
+
+/** Archivar la propuesta o la aprobada en `published/`, apartando la constancia anterior si la hubiera. */
+function moverConConstancia(root, key, id, from) {
+  const yaHay = join(root, 'projects', key, 'published', id);
+  if (existsSync(yaHay)) {
+    const apartada = join(root, 'projects', key, 'superseded', `${id}-constancia-${stamp(new Date())}`);
+    try {
+      mkdirSync(dirname(apartada), { recursive: true });
+      renameSync(yaHay, apartada);
+    } catch (error) {
+      return { ok: false, reason: `no se pudo apartar la constancia anterior: ${error.message}` };
+    }
+  }
+  return move(root, key, id, from, 'published');
+}
+
+/** Sacar una skill global de la biblioteca a un estado nuestro (apagada, o al respaldo al retirarla). */
+function desdeBiblioteca(opts, id, cartel, destino) {
+  if (!existsSync(join(cartel, 'SKILL.md'))) return { ok: false, reason: `no hay ninguna skill publicada con el id ${id}` };
+  if (!isOurs(cartel)) return { ok: false, reason: `«${id}» está en la biblioteca pero no la escribió skill-compiler: no se toca` };
+  if (existsSync(destino)) return { ok: false, reason: `ya hay una copia de ${id} en ${destino}: no se sobrescribe` };
+  const hash = folderHash(cartel);
+  try {
+    mkdirSync(dirname(destino), { recursive: true });
+    renameSync(cartel, destino);
+  } catch (error) {
+    return { ok: false, reason: `no se pudo mover: ${error.message}` };
+  }
+  return { ok: true, id, scope: 'global', path: join(destino, 'SKILL.md'), hash, root: opts.root ?? defaultRoot() };
+}
 export const reject = (id, key, opts = {}) => move(opts.root ?? defaultRoot(), key, id, 'proposed', 'rejected');
 
 // ── el ciclo de vida completo: apagar, retirar y volver ──────────────────────────────────────────
@@ -479,13 +649,33 @@ export function folderHash(dir) {
  * Apagar una skill aprobada: deja de servirse y sale de la lista de activas, pero **se conserva entera** y
  * vuelve con un gesto. No es lo mismo que retirarla, y por eso son dos estados y dos verbos.
  */
-export const disable = (id, key, opts = {}) => move(opts.root ?? defaultRoot(), key, id, 'approved', 'disabled');
+export const disable = (id, key, opts = {}) =>
+  (scopeOf(opts) === 'global'
+    ? desdeBiblioteca(opts, id, join(libraryRoot(opts), id), join(opts.root ?? defaultRoot(), 'global', 'disabled', id))
+    : move(opts.root ?? defaultRoot(), key, id, 'approved', 'disabled'));
+
+export const enableGlobal = (id, opts = {}) => {
+  const root = opts.root ?? defaultRoot();
+  const source = join(root, 'global', 'disabled', id);
+  if (!existsSync(join(source, 'SKILL.md'))) return { ok: false, reason: `no hay ninguna skill global apagada con el id ${id}` };
+  const cartel = join(libraryRoot(opts), id);
+  if (existsSync(cartel)) return { ok: false, reason: `la biblioteca ya tiene «${id}»: decide primero qué hacer con ella` };
+  const hash = folderHash(source);
+  try {
+    mkdirSync(dirname(cartel), { recursive: true });
+    renameSync(source, cartel);
+  } catch (error) {
+    return { ok: false, reason: `no se pudo encender: ${error.message}` };
+  }
+  return { ok: true, id, scope: 'global', path: join(cartel, 'SKILL.md'), hash };
+};
 
 /**
  * Volver a encenderla. Si ya hay una aprobada con ese id, se dice: pisarla en silencio destruiría una
  * skill que alguien aprobó, y decidir eso no le toca al plugin.
  */
 export function enable(id, key, opts = {}) {
+  if (scopeOf(opts) === 'global') return enableGlobal(id, opts);
   const root = opts.root ?? defaultRoot();
   if (existsSync(join(root, 'projects', key, 'approved', id))) {
     return { ok: false, reason: `ya hay una skill aprobada con ese id en ${key}: decide primero qué hacer con ella` };
@@ -497,7 +687,13 @@ export function enable(id, key, opts = {}) {
  * Retirar: la carpeta sale del almacén a un respaldo fechado, con su huella. Es el único gesto
  * irreversible del plugin, así que **nunca borra**: mueve, y deja la vuelta al lado.
  */
-export function retire(id, key, { root = defaultRoot(), now = new Date(), backupRoot = null } = {}) {
+export function retire(id, key, { root = defaultRoot(), now = new Date(), backupRoot = null, scope = 'project', library = null } = {}) {
+  if (scopeOf({ scope }) === 'global') {
+    const destino = join(backupRoot ?? retiredRoot(now), 'global', id);
+    const salida = desdeBiblioteca({ root, library }, id, join(library ?? curatedLibraryRoot(), id), destino);
+    if (!salida.ok) return salida;
+    return { ok: true, id, projectKey: key, scope: 'global', backup: destino, path: join(destino, 'SKILL.md'), hash: salida.hash, revierte: `restore ${id} --global` };
+  }
   const candidatos = [join(root, 'projects', key, 'disabled', id), join(root, 'projects', key, 'approved', id)];
   const source = candidatos.find((dir) => existsSync(dir)) ?? null;
   if (source === null) return { ok: false, reason: `no hay ninguna skill activa ni apagada con el id ${id} en ${key}` };
@@ -536,6 +732,20 @@ function hallarRespaldo(key, id, { backup = null, backupRoot = null }) {
  */
 export function restore(id, key, opts = {}) {
   const root = opts.root ?? defaultRoot();
+  if (scopeOf(opts) === 'global') {
+    const source = hallarRespaldo('global', id, opts);
+    if (source === null) return { ok: false, reason: `no hay respaldo global de ${id}` };
+    const cartel = join(libraryRoot(opts), id);
+    if (existsSync(cartel)) return { ok: false, reason: `la biblioteca ya tiene «${id}»: decide qué hacer con ella antes de restaurar` };
+    const hash = folderHash(source);
+    try {
+      mkdirSync(dirname(cartel), { recursive: true });
+      renameSync(source, cartel);
+    } catch (error) {
+      return { ok: false, reason: `no se pudo restaurar: ${error.message}` };
+    }
+    return { ok: true, id, scope: 'global', path: join(cartel, 'SKILL.md'), hash };
+  }
   const source = hallarRespaldo(key, id, opts);
   if (source === null) return { ok: false, reason: `no hay respaldo de ${id} para ${key}` };
   if (existsSync(join(root, 'projects', key, 'approved', id)) || existsSync(join(root, 'projects', key, 'disabled', id))) {
@@ -557,16 +767,23 @@ export function restore(id, key, opts = {}) {
  * y la que alimenta la decisión en lote.
  */
 export function retired(key, { root = defaultRoot(), backupRoot = null } = {}) {
-  const apagadas = scanTree(join(root, 'projects', key, 'disabled'), 'apagada').map((skill) => ({ ...skill, state: 'disabled' }));
+  const apagadas = scanTree(join(root, 'projects', key, 'disabled'), 'apagada').map((skill) => ({ ...skill, state: 'disabled', scope: 'project' }));
+  // Y lo global: lo apagado y lo retirado de la biblioteca vive en nuestro almacén, así que se lista aquí,
+  // con su ámbito dicho, para que el humano pueda volver a encenderlo o traerlo al proyecto.
+  const globales = [
+    ...scanTree(join(root, 'global', 'disabled'), 'apagada-global').map((s) => ({ ...s, state: 'disabled', scope: 'global' })),
+    ...scanTree(join(root, 'global', 'superseded'), 'apartada-global').map((s) => ({ ...s, state: 'superseded', scope: 'global' })),
+  ];
   const base = backupRoot ?? backupsRoot();
   const archivadas = [];
   if (existsSync(base)) {
     const dias = readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort().reverse();
     for (const dia of dias) {
-      for (const skill of scanTree(join(base, dia, key), 'eliminada')) archivadas.push({ ...skill, state: 'retired', retiredAt: dia });
+      for (const skill of scanTree(join(base, dia, key), 'eliminada')) archivadas.push({ ...skill, state: 'retired', retiredAt: dia, scope: 'project' });
+      for (const skill of scanTree(join(base, dia, 'global'), 'eliminada')) archivadas.push({ ...skill, state: 'retired', scope: 'global', retiredAt: dia });
     }
   }
-  return [...apagadas, ...archivadas];
+  return [...apagadas, ...globales, ...archivadas];
 }
 
 /**
@@ -605,9 +822,17 @@ export function checkProposal(id, key, { root = defaultRoot() } = {}) {
 export function locate(id, key, { root = defaultRoot() } = {}) {
   // `disabled` entra aquí: sin él, apagar algo ya apagado no se reconocía como «ya estaba», y la
   // respuesta era un error de movimiento en vez de decir la verdad (que es lo que el humano espera).
-  for (const where of ['proposed', 'approved', 'disabled', 'rejected']) {
+  for (const where of ['proposed', 'approved', 'disabled', 'rejected', 'published']) {
     if (existsSync(join(root, 'projects', key, where, id, 'SKILL.md'))) return where;
   }
+  // Y el ámbito global: sin esto, una segunda aprobación «global» intentaría publicar lo ya publicado y
+  // respondería un error de movimiento en vez de decir la verdad («ya está en la biblioteca»).
+  if (existsSync(join(root, 'global', 'disabled', id, 'SKILL.md'))) return 'global:disabled';
+  // Y aquí la distinción que impide el peor desenlace: una skill en la biblioteca **con ese id** pero que
+  // no escribió este plugin NO es «ya está publicada». Si lo dijera, el comando no haría nada y el humano
+  // leería una mentira; y si siguiera adelante, pisaría trabajo ajeno. Lo cazó la arena.
+  const ajena = join(curatedLibraryRoot(), id, 'SKILL.md');
+  if (existsSync(ajena)) return isOurs(join(curatedLibraryRoot(), id)) ? 'global' : 'global:ajena';
   return null;
 }
 

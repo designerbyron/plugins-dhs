@@ -13,7 +13,9 @@
  *   node bin/skill-compiler.mjs list                      # qué hay propuesto y aprobado
  *   node bin/skill-compiler.mjs show <id>                 # leer una propuesta entera
  *   node bin/skill-compiler.mjs check [<id>]              # puerta: valida antes de aprobar
- *   node bin/skill-compiler.mjs approve <id>              # activar (exige que `check` pase)
+ *   node bin/skill-compiler.mjs approve <id>              # activar en ESTE proyecto (exige que `check` pase)
+ *   node bin/skill-compiler.mjs approve <id> --global     # activar para TODOS tus proyectos
+ *   node bin/skill-compiler.mjs scope <id> --local|--global  # cambiar de ámbito una ya aprobada
  *   node bin/skill-compiler.mjs reject <id>               # apartar sin borrar
  *   node bin/skill-compiler.mjs disable <id>              # apagar: reversible, se conserva entera
  *   node bin/skill-compiler.mjs enable <id>               # volver a encender
@@ -37,7 +39,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  approve, checkProposal, defaultRoot, disable, enable, listForProject, locate, overview, pending,
+  ambito, approve, checkProposal, defaultRoot, disable, enable, listForProject, locate, overview, pending,
   projectKey, reject, restore, retire, retired, retiredRoot,
 } from '../lib/compiler.mjs';
 import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
@@ -60,6 +62,9 @@ for (let i = 1; i < argv.length; i++) {
   if (arg === '--project-key') { flags.projectKey = argv[++i]; continue; }
   if (arg === '--force') { flags.force = true; continue; }
   if (arg === '--yes') { flags.yes = true; continue; }
+  // El ámbito: publicar para todos los proyectos es un gesto explícito, y volver a local, otro.
+  if (arg === '--global') { flags.global = true; continue; }
+  if (arg === '--local') { flags.local = true; continue; }
   if (arg === '--id') { flags.id = argv[++i]; continue; }
   if (arg === '--note') { flags.note = argv[++i]; continue; }
   if (arg === '--url') { flags.url = argv[++i]; continue; }
@@ -146,7 +151,12 @@ switch (command) {
     const key = scope();
     // Aprobar algo ya aprobado no es un fallo: es un acto que ya ocurrió. Medido con el usuario delante:
     // volvió a aprobar al ver la skill todavía en la lista, y aquí leería «no existe una propuesta».
-    if (locate(id, key, { root }) === 'approved') {
+    const ambitoPedido = flags.global === true ? 'global' : 'project';
+    if (ambitoPedido === 'global' && ['global', 'published'].includes(locate(id, key, { root }))) {
+      process.stdout.write(`Ya estaba publicada: ${id} en la biblioteca de usuario\n  No se ha cambiado nada.\n`);
+      break;
+    }
+    if (ambitoPedido === 'project' && locate(id, key, { root }) === 'approved') {
       process.stdout.write(`Ya estaba activa: ${id} en ${key}\n  No se ha cambiado nada.\n`);
       break;
     }
@@ -161,11 +171,32 @@ switch (command) {
       printCheck(id, key, result);
       process.exit(1);
     }
-    const moved = approve(id, key, { root });
+    const moved = approve(id, key, { root, scope: ambitoPedido });
     if (!moved.ok) { process.stderr.write(`No se pudo aprobar: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Aprobada ${id} en ${key}\n  ${moved.path}\n`);
-    if (moved.superseded) process.stdout.write(`  versión anterior apartada en ${moved.superseded}\n`);
-    process.stdout.write('Se sirve al modelo solo en este proyecto.\n');
+    if (ambitoPedido === 'global') {
+      process.stdout.write(`Aprobada ${id} para TODOS tus proyectos\n  ${moved.path}\n`);
+      if (moved.superseded) process.stdout.write(`  versión anterior apartada en ${moved.superseded}\n`);
+      process.stdout.write('Se sirve en toda sesión de esta máquina, y el modelo la verá sin reiniciar si el catálogo se refresca.\n');
+      process.stdout.write(`Para dejarla sólo en este proyecto: scope ${id} --local\n`);
+    } else {
+      process.stdout.write(`Aprobada ${id} en ${key}\n  ${moved.path}\n`);
+      if (moved.superseded) process.stdout.write(`  versión anterior apartada en ${moved.superseded}\n`);
+      process.stdout.write('Se sirve al modelo solo en este proyecto.\n');
+      process.stdout.write(`Para que la vean todos tus proyectos: approve ${id} --global\n`);
+    }
+    break;
+  }
+
+  // ── el ámbito, en las dos direcciones ────────────────────────────────────────────────────────────
+  // Una aprobación con el ámbito equivocado se corrige sin volver a proponer nada: la decisión tiene vuelta.
+  case 'scope': {
+    const id = positional[0];
+    if (!id) usage(2);
+    const key = scope();
+    const to = flags.local === true ? 'project' : flags.global === true ? 'global' : null;
+    const moved = ambito(id, key, { to, root });
+    if (!moved.ok) { process.stderr.write(`No se pudo cambiar el ámbito: ${moved.reason}\n`); process.exit(1); }
+    process.stdout.write(`Ahora ${id} vive en ${moved.scope === 'global' ? 'la biblioteca de usuario (todos tus proyectos)' : `el proyecto ${key}`}\n  ${moved.path}\n  huella: ${moved.sha256}\n`);
     break;
   }
 
@@ -180,9 +211,10 @@ switch (command) {
       process.stdout.write(`Ya estaba apagada: ${id} en ${key}\n  No se ha cambiado nada.\n`);
       break;
     }
-    const moved = disable(id, key, { root });
+    const moved = disable(id, key, { root, scope: flags.global === true ? 'global' : 'project' });
     if (!moved.ok) { process.stderr.write(`No se pudo apagar: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Apagada ${id} en ${key}\n  deja de servirse al modelo, y se conserva entera: vuele con \`enable ${id}\`\n`);
+    const donde = flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`;
+    process.stdout.write(`Apagada ${id} en ${donde}\n  deja de servirse al modelo, y se conserva entera: vuelve con \`enable ${id}${flags.global === true ? ' --global' : ''}\`\n`);
     break;
   }
 
@@ -190,9 +222,9 @@ switch (command) {
     const id = positional[0];
     if (!id) usage(2);
     const key = scope();
-    const moved = enable(id, key, { root });
+    const moved = enable(id, key, { root, scope: flags.global === true ? 'global' : 'project' });
     if (!moved.ok) { process.stderr.write(`No se pudo encender: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Encendida ${id} en ${key}\n  vuelve a servirse al modelo en este proyecto.\n`);
+    process.stdout.write(`Encendida ${id} en ${flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`}\n`);
     break;
   }
 
@@ -200,16 +232,17 @@ switch (command) {
     const id = positional[0];
     if (!id) usage(2);
     const key = scope();
-    const destino = join(retiredRoot(), key, id);
+    const esGlobal = flags.global === true;
+    const destino = join(retiredRoot(), esGlobal ? 'global' : key, id);
     if (flags.yes !== true) {
-      process.stdout.write(`Se va a RETIRAR ${id} del proyecto ${key}:\n  respaldo: ${destino}\n`);
+      process.stdout.write(`Se va a RETIRAR ${id} de ${esGlobal ? 'la biblioteca de usuario' : `el proyecto ${key}`}:\n  respaldo: ${destino}\n`);
       process.stdout.write('Nada se borra: la carpeta se mueve, con su huella, y vuelve con `restore`.\n');
       process.stdout.write('Repite con --yes para hacerlo.\n');
       process.exit(1);
     }
-    const moved = retire(id, key, { root });
+    const moved = retire(id, key, { root, scope: esGlobal ? 'global' : 'project' });
     if (!moved.ok) { process.stderr.write(`No se pudo retirar: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Retirada ${id} del proyecto ${key}\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: restore ${id}\n`);
+    process.stdout.write(`Retirada ${id} de ${esGlobal ? 'la biblioteca de usuario' : `el proyecto ${key}`}\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: ${moved.revierte}\n`);
     break;
   }
 
@@ -218,7 +251,9 @@ switch (command) {
     const lista = retired(key, { root });
     if (lista.length === 0) { process.stdout.write(`Nada apagado ni retirado en ${key}\n`); break; }
     for (const skill of lista) {
-      process.stdout.write(`  ${skill.state === 'disabled' ? 'apagada ' : 'retirada'}  ${skill.id}${skill.retiredAt ? `  (${skill.retiredAt})` : ''}\n`);
+      const estado = skill.state === 'disabled' ? 'apagada ' : skill.state === 'superseded' ? 'apartada' : 'retirada';
+      const donde = skill.scope === 'global' ? 'global' : 'proyecto';
+      process.stdout.write(`  ${estado}  ${skill.id}  [${donde}]${skill.retiredAt ? `  (${skill.retiredAt})` : ''}\n`);
     }
     break;
   }
@@ -227,9 +262,9 @@ switch (command) {
     const id = positional[0];
     if (!id) usage(2);
     const key = scope();
-    const moved = restore(id, key, { root });
+    const moved = restore(id, key, { root, scope: flags.global === true ? 'global' : 'project' });
     if (!moved.ok) { process.stderr.write(`No se pudo restaurar: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Restaurada ${id} en ${key}\n  ${moved.path}\n  huella: ${moved.hash}\n`);
+    process.stdout.write(`Restaurada ${id} en ${flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`}\n  ${moved.path}\n  huella: ${moved.hash}\n`);
     break;
   }
 

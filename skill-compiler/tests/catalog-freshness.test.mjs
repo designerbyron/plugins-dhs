@@ -100,7 +100,7 @@ describe('frescura del catálogo de skills', () => {
       await skills.list({ cwd: CWD }); // deja el catálogo cacheado ANTES de aprobar
 
       const aprobar = skillCommands({ root: s.root, catalog }).find((c) => c.name === 'skill-aprobar');
-      const result = aprobar.handler({ agent: AGENT, rawInput: 'measured-decision-check' });
+      const result = aprobar.handler({ agent: AGENT, rawInput: 'measured-decision-check --local' });
 
       assert.equal(result.kind, 'success', JSON.stringify(result));
       assert.deepEqual(names(await skills.list({ cwd: CWD })), ['measured-decision-check'],

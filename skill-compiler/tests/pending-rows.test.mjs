@@ -78,7 +78,7 @@ describe('filas de pendientes · composición', () => {
 
     const rows = pendingRowsForAll({ root: s.root, cwds: [CWD, OTHER] });
     const names = rows.map((row) => row.name);
-    assert.equal(names.length, 6, 'tres filas por proyecto');
+    assert.equal(names.length, 8, 'cuatro filas por proyecto: leer, aprobar aquí, aprobar para todos, apartar');
     assert.equal(new Set(names).size, names.length, 'ningún nombre repetido');
     for (const name of names) assert.match(name, COMMAND_NAME, `${name} no cumple la gramática`);
     // El mismo id, dos ámbitos: cada fila sabe de cuál es.

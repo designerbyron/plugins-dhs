@@ -72,7 +72,10 @@ window.__ModuleLoader__.load({
      * un resultado es el registro de lo que pasó y no se reescribe, así que lo que se hace es decir que hay
      * una decisión posterior — eso lo sabe el log, y por eso viaja en la proyección.
      */
-    const LIST_COMMANDS = ['skill-propuestas', 'skill-ver', 'skill-retiradas'];
+    // Los comandos cuyos resultados traen una lista que decidir. `skill-globalizar` y `skill-ambito` entran
+    // aquí porque su resultado también deja filas: publicar y cambiar de ámbito son decisiones que se ofrecen
+    // en el propio bloque, no sólo en el menú.
+    const LIST_COMMANDS = ['skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito'];
     /**
      * Dónde se recuerda un resultado cerrado.
      *
