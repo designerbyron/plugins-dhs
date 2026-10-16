@@ -144,7 +144,7 @@ const renderWithMarker = (value) => [{
 export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
   return {
     name: 'skill_propose',
-    description: 'Propose a reusable skill only with evidence you can point at: a contract discovered the hard way, a trap already paid for, an operational order, or an exact value you will need again. "It could be reused" is not evidence — nor is a solved query, restating AGENTS.md/docs, or narrating the session. Pass the id of an existing skill of this project to UPDATE it instead of creating one: the same id means a patch, and approving it moves the previous version to superseded/ (never deleted). The proposal is NOT active: it waits for human approval in this project.',
+    description: 'Propose a reusable skill only with evidence you can point at: a contract discovered the hard way, a trap already paid for, an operational order, or an exact value you will need again. "It could be reused" is not evidence — nor is a solved query, restating AGENTS.md/docs, or narrating the session. Pass the id of an existing skill of this project to UPDATE it instead of creating one: the same id means a patch, and approving it moves the previous version to superseded/ (never deleted). The proposal is NOT active: it waits for human approval in this project. If this session learned SEVERAL separate things, propose them one by one (one id each) — do not merge them into a single skill; and if two of them are alike because they come from the same incident while being genuinely different skills, declare `group` on both with a concrete `motivo` so the likeness is reported instead of rejected.',
     parameters: {
       id: { type: 'string', required: true, description: 'Unique kebab-case id of the skill, e.g. "measured-decision-check".' },
       description: { type: 'string', required: true, description: 'One line, 60-300 characters: what it automates and when it is triggered. This is what the model reads when choosing a skill, so it has to distinguish it from the others.' },
@@ -175,7 +175,17 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
           removed: { type: 'string', description: 'Required if this patch removes lines or reference material: why it is gone and what it is replaced by. Deleting approved knowledge cannot happen silently.' },
         },
       },
-      tags: { type: 'array', description: 'Optional: a few words that help compare it against existing skills.', items: { type: 'string' } },
+      tags: { type: 'array', description: 'Optional: a few words that help comparing it against existing skills. Identifiers, not prose: lowercase kebab-case ASCII (a tag with an accent is tolerated but reported).', items: { type: 'string' } },
+      group: {
+        type: 'object',
+        description: 'Optional, and ONLY when this session learns several things that belong together: declare them as one batch so the overlap veto does not block them. Two skills that are siblings of a group are not rejected for being alike — the likeness is reported instead — because the group states that they go together and why. It is a declaration, not a shortcut: `motivo` is required and must be concrete. Without a group the same likeness is rejected.',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string', required: true, description: 'Short kebab-case id shared by every proposal of the batch, e.g. "respaldos-antes-de-migrar".' },
+          motivo: { type: 'string', required: true, description: 'Why these proposals go together, in at least 20 characters, naming the incident or the decision they come from.' },
+          esperadas: { type: 'number', description: 'Optional, and the only way the automatic path can know whether a sibling is missing: how many proposals this batch has. Without it the automatic promotion of a batch waits (the human path is not blocked either way). It has to be declared when the first proposal is made, because every one of them carries it.' },
+        },
+      },
     },
     output: {
       schema: {
@@ -211,6 +221,10 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
           autoApproved: { type: 'boolean', description: 'True when the session\'s auto-approve mode activated this proposal immediately; only present when that mode is on.' },
           conflicts: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, reason: { type: 'string' }, where: { type: 'string' } } } },
           relatedElsewhere: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, where: { type: 'string' } } } },
+          // El lote en el que va esta propuesta, y sus hermanas. Declarados por la misma razón que el resto:
+          // con `additionalProperties: false`, devolver un campo sin declarar rechaza el resultado entero.
+          group: { type: 'object', additionalProperties: true, description: 'The batch this proposal belongs to (only when one was declared), with its reason.', properties: { id: { type: 'string' }, motivo: { type: 'string' } } },
+          siblings: { type: 'array', description: 'Other proposals of the same batch that this one resembles. Reported, not rejected: the batch says they go together.', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, where: { type: 'string' } } } },
           warnings: { type: 'array', items: { type: 'string' } },
           errors: { type: 'array', items: { type: 'string' } },
         },
@@ -227,6 +241,7 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
           ...(curated === undefined ? {} : { curated }),
           ...(Array.isArray(args.references) ? { references: args.references } : {}),
           ...(args.revision === undefined ? {} : { revision: args.revision }),
+          ...(args.group === undefined ? {} : { group: args.group }),
         },
       );
       const base = {
@@ -239,6 +254,11 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
         references: result.references ?? [],
         links: result.links ?? [],
         files: result.files ?? [],
+        // `group` sólo cuando se declaró un lote: devolver `null` con un esquema `type: 'object'` haría que
+        // el harness rechazara el resultado **entero** (con la propuesta ya escrita en disco). Es la misma
+        // trampa que ya se pagó con `updatesProposal`, y por eso hay un test que valida el valor real.
+        ...(result.group ? { group: result.group } : {}),
+        siblings: result.siblings ?? [],
       };
       // Lo que sólo existe cuando esto es un parche de algo vivo: contra qué se hizo, qué cambia y si la
       // evidencia se pudo comprobar. Va declarado en el esquema: un campo devuelto sin declarar rechaza
@@ -300,6 +320,12 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
                     ? 'La evidencia de la corrección es una ruta que EXISTE en el proyecto: observada.'
                     : 'La evidencia de la corrección es una afirmación del modelo: NO verificada — nadie la ha comprobado todavía.']
                 : []),
+              ...(result.group
+                ? ['', `Va en el lote «${result.group.id}»: ${result.group.motivo}`,
+                  ...(base.siblings.length
+                    ? [`Sus hermanas ya propuestas: ${base.siblings.map((h) => `${h.id} (${h.score})`).join(', ')} — se parecen y aun así se admiten: el lote dice que van juntas.`]
+                    : [])]
+                : []),
               ...autoApprovalLines(auto, result.id),
               ...(warnings.length ? ['', 'Avisos:', ...warnings.map((w) => `  · ${w}`)] : []),
             ].join('\n'),
@@ -318,7 +344,8 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
               // «mejorar» —no es nuestra— así que ahí la salida es otro id, y decirlo.
               ...(result.conflicts.some((c) => c.ours === false)
                 ? ['Ese id lo ocupa una skill que no es de skill-compiler: no se toca ni se suplanta. Propón el mismo tema con otro id, o pide al humano que la retire si ya no la usa.']
-                : ['Mejora esa skill en vez de crear otra, o elige un tema que no exista todavía.']),
+                : ['Mejora esa skill en vez de crear otra, o elige un tema que no exista todavía.',
+                  'Si de verdad son DOS skills distintas que nacen del mismo asunto (no una mal partida en dos), vuelve a proponer la segunda declarando `group` con su `id` y un `motivo` concreto: dentro de un lote el parecido se avisa en vez de vetar.']),
             ].join('\n'),
           };
         case 'invalid':

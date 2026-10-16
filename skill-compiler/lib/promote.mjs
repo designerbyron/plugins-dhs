@@ -23,7 +23,7 @@
  * El registro de todo esto vive en el diario del proyecto (`journal.jsonl`), que es lo que permite auditar
  * por qué se activó algo, con qué evidencia y qué se probó.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 
 import {
@@ -255,17 +255,29 @@ export function promover(id, key, {
     const regresion = pruebasDeRegresion(id, key, meta, { root, curated, maxLineas, maxFicheros, alcance });
     const autorizado = nivel <= 2 && niveles.includes(nivel);
 
+    // ── El lote: la vía automática no activa una parte de un cambio que toca varias skills ─────────
+    // La vía humana (promoción no autorizada) NO pasa por aquí: aprobar dos de tres es una decisión, no un
+    // accidente. Lo que no puede pasar es que la automatización deje la biblioteca contando dos historias.
+    const grupo = meta?.group ?? null;
+    if (autorizado && grupo) {
+      const bloqueoLote = comprobarLote(grupo, propuestasDelLote(grupo.id, key, { root }), { key, root, curated, maxLineas, maxFicheros, alcance });
+      if (bloqueoLote) {
+        anotarEnDiario(key, { id, key, group: grupo.id, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'espera-lote', por, hashResultante: null, hashAnterior: null, why: bloqueoLote }, { root, now });
+        return { status: 'pending', id, nivel, grupo: grupo.id, regresion, reason: bloqueoLote };
+      }
+    }
+
     if (!autorizado) {
       const decision = nivel > 2 ? 'espera-humano' : 'promocion-desactivada';
       const reason = nivel > 2
         ? `el nivel ${nivel} de esta corrección exige aprobación humana: la propuesta queda pendiente y con sus pruebas hechas`
         : `el nivel ${nivel} no está en la lista de niveles autorizados (${niveles.length ? niveles.join(', ') : 'ninguno'}): la promoción automática está apagada`;
-      anotarEnDiario(key, { id, key, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision, por, hashResultante: null, hashAnterior: null, why: reason }, { root, now });
+      anotarEnDiario(key, { id, key, group: grupo?.id ?? null, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision, por, hashResultante: null, hashAnterior: null, why: reason }, { root, now });
       return { status: 'pending', id, nivel, regresion, reason };
     }
     if (!regresion.ok) {
       const reason = `no se activa: ${regresion.pruebas.filter((p) => !p.ok).map((p) => p.nombre).join(', ')}`;
-      anotarEnDiario(key, { id, key, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'rechazada-por-regresion', por, hashResultante: null, hashAnterior: null, why: reason }, { root, now });
+      anotarEnDiario(key, { id, key, group: grupo?.id ?? null, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'rechazada-por-regresion', por, hashResultante: null, hashAnterior: null, why: reason }, { root, now });
       return { status: 'regression', id, nivel, regresion, reason };
     }
 
@@ -304,14 +316,14 @@ export function promover(id, key, {
     }
 
     if (problemas.length === 0) {
-      anotarEnDiario(key, { id, key, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'promovida', por, hashResultante: huellaActivada, hashAnterior, superseded: resultado.superseded ?? null }, { root, now });
+      anotarEnDiario(key, { id, key, group: grupo?.id ?? null, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'promovida', por, hashResultante: huellaActivada, hashAnterior, superseded: resultado.superseded ?? null }, { root, now });
       return { status: 'promoted', id, nivel, regresion, hashAnterior, hashResultante: huellaActivada, superseded: resultado.superseded ?? null };
     }
 
     // ── Reversión: volver a la versión anterior, con su huella ────────────────────────────────────
     const reverso = deshacer({ root, key, id, huellaActivada, hashAnterior, superseded: resultado.superseded ?? null });
     anotarEnDiario(key, {
-      id, key, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas,
+      id, key, group: grupo?.id ?? null, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas,
       decision: reverso.ok ? 'revertida' : 'reversion-fallida', por, hashResultante: reverso.hash ?? null, hashAnterior,
       why: problemas.join(' | '), reverso,
     }, { root, now });
@@ -357,12 +369,64 @@ function deshacer({ root, key, id, huellaActivada, hashAnterior, superseded }) {
   return { ok: true, hash, apartada, huellaApartada: huellaActivada };
 }
 
+/**
+ * Las propuestas que forman un lote en un proyecto, leídas de su `meta.json` (que es el estado que el motor
+ * consume). Se ordenan por id para que el resultado no dependa del orden del sistema de ficheros.
+ */
+export function propuestasDelLote(groupId, key, { root = defaultRoot() } = {}) {
+  const dir = join(root, 'projects', key, 'proposed');
+  let entradas = [];
+  try {
+    entradas = readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    // Sólo «no existe la carpeta» significa «no hay propuestas». Cualquier otro error se **propaga**: un
+    // fallo de programación no puede disfrazarse de lote vacío y dejar que la promoción siga adelante
+    // creyendo que el lote está completo. Es la misma lección que `treeOf` → `treeOfConErrores`.
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+  const out = [];
+  for (const entrada of entradas) {
+    if (!entrada.isDirectory()) continue;
+    try {
+      const meta = JSON.parse(readFileSync(join(dir, entrada.name, 'meta.json'), 'utf8'));
+      if (meta?.group?.id === groupId) out.push({ id: entrada.name, meta });
+    } catch { /* una propuesta ilegible no entra en el lote: su problema saldrá por su propia puerta */ }
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/**
+ * ¿Está el lote entero, y entero **verificable**, como para activar una de sus partes sola?
+ *
+ * Un cambio que toca varias skills y se activa a medias deja la biblioteca contando dos historias distintas
+ * — y es justo lo que el lote existe para evitar. Devuelve el motivo del bloqueo, o `null` si el lote está
+ * completo y cada una de sus propuestas pasa su propia regresión.
+ */
+export function comprobarLote(grupo, propuestas, { key = null, root = defaultRoot(), curated = null, maxLineas = 200, maxFicheros = 5, alcance = null } = {}) {
+  if (!grupo) return null;
+  if (typeof grupo.esperadas !== 'number') {
+    return `el lote «${grupo.id}» no declara cuántas propuestas lo forman («esperadas»): sin eso no se puede saber si falta alguna, y un lote no se activa a medias`;
+  }
+  if (propuestas.length !== grupo.esperadas) {
+    return `el lote «${grupo.id}» declara ${grupo.esperadas} propuestas y solo hay ${propuestas.length} propuesta(s): un lote no se activa a medias (la vía humana puede activar lo que quiera, esta no)`;
+  }
+  for (const hermana of propuestas) {
+    const regresion = pruebasDeRegresion(hermana.id, key ?? hermana.meta?.projectKey ?? null, hermana.meta, { root, curated, maxLineas, maxFicheros, alcance });
+    if (!regresion.ok) {
+      return `la hermana «${hermana.id}» del lote «${grupo.id}» no pasa su regresión (${regresion.pruebas.filter((p) => !p.ok).map((p) => p.nombre).join(', ')}): se arregla eso antes de activar ninguna`;
+    }
+  }
+  return null;
+}
+
 /** El estado de las correcciones de un proyecto, tal y como quedó en el diario. */
-export function historial(key, { root = defaultRoot(), id = null } = {}) {
+export function historial(key, { root = defaultRoot(), id = null, grupo = null } = {}) {
   return leerDiario(key, { root })
     .filter((e) => (id === null ? true : e.id === id))
+    .filter((e) => (grupo === null ? true : e.group === grupo))
     .map((e) => ({
-      at: e.at, id: e.id, nivel: e.nivel, reglas: e.reglas ?? [], decision: e.decision,
+      at: e.at, id: e.id, group: e.group ?? null, nivel: e.nivel, reglas: e.reglas ?? [], decision: e.decision,
       pruebas: (e.pruebas ?? []).map((p) => `${p.nombre}:${p.ok ? 'ok' : 'FALLA'}`),
       base: e.base?.hash ?? null, resultado: e.hashResultante ?? null, anterior: e.hashAnterior ?? null, why: e.why ?? null,
     }));

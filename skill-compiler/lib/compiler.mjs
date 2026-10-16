@@ -350,6 +350,21 @@ export function validateInput(input, { references = [], cwd = null, present = []
   else if (encabezados < 2) add('warn', { rule: 'body-sections-soft', observed: encabezados, threshold: 2, message: `body corto (${body.length} caracteres) con una sola sección: se admite, pero una segunda sección lo hace localizable cuando crezca`, fix: 'Opcional: una segunda sección' });
 
   const haystack = `${description}\n${whenToUse}\n${body}`;
+  // Las etiquetas de tema son **identificadores**, no prosa: van en kebab-case ASCII, sin acentos, como el
+  // resto del ecosistema (que es inglés). Se tolera una etiqueta con acento —se normaliza y coincide— pero se
+  // **avisa**, porque corregirlo en silencio enseña a escribir mal y la forma canónica es la que se busca.
+  for (const etiqueta of Array.isArray(input?.tags) ? input.tags : []) {
+    const canonica = normalizarEtiqueta(etiqueta);
+    if (String(etiqueta) !== canonica) {
+      add('warn', {
+        rule: 'tag-no-canónico',
+        observed: String(etiqueta),
+        threshold: canonica,
+        message: `la etiqueta «${etiqueta}» no está en su forma canónica: los identificadores van en kebab-case ASCII, sin acentos ni mayúsculas`,
+        fix: `Escríbela como «${canonica}»`,
+      });
+    }
+  }
   for (const [re, label] of SECRET_SHAPES) if (re.test(haystack)) add('error', { rule: 'secret', observed: label, message: `parece contener una credencial (${label}): una skill no lleva secretos nunca`, fix: 'Quita la credencial y sustitúyela por una referencia al almacén de secretos' });
   for (const [re, label] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) add('error', { rule: 'personal-path', observed: label, message: `contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`, fix: 'Sustituye la ruta personal por $DSH_HOME o una ruta relativa' });
   for (const re of ABSOLUTE_PATH_SHAPES) if (re.test(haystack)) { add('warn', { rule: 'absolute-path', observed: 'ruta absoluta', message: 'contiene rutas absolutas: si la skill debe viajar, parametrízalas', fix: 'Parametriza la ruta absoluta o documéntala como del puesto' }); break; }
@@ -389,11 +404,36 @@ const STOPWORDS = new Set([
   'get', 'set', 'run', 'how', 'why', 'what', 'who', 'been', 'were', 'was', 'has', 'have', 'had',
   'skill', 'skills', 'dsh', 'hermes', 'exact', 'exactly', 'only', 'also', 'then', 'than', 'them',
   'they', 'there', 'here', 'each', 'other', 'same', 'such', 'does', 'doing', 'done', 'before', 'after',
-  'under', 'about', 'while', 'never', 'always', 'still', 'just', 'more', 'most', 'some',
+  // Las palabras funcionales del español: **medido**, la lista era inglesa y en español «los», «las»,
+  // «del», «con», «para» o «que» contaban como si fueran tema, y bastaban para que dos asuntos sin nada
+  // en común (respaldar / correos de aviso) superaran el umbral del veto.
+  'los', 'las', 'del', 'con', 'para', 'por', 'que', 'una', 'uno', 'sus', 'sin', 'mas', 'pero', 'como',
+  'este', 'esta', 'esto', 'estos', 'estas', 'esos', 'esas', 'todo', 'toda', 'todos', 'todas', 'cada',
+  'donde', 'cuando', 'quien', 'cual', 'cuales', 'sea', 'ser', 'son', 'era', 'han', 'hay', 'muy',
+  'entre', 'sobre', 'hacia', 'desde', 'hasta', 'segun', 'ante', 'tras', 'otro', 'otra', 'otros', 'otras',
+  'the', 'its', 'own', 'under', 'about', 'while', 'never', 'always', 'still', 'just', 'more', 'most', 'some',
 ]);
 /** Tokens que solo dicen «soy de la familia»: no distinguen por sí solos. */
 const FAMILY_TOKENS = new Set(['hash', 'hashed', 'authorized', 'authorised', 'sha', 'sha256', 'signed']);
-const THRESHOLD = 0.5;
+/**
+ * El umbral del veto, **calibrado con pares etiquetados** y con el corpus neutral (ocho temas de fondo que
+ * no son ninguno de los pares juzgados): los temas distintos puntúan 0,000 y el mismo tema 0,500–1,000, así
+ * que la banda que separa limpio es 0,25–0,45 y se elige el centro bajo: 0,40. Con la huella anterior
+ * (uniforme, umbral 0,50) los temas distintos puntuaban 0,70–0,74 y **se vetaban**.
+ */
+const THRESHOLD = 0.4;
+/**
+ * Los dos números del peso por frecuencia documental.
+ *
+ * Un token que aparece en **casi todas** las skills de la biblioteca no distingue un tema de otro: es
+ * **estilo** (las muletillas con las que escribe el mismo autor). Se le da peso cero cuando hay biblioteca
+ * suficiente para que esa frecuencia signifique algo. Medido: con ocho skills del mismo autor, cuatro
+ * muletillas aparecían en 8/8 y dos temas **distintos** puntuaban 0,955 — el veto rechazaba aprender dos
+ * cosas en la misma sesión.
+ */
+const MIN_GROUP_WHY = 20;
+const ESTILO_DESDE = 0.8;
+const ESTILO_MINIMO = 6;
 
 const singular = (w) => (w.length > 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
 const words = (s) => (s || '').toLowerCase().split(/[^a-z0-9]+/)
@@ -408,18 +448,69 @@ export function fingerprint({ id, description = '', whenToUse = '', tags = [] })
   };
 }
 
-function jaccard(a, b) {
-  if (a.size === 0 || b.size === 0) return 0;
-  let inter = 0;
-  for (const x of a) if (b.has(x)) inter++;
-  return inter / (a.size + b.size - inter);
+/**
+ * Los pesos de un corpus: cuántas skills contienen cada token.
+ *
+ * Es lo que convierte «se parecen» en «se parecen **en el tema**». La frecuencia la aporta la biblioteca del
+ * proyecto, que es real: no hay ninguna lista de palabras prohibidas escrita a mano que envejezca mal.
+ */
+/**
+ * Una etiqueta de tema, normalizada: `Respaldos de Producción` y `respaldos-de-produccion` son la misma.
+ *
+ * El acento se **quita** (NFD + marcas combinantes), no se sustituye: sin esto, «Producción» normalizaba a
+ * `producci-n` y no coincidía con «produccion» — dos formas de escribir el mismo tema que no se reconocían.
+ * En español eso es la mitad de las etiquetas.
+ */
+export const normalizarEtiqueta = (etiqueta) => singular(String(etiqueta ?? '').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''));
+
+/** Las etiquetas de tema de una skill, normalizadas y sin repetir. */
+export const etiquetasDe = ({ tags = [] } = {}) => new Set(
+  (Array.isArray(tags) ? tags : []).map(normalizarEtiqueta).filter((t) => t.length >= 3),
+);
+
+export function pesosDeTema(corpus = []) {
+  const df = new Map();
+  for (const entrada of corpus) {
+    for (const token of fingerprint(entrada).wide) df.set(token, (df.get(token) ?? 0) + 1);
+  }
+  return { df, n: corpus.length };
 }
 
-/** 0..1: cuánto se parece un candidato a otro. Mira tallos y bolsa amplia, y se queda con el mayor. */
-export function similarity(a, b) {
+/** El peso de un token: 0 si es estilo de la casa, y si no, tanto más alto cuanto menos común sea. */
+const pesoDe = (token, pesos) => {
+  if (!pesos || pesos.n === 0) return 1;
+  const df = pesos.df.get(token) ?? 0;
+  if (pesos.n >= ESTILO_MINIMO && df / pesos.n >= ESTILO_DESDE) return 0;
+  return Math.log(1 + pesos.n / (1 + df));
+};
+
+function jaccardPonderado(a, b, pesos) {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  let union = 0;
+  for (const token of new Set([...a, ...b])) {
+    const peso = pesoDe(token, pesos);
+    if (a.has(token) && b.has(token)) inter += peso;
+    union += peso;
+  }
+  return union === 0 ? 0 : inter / union;
+}
+
+/**
+ * 0..1: cuánto se parece un candidato a otro **en el tema**. Mira tallos y bolsa amplia, y se queda con el
+ * mayor.
+ *
+ * @param contexto - `{ corpus }` (calcula los pesos de ese corpus) o `{ pesos }` (ya calculados). Sin
+ *   contexto los pesos son uniformes, que es el comportamiento de siempre: quien llame con dos argumentos no
+ *   ve un cambio inesperado.
+ */
+export function similarity(a, b, contexto = null) {
+  const pesos = contexto?.pesos ?? (contexto?.corpus ? pesosDeTema(contexto.corpus) : null);
   const fa = fingerprint(a);
   const fb = fingerprint(b);
-  return Math.max(jaccard(fa.stems, fb.stems), jaccard(fa.wide, fb.wide));
+  return Math.max(jaccardPonderado(fa.stems, fb.stems, pesos), jaccardPonderado(fa.wide, fb.wide, pesos));
 }
 
 /**
@@ -428,15 +519,35 @@ export function similarity(a, b) {
  * — porque ahí es legítimo que exista, y saberlo es útil, pero no es motivo para impedir la propuesta.
  *
  * Reproponer el propio id no es una colisión con uno mismo: es actualizar la propuesta.
+ *
+ * Los pesos salen de la biblioteca (`corpus`, por defecto las propias skills existentes), así que el veto
+ * mide **tema** y no estilo de redacción.
  */
-export function checkOverlap(candidate, existing, { threshold = THRESHOLD, scope = null } = {}) {
+export function checkOverlap(candidate, existing, { threshold = THRESHOLD, scope = null, corpus = null, group = null } = {}) {
+  const pesos = pesosDeTema(corpus ?? existing);
   const conflicts = [];
   const relatedElsewhere = [];
+  const siblings = [];
   for (const other of existing) {
     const sameScope = other.where === 'biblioteca-curada' || (scope !== null && typeof other.where === 'string' && other.where.endsWith(`:${scope}`));
     if (!sameScope) {
-      const score = similarity(candidate, other);
+      const score = similarity(candidate, other, { pesos });
       if (score >= threshold) relatedElsewhere.push({ id: other.id, score: Number(score.toFixed(3)), where: other.where });
+      continue;
+    }
+    // Hermanas de un lote: el autor ya declaró que van juntas y por qué, así que el parecido se **avisa**,
+    // no veta. Va antes que la etiqueta porque dos hermanas comparten tema por definición — si no, la
+    // regla de la etiqueta las vetaría justo por ser lo que el lote declara.
+    if (group && other.group && other.group.id === group.id) {
+      siblings.push({ id: other.id, score: Number(similarity(candidate, other, { pesos }).toFixed(3)), where: other.where });
+      continue;
+    }
+    // La etiqueta de tema es la vía que **no** depende del vocabulario: dos skills que declaran el mismo
+    // tema chocan aunque una diga «respaldar» y la otra «hacer copia de seguridad». Un jaccard de palabras
+    // no ve sinónimos, y fingir que los ve sería mentir; declararlo, sí lo ve.
+    const compartidas = [...etiquetasDe(candidate)].filter((etiqueta) => etiquetasDe(other).has(etiqueta));
+    if (compartidas.length > 0) {
+      conflicts.push({ id: other.id, score: 1, where: other.where, reason: 'mismo-tag', tags: compartidas });
       continue;
     }
     if (other.id === candidate.id) {
@@ -451,12 +562,13 @@ export function checkOverlap(candidate, existing, { threshold = THRESHOLD, scope
       }
       continue;
     }
-    const score = similarity(candidate, other);
+    const score = similarity(candidate, other, { pesos });
     if (score >= threshold) conflicts.push({ id: other.id, score: Number(score.toFixed(3)), where: other.where, reason: 'mismo-tema' });
   }
   return {
     ok: conflicts.length === 0,
     conflicts: conflicts.sort((x, y) => y.score - x.score),
+    siblings: siblings.sort((x, y) => y.score - x.score),
     relatedElsewhere: relatedElsewhere.sort((x, y) => y.score - x.score),
   };
 }
@@ -832,6 +944,11 @@ export function scanTree(root, where) {
         // De quién es: la marca que `renderSkill` pone en el frontmatter. Es la distinción que decide si
         // el mismo id es una actualización (nuestra) o una suplantación (de otra herramienta).
         ours: data.metadata?.dsh?.origin === 'skill-compiler',
+        // El lote viaja **con la skill** (en su frontmatter) y no en un registro aparte: así sigue siendo
+        // cierto aunque la skill se copie de un sitio a otro, y no hay dos fuentes que puedan discrepar.
+        group: data.metadata?.dsh?.groupId
+          ? { id: data.metadata.dsh.groupId, motivo: data.metadata.dsh.groupWhy ?? '' }
+          : null,
         where,
         path: file,
       });
@@ -893,7 +1010,7 @@ const quote = (s) => `"${single(s).replace(/"/g, '\\"')}"`;
  * `upstream` marca una skill **vendorizada**: nuestra versión adaptada de un original externo. Los
  * campos van planos bajo `metadata.dsh` a propósito (el parser de esta biblioteca modela dos niveles).
  */
-export function renderSkill({ id, description, whenToUse, body, project, projectKey: key, evidence = [], createdAt, toolVersion = 1, upstream = null, localNote = '' }) {
+export function renderSkill({ id, description, whenToUse, body, project, projectKey: key, evidence = [], createdAt, toolVersion = 1, upstream = null, localNote = '', group = null }) {
   const front = ['---', `name: ${id}`, `description: ${quote(description)}`];
   if (single(whenToUse)) front.push(`whenToUse: ${quote(whenToUse)}`);
   front.push('metadata:');
@@ -908,6 +1025,12 @@ export function renderSkill({ id, description, whenToUse, body, project, project
     if (upstream.ref) front.push(`    upstreamRef: ${quote(upstream.ref)}`);
     front.push(`    upstreamSha256: ${quote(upstream.sha256)}`);
     front.push(`    upstreamFetchedAt: ${quote(upstream.fetchedAt)}`);
+  }
+  // El lote, en dos claves planas: el parser de esta biblioteca modela dos niveles bajo `metadata`, y
+  // anidar un tercero obligaría a escribir un parser de YAML de verdad para ganar nada.
+  if (group) {
+    front.push(`    groupId: ${quote(group.id)}`);
+    front.push(`    groupWhy: ${quote(group.motivo)}`);
   }
   if (evidence.length) front.push(`    evidence: [${evidence.map((e) => quote(e)).join(', ')}]`);
   front.push('---', '', `# ${single(description)}`, '');
@@ -1022,9 +1145,41 @@ function writeAtomic(dir, files) {
  * Write a proposal. Idempotent by construction: the same id rewrites its own directory and nothing
  * else, so proposing twice leaves one proposal and never duplicates the library.
  */
-export function propose(input, { root = defaultRoot(), cwd, key = null, now = new Date().toISOString(), curated = curatedLibraryRoot(), extraFiles = {}, metaExtra = {}, references = [], revision } = {}) {
+/**
+ * Un lote es una **declaración**, no un atajo: dice que varias propuestas nacen del mismo asunto y solo
+ * tienen sentido juntas. Por eso el motivo es obligatorio y se exige explícito — sin él, `group` sería la
+ * forma de saltarse el veto escribiendo cualquier cosa.
+ *
+ * @returns `{ ok, errors, valor }` — `valor` es `{ id, motivo }` o `null` si no se declaró lote.
+ */
+export function validateGroup(group) {
+  if (group === undefined || group === null) return { ok: true, errors: [], valor: null };
+  const id = String(group.id ?? '').trim();
+  const motivo = String(group.motivo ?? '').trim();
+  const errors = [];
+  if (id.length > 64 || !/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(id)) {
+    errors.push('«group.id» tiene que ser un identificador kebab-case de hasta 64 caracteres (sin acentos: es un identificador, no un título)');
+  }
+  if (motivo.length < MIN_GROUP_WHY) {
+    errors.push(`«group.motivo» tiene que decir en al menos ${MIN_GROUP_WHY} caracteres por qué estas propuestas van juntas: es lo que distingue un lote de un atajo para saltarse el veto`);
+  }
+  // `esperadas` es opcional, y es lo que permite **saber que falta una hermana**. Sin él, la promoción
+  // automática de un lote no puede comprobar que está completo — y por eso, sin él, espera.
+  const esperadas = group.esperadas === undefined ? null : Number(group.esperadas);
+  if (esperadas !== null && (!Number.isInteger(esperadas) || esperadas < 1 || esperadas > 50)) {
+    errors.push('«group.esperadas» es el número de propuestas que forman el lote: un entero entre 1 y 50, o se omite');
+  }
+  return { ok: errors.length === 0, errors, valor: errors.length === 0 ? { id, motivo, ...(esperadas === null ? {} : { esperadas }) } : null };
+}
+
+export function propose(input, { root = defaultRoot(), cwd, key = null, now = new Date().toISOString(), curated = curatedLibraryRoot(), extraFiles = {}, metaExtra = {}, references = [], revision, group: grupoDeclarado } = {}) {
   const validation = validateInput(input, { references, cwd });
   if (!validation.ok) return { status: 'invalid', errors: validation.errors, warnings: validation.warnings };
+  // El lote se acepta en el input o aparte, y por el mismo motivo que la revisión: quien propone puede ser
+  // una sesión (lo manda en el input) o el motor (lo pasa por parámetro), y leerlo de los dos sitios evita
+  // que una llamada interna se quede sin él por dónde lo puso.
+  const grupo = validateGroup(grupoDeclarado ?? input?.group ?? null);
+  if (!grupo.ok) return { status: 'invalid', errors: grupo.errors, warnings: validation.warnings };
   // La revisión es parte de la propuesta, como la evidencia: se acepta en el input o aparte, y la
   // herramienta la pasa aparte porque es un parámetro suyo. Leerla de los dos sitios evita que una
   // llamada interna (o una prueba) se quede sin ella por dónde la puso.
@@ -1042,8 +1197,13 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
     whenToUse: (input.whenToUse ?? '').trim(),
     tags: Array.isArray(input.tags) ? input.tags : [],
   };
-  const overlap = checkOverlap(candidate, existingSkills({ root, curated }), { scope: clave });
+  const overlap = checkOverlap(candidate, existingSkills({ root, curated }), { scope: clave, group: grupo.valor });
   if (!overlap.ok) return { status: 'conflict', conflicts: overlap.conflicts, warnings: validation.warnings };
+  // El parecido con una hermana del lote se dice, aunque no vete: es la información que el humano necesita
+  // para juzgar si de verdad son dos skills o una mal partida en dos.
+  for (const hermana of overlap.siblings) {
+    validation.warnings.push(`va en el lote «${grupo.valor.id}» y se parece a su hermana «${hermana.id}» (${hermana.score}): es un aviso, no un veto — el lote declara que van juntas`);
+  }
 
   // ── Actualizar algo vivo: evidencia, base y diff ───────────────────────────────────────────────
   //
@@ -1095,6 +1255,7 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
   const skill = renderSkill({
     ...candidate, body: input.body.trim(), project, projectKey: clave, evidence: input.evidence ?? [],
     createdAt: now, upstream: input.upstream ?? null, localNote: input.localNote ?? '',
+    group: grupo.valor,
   });
   // El material pesado viaja **con** la skill: el cuerpo lo enlaza, la puerta ya comprobó que el vínculo
   // se resuelve, y la Fase 0 midió que el modelo lo alcanza desde la carpeta. Lo que se guarda en el
@@ -1125,6 +1286,7 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
         },
       }
       : {}),
+    ...(grupo.valor ? { group: grupo.valor } : {}),
     ...metaExtra,
   };
   const escrito = writeAtomic(dir, { 'SKILL.md': skill, 'meta.json': `${JSON.stringify(meta, null, 2)}\n`, ...archivosReferencia, ...extraFiles });
@@ -1138,6 +1300,7 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
     path: join(dir, 'SKILL.md'),
     warnings: validation.warnings,
     sha256: createHash('sha256').update(skill).digest('hex'),
+    ...(grupo.valor ? { group: grupo.valor, siblings: overlap.siblings } : {}),
     references: referencias,
     links: validation.links,
     files: escrito.files,
@@ -1588,7 +1751,8 @@ export function locate(id, key, { root = defaultRoot() } = {}) {
 
 /** Propuestas pendientes de un proyecto. Solo lectura: no decide nada. */
 export function pending({ root = defaultRoot(), key }) {
-  return scanTree(join(root, 'projects', key, 'proposed'), 'propuesto').map((s) => ({ id: s.id, description: s.description, path: s.path }));
+  return scanTree(join(root, 'projects', key, 'proposed'), 'propuesto')
+    .map((s) => ({ id: s.id, description: s.description, path: s.path, group: s.group ?? null }));
 }
 
 // ── lo que el proveedor sirve al modelo ──────────────────────────────────────────────────────────

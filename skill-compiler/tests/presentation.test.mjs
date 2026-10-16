@@ -242,7 +242,7 @@ describe('plegado del estado', () => {
       assert.equal(['string', 'number'].includes(typeof value), true, `${key} debería ser primitivo, es ${typeof value}`);
     }
     assert.deepEqual(Object.keys(view).sort(),
-      ['analyzers', 'at', 'created', 'decisionKind', 'decisionSeq', 'id', 'outcome', 'phase', 'turn', 'updated']);
+      ['analyzers', 'at', 'blocked', 'created', 'decisionKind', 'decisionSeq', 'id', 'ids', 'outcome', 'phase', 'rejected', 'turn', 'updated']);
   });
 
   it('una decisión humana deja marca, y solo si termina bien', () => {

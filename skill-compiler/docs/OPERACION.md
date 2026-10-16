@@ -203,7 +203,9 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 | `list` | Qué hay propuesto, aprobado y rechazado, por proyecto | — |
 | `show <id>` | Imprime una propuesta entera, tal cual | No existe |
 | `check [<id>]` | Pasa la puerta de validación a las pendientes (o a una) | Alguna falla |
+| `check --grupo <lote>` | Pasa la puerta a **todas** las propuestas de un lote, una por una | Alguna falla |
 | `approve <id>` | **Activa** la skill en su proyecto | No pasa `check`, o tiene avisos y falta `--force` |
+| `approve --grupo <lote>` | Activa el lote entero: primero comprueba **todas** las puertas y sólo entonces aprueba. Si una falla, no se aprueba ninguna | Igual que `approve`, para cualquiera del lote |
 | `reject <id>` | La aparta sin borrarla | No existe |
 | `active` | Qué se está sirviendo de verdad en este directorio | — |
 | `vendor <url>` | Nuestra versión de una skill externa | Bloqueado, conflicto, o el enlace pide elegir carpeta |
@@ -213,7 +215,7 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 | `audit [--json] [--estado X] [--todo]` | **Audita el almacén entero en solo lectura**: todas las skills, en todos sus estados, medidas con la misma puerta que decide una aprobación. Dice por skill la regla que incumple, el valor observado, el umbral, la severidad y la corrección recomendada, con identificadores estables (`estado/proyecto/id`). Por defecto muestra lo que no pasa; `--todo` incluye también lo que pasa, `--estado` acota a uno o varios estados (separados por comas) y `--json` da el informe entero | Una skill tiene error o no se pudo leer (sale con 1; con 0, todo pasa). **No repara nada**: señala |
 | `repair <id>` | **Prepara** la corrección de una skill viva a partir de lo que la auditoría encontró. Dice el nivel (1 mecánico · 2 semántico acotado · 3 criterio humano) y, si el motor no puede arreglar lo que bloquea, **no crea ninguna propuesta**. No activa nada | No hay versión viva con ese id, o la corrección bloquea en criterio humano |
 | `promote <id> [--nivel 1,2] [--dry]` | **Activa** una corrección ya preparada, con nueve pruebas de regresión antes y verificación por huella después. Sin `--nivel` **no activa nada**; el 3 no se puede autorizar aquí. `--dry` corre las pruebas sin escribir | Alguna prueba falla (no activa), el cerrojo está tomado, o el nivel no está autorizado |
-| `history [<id>]` | Qué se promocionó, con qué pruebas, de qué huella a cuál y por qué; y avisa de las correcciones repetidas (posibles ciclos) | — |
+| `history [<id>] [--grupo <lote>]` | Qué se promocionó, con qué pruebas, de qué huella a cuál y por qué; y avisa de las correcciones repetidas (posibles ciclos). Con `--grupo`, sólo lo de ese lote | — |
 | `review [--port N]` | **Sirve una página local** con las pendientes, su validación y botones de aprobar y rechazar. Escucha solo en `127.0.0.1` y exige un token de un solo uso que se imprime al arrancar | El puerto está ocupado, o falta el token |
 | `where` | El ámbito de este directorio y dónde está el almacén | — |
 
@@ -302,6 +304,8 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | `vendor` dice `blocked` | El origen trae credenciales, órdenes al agente o texto invisible | **No hay forma de saltarlo desde la CLI, a propósito.** Sanea el origen (o usa otro `ref`) y vendoriza una versión limpia |
 | `propose` o `vendor` dice `conflict` | Ya existe ese id o ese tema | Mejora esa skill, o elige otro tema; si es una versión mejorada de la existente, se decide como actualización |
 | `check` falla en una propuesta que escribí a mano | Una edición posterior rompió el contrato | El propio `check` dice qué regla; edita y repite |
+| El veto rechaza la segunda skill de una sesión que aprendió dos cosas | El tema es parecido **a propósito**: van juntas | Proponla declarando el mismo `group` (con su `motivo`): dentro de un lote el parecido se avisa y no veta |
+| `promote` no activa una corrección de un lote y dice que espera | El lote no está completo o alguna hermana no pasa su regresión: un lote no se activa a medias | Completa el lote, o activa a mano lo que quieras con `approve <id>` (la vía humana no la bloquea el lote) |
 | `upstream` dice que cambió y quiero la versión nueva | Nuestra versión está adaptada | Vendoriza otra vez con el mismo id: se propone como actualización y, al aprobar, la anterior se aparta en `superseded/` |
 | La píldora del feedback visual no aparece nunca | El perfil no resolvió `zod`, o el servicio de proyección no está, o la unidad no cumplió el contrato (entonces **no se registra**) | `node bin/skill-compiler.mjs doctor`: dice si la proyección cumple el contrato y si el registro real proyecta. Con las herramientas funcionando, es un adorno ausente, no una avería |
 | Veo la lista de pendientes pero no encuentro cómo elegir una | El comando con argumentos hay que escribirlo entero, y el compositor no ofrece lista pulsable para los argumentos de un comando del host | Escribe `/` y elige la fila `skill-aprobar-<id>` (o `skill-ver-…`, `skill-rechazar-…`). `/skill-propuestas` las anuncia por su nombre exacto. Si no aparecen en el menú, ejecútalo: es lo que las arma |

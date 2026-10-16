@@ -43,7 +43,7 @@ import { DECISION_KINDS, OUTCOMES, PHASES, applyLearning, initialLearning, learn
 export const LEARNING_KEY = 'skillCompiler';
 
 /** Sube solo cuando cambian los campos del estado o la semántica del plegado, y no al tocar la vista. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 4;
 
 /**
  * El estado que se pliega y se persiste. Cada campo se repara por separado (`.catch`) y el objeto
@@ -58,6 +58,9 @@ export const learningStateSchema = z
     pending: z.array(z.string()).catch([]),
     created: z.number().catch(0),
     updated: z.number().catch(0),
+    rejected: z.number().catch(0),
+    blocked: z.number().catch(0),
+    ids: z.array(z.string()).catch([]),
     at: z.number().catch(0),
     turn: z.number().catch(0),
     seq: z.number().catch(-1),
@@ -79,6 +82,10 @@ export const learningViewSchema = z.object({
   analyzers: z.number().int().nonnegative(),
   created: z.number().int().nonnegative(),
   updated: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  blocked: z.number().int().nonnegative(),
+  // La vista no lleva listas: los ids del acumulado viajan como una cadena separada por comas.
+  ids: z.string(),
   at: z.number().int().nonnegative(),
   turn: z.number().int().nonnegative(),
   // `-1` es «ninguna decisión todavía»: es un centinela, no un valor negativo de verdad.

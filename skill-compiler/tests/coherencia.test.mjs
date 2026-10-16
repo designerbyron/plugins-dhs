@@ -12,6 +12,8 @@
  *   node --test tests/coherencia.test.mjs
  */
 import assert from 'node:assert/strict';
+
+import { initialLearning, learningView } from '../lib/presentation.mjs';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -75,5 +77,44 @@ describe('la versión, la ayuda y la documentación dicen lo mismo que el códig
     for (const herramienta of new Set(herramientas)) {
       assert.ok(readme.includes(herramienta), `la herramienta «${herramienta}» no aparece en el README`);
     }
+  });
+});
+
+describe('la píldora cuenta lo que pasó, y se retira', () => {
+  const cliente = () => readFileSync(join(RAIZ, 'client.js'), 'utf8');
+
+  it('cuenta por TIPO y no por el último resultado', () => {
+    // El defecto que esto vigila: un `outcome` único hacía que un turno con una creación y un rechazo
+    // dijera «no se creó ninguna skill». Contar por tipo es lo que impide volver a esa frase.
+    const c = cliente();
+    assert.match(c, /part_rejected_s/, 'la píldora tiene que poder decir que algo se rechazó');
+    assert.match(c, /part_blocked_s/, 'y que algo se bloqueó');
+    assert.match(c, /partes\.length/, 'y componer la frase con las cuentas');
+  });
+
+  it('no enseña un id suelto cuando el turno hizo varias cosas', () => {
+    const c = cliente();
+    assert.match(c, /const simple = partes\.length === 1 && total === 1/, 'la frase con id es sólo para una skill y un resultado');
+    assert.match(c, /simple && id \?/, 'y el id se pinta sólo en ese caso');
+  });
+
+  it('los dos tiempos están declarados y el aviso no es indefinido', () => {
+    const c = cliente();
+    assert.match(c, /MS_INFORMATIVO = 8000/, 'el informativo: 2× el peor tiempo de lectura medido');
+    assert.match(c, /MS_ATENCION = 30000/, 'el que pide atención: puede exigir una decisión');
+    assert.match(c, /setTimeout/, 'y alguien tiene que retirarlo');
+  });
+
+  it('la vista expone los ids y los recuentos, y la proyección los declara', () => {
+    const view = learningView(initialLearning());
+    // Cadena (y no lista): la vista de esta unidad sólo lleva primitivos. El par de arriba prueba que no
+    // se rompa esa regla, así que aquí se comprueba la forma que sí cumple.
+    assert.equal(view.ids, '', 'la vista tiene que traer el acumulado (aunque esté vacío)');
+    for (const campo of ['created', 'updated', 'rejected', 'blocked']) {
+      assert.equal(view[campo], 0, `la vista tiene que traer «${campo}»`);
+    }
+    const proyeccion = readFileSync(join(RAIZ, 'lib', 'projection.mjs'), 'utf8');
+    assert.match(proyeccion, /ids: z\.array\(z\.string\(\)\).catch\(\[\]\)/, 'el estado declara la lista');
+    assert.match(proyeccion, /ids: z\.string\(\)/, 'la vista la expone como cadena');
   });
 });

@@ -111,9 +111,21 @@ export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
   if (key === null) return [];
   const project = projectName(cwd, key);
   const rows = [];
-  for (const proposal of pending({ root, key })) {
+  const propuestas = pending({ root, key });
+  // Cuántas van en cada lote: una fila que dice «va en el lote X» sin decir con cuántas más deja al humano
+  // sin saber si le falta algo por decidir. Se cuenta una vez, aquí, y no por fila.
+  const tamano = new Map();
+  for (const proposal of propuestas) {
+    if (proposal.group) tamano.set(proposal.group.id, (tamano.get(proposal.group.id) ?? 0) + 1);
+  }
+  for (const proposal of propuestas) {
     const slug = commandSlug(proposal.id);
     if (slug === null) continue;
+    // El lote se dice **en la descripción de la fila**: es lo que hace que en el menú se vea que estas
+    // propuestas van juntas, sin añadir un clic nuevo que escriba en varias skills a la vez.
+    const lote = proposal.group
+      ? ` · va en el lote «${proposal.group.id}» (${tamano.get(proposal.group.id)} propuesta(s) juntas: ${proposal.group.motivo})`
+      : '';
     for (const { verb, describe } of ROW_VERBS) {
       const name = uniqueName(`skill-${verb}-${slug}`, taken);
       // Última guarda antes de devolver algo que se va a registrar: un nombre fuera de la gramática no
@@ -122,11 +134,12 @@ export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
       taken.add(name);
       rows.push({
         name,
-        description: describe(proposal.id, project),
+        description: `${describe(proposal.id, project)}${lote}`,
         verb,
         id: proposal.id,
         key,
         project,
+        group: proposal.group?.id ?? null,
       });
     }
   }

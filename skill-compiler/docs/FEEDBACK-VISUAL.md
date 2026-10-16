@@ -17,7 +17,46 @@ cuando no lo hay — no deja un hueco vacío.
 | El intento se **rechazó** (solapamiento, validación) | Aspa + «No se creó» + el nombre | «No se creó ninguna skill» |
 | El origen ajeno venía con **contenido peligroso** | Escudo + «Origen bloqueado» | «Bloqueado: el origen traía contenido peligroso» |
 
-Si en una misma sesión ya se crearon o actualizaron varias, la píldora añade `×N` con el acumulado.
+### Cuando el turno hace varias cosas
+
+Un turno puede crear una skill **y** actualizar otra, o crear una y rechazar otra. La píldora no elige una de
+las dos: cuenta **por tipo**, con los ids completos en el `title`.
+
+| Lo que pasó en el turno | Qué se ve |
+|---|---|
+| Una creación | «Nueva skill» + el nombre |
+| Una actualización | «Skill actualizada» + el nombre |
+| La **misma** skill dos veces | Su nombre, y `×2` con el acumulado de la sesión |
+| Una creación **y** una actualización | «1 nueva · 1 actualizada», con los dos ids en el `title` |
+| Crea, actualiza, crea | «2 nuevas · 1 actualizada» |
+| Una creación **y** un rechazo | «1 nueva · 1 rechazada» — nunca «no se creó ninguna» |
+| Varias creaciones | «3 nuevas» (la cuenta, sin un id suelto que parezca el de todas) |
+
+Antes de esto el estado guardaba **un solo resultado** (el último pisaba al anterior) y dos contadores, así que
+un turno con una creación y un rechazo decía «No se creó ninguna skill» — con la creación en el dato. Está
+medido y congelado en `tests/aviso-del-turno.test.mjs`: si alguien vuelve a resumir por el último resultado, la
+suite se pone roja.
+
+El **id suelto** sólo se pinta cuando el turno hizo una cosa con una skill; con varias, la etiqueta son las
+cuentas y los nombres van al `title` (que se lee al pasar el puntero y al enfocar).
+
+### Cuánto tiempo permanece
+
+Un aviso que no se va nunca deja de ser un aviso; uno que se va demasiado pronto deja de informar. Los dos
+tiempos salen de una medida, no del gusto: la frase más larga que la píldora puede pintar son **73 caracteres**,
+que a 200 palabras por minuto se leen en **3,9 s**.
+
+| Situación | Permanece | Por qué |
+|---|---|---|
+| Informativo (nueva, actualizada, sin cambios) | **8 s** | El doble del peor tiempo de lectura: verlo, mirarlo y leerlo |
+| Pide atención (rechazada, bloqueada) | **30 s** | Puede exigir una decisión (mejorar la propuesta, mirar el origen) |
+| El **foco** o el **puntero** encima | **No se retira** | WCAG 2.2.1: un aviso no puede desaparecer bajo los dedos de quien lo lee |
+| Mientras analiza | No aplica | Todavía no hay nada que contar |
+| Llega un resultado nuevo | El anterior se retira en el acto | Lo que se anuncia es del turno que acaba de pasar |
+
+Ninguno es indefinido, y **retirarse no borra nada**: el resultado de la herramienta queda en el flujo del chat
+y el `title` de la píldora lleva la frase completa. La retirada la temporiza el **cliente**, no la proyección:
+un plegado con reloj dejaría de ser reproducible al releer un punto de control.
 
 ## Cómo se entera la interfaz
 
@@ -67,6 +106,8 @@ No son gusto. Cada una viene de una consulta a la guía de UI/UX que acompaña a
 | Iconos SVG en línea con `aria-hidden`, jamás emoji | «Icon Discipline»: SVG, no emoji; y decorativos cuando el texto de al lado ya lo dice |
 | El contenedor toma el color del tema del anfitrión; **solo el arte** lleva sus tonos | «Inherit the host theme for containers and controls; artwork may use its own colors» |
 | El texto pasa por el servicio de idioma, con reserva si falla | «Route visible UI text through the Client locale service» |
+| El aviso se retira solo a los 8 s (30 s si pide atención), y **no** mientras el foco o el puntero están encima | WCAG 2.2.1 (pausar, detener, ocultar): un aviso de estado no puede ser la única forma de acceder al dato, ni desaparecer mientras se lee. Por eso el registro vive en el chat y el detalle en el `title` |
+| La retirada es **sin transición**: el nodo se desmonta | «Use continuous animation for loading indicators only»: el movimiento no es aquí información, y `prefers-reduced-motion` no tiene nada que reducir |
 
 El contenedor se deriva entero de `currentColor` con `color-mix`, así que funciona en claro y en oscuro
 sin fijar ni un token de color del anfitrión. El degradado multicolor vive en el engranaje: es arte, y es
@@ -188,6 +229,10 @@ motivos de la tabla; la **decisión**, no.
 
 ## Límites, dichos en voz alta
 
+- **El temporizador de la retirada no se ha visto correr.** Su contrato está probado (los dos tiempos
+  declarados, el foco que pausa, la clave que rearma y el desmontaje), pero *verlo* desaparecer necesita el
+  plugin instalado y una sesión de verdad: en este puesto no hay control de navegador, y decir «se retira solo»
+  sin haberlo visto sería exactamente lo que este documento evita.
 - **El dibujo no está verificado visualmente.** El estado que lo alimenta (217 pruebas, incluido el
   contrato contra el registro real de proyecciones) y la forma del
   artefacto (carga, slot, idioma, movimiento reducido, ausencia de emoji) sí; **cómo se ve** solo se

@@ -4,6 +4,82 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.0.0] — 2026-10-16
+
+**Una sesión que aprende varias cosas puede proponerlas todas, y la interfaz deja de contar eventos.** Preguntado
+así: *«¿qué pasa si en una sesión la evaluación o reflexión debería crear más de una skill, o el conocimiento
+revisado toca más de un tema y se deberían hacer patches en varios skills? ¿Cómo manejamos esos casos y cómo la
+interfaz puede seguir dándonos el feedback correctamente?»*.
+
+Es **`mayor`** por el criterio del repositorio, y no por el tamaño: la superficie visible al modelo cambia de
+contrato —`skill_propose` gana un parámetro (`group`), gana campos en su esquema de salida (`group`, `siblings`),
+su descripción cambia, la vista de la proyección gana `ids` y el frontmatter de las skills gana
+`metadata.dsh.groupId`/`groupWhy` (formato del almacén)—. Que nada de lo que antes pasaba deje de pasar (salvo el
+veto, que rechazaba lo que no debía) es lo que hace el cambio **compatible**, no lo que lo hace menor.
+
+### El defecto, medido antes de tocar nada
+
+Tres skills de temas **distintos** propuestas en la misma sesión: la 2ª y la 3ª se vetaban por «mismo-tema»
+contra la 1ª (parecido 0,68). La huella comparaba descripción y disparador **completos**, así que medía el
+**estilo** de redacción del mismo autor —presente en 8/8 skills de la biblioteca— y no el tema. Con los pares
+etiquetados, el margen entre lo que debía vetarse (0,800–1,000) y lo que no (0,708–0,739) era de **0,06**.
+
+### Cambiado
+
+- **El veto de solapamiento mide tema y no estilo**: el peso de cada token sale de su frecuencia en la
+  biblioteca (`log(1 + N/(1+df))`), y lo que aparece en casi todas (≥0,8 de ellas, con ≥6 skills para comparar)
+  pesa cero. Las palabras funcionales del español también se ignoran: medido, bastaban para que dos asuntos sin
+  nada en común superaran el umbral. Umbral nuevo **0,40**, calibrado con pares etiquetados y corpus neutral:
+  temas distintos **0,000**, mismo tema **0,500–1,000** (margen 0,500).
+- **El mismo tema con sinónimos se caza por la etiqueta declarada** (normalizada, sin acentos): un parecido de
+  vocabulario no puede ver sinonimia, y no se le pide.
+- **La píldora cuenta skills, no eventos**: la vista lleva los `ids` del turno; con varias skills distintas
+  dice cuántas son (la lista en el `title`) y sólo marca `×N` cuando de verdad se repite la misma.
+- **Las filas del menú dicen a qué lote pertenece cada propuesta** y con cuántas más va.
+- La reparación **hereda el lote** de la skill viva: reparar un miembro no parte el lote.
+- Un `catch` de `propuestasDelLote` que devolvía `[]` a cualquier error se estrecha a `ENOENT`: un fallo de
+  programación no puede disfrazarse de «lote vacío» y dejar que la promoción siga creyendo que está completo.
+- El comentario de `presentation.mjs` decía que los contadores de sesión **no** se reinician y el código los
+  reiniciaba: manda el código, y el comentario ya lo dice.
+
+### Añadido
+
+- **`group` en `skill_propose`** (`id`, `motivo` obligatorio de ≥20 caracteres, `esperadas` opcional): declara
+  que varias propuestas van juntas. Las hermanas de un lote **no se vetan** —el parecido se avisa, con la
+  hermana y su puntuación— y sin lote el mismo parecido se veta igual que antes.
+- **Un lote no se activa a medias**: la promoción automática exige `esperadas` declarado, todas las propuestas
+  presentes y cada una pasando su regresión. Sin `esperadas` espera y lo dice. La **vía humana no la bloquea**:
+  aprobar dos de tres es una decisión.
+- **`--grupo` en la CLI**: `check --grupo`, `approve --grupo` (comprueba todas las puertas y sólo entonces
+  aprueba; si una falla, no aprueba ninguna) y `history --grupo`.
+- **`siblings` y `group` en el resultado** de la herramienta, y el diario anota el lote en todas sus entradas.
+- **Aviso `tag-no-cánico`**: una etiqueta con acentos o mayúsculas se tolera y se avisa con su forma canónica.
+- `tests/aprendizaje-en-lote.test.mjs`: **23 pruebas** — los once pares etiquetados del veto, el corpus con
+  margen, el lote por la herramienta real (incluido `esperadas`, que el esquema tiene que declarar), el guardián
+  de la promoción, la píldora por el flujo de eventos, la CLI y las filas del menú.
+
+### El aviso del turno: qué dice y cuánto dura
+
+- **La píldora cuenta por tipo, no por el último resultado.** Antes el estado guardaba un `outcome` único (el
+  último resultado pisaba al anterior), así que un turno que creaba una skill y rechazaba otra decía «No se creó
+  ninguna skill» — con la creación en el dato —, y «crea, actualiza, crea» se resumía como «×3» mezclando dos
+  cosas distintas. Ahora hay un contador por tipo (`created`, `updated`, `rejected`, `blocked`) y la frase se
+  compone: «1 nueva · 1 actualizada», «2 nuevas · 1 actualizada», «1 nueva · 1 rechazada». La frase de un solo
+  resultado con una sola skill **no cambia**.
+- **El id suelto sólo se pinta cuando el turno hizo una cosa con una skill**; con varias, la etiqueta son las
+  cuentas y los nombres completos van al `title`. Se acaba el `×N` que mezclaba tipos.
+- **El aviso se retira.** No había ningún temporizador: la píldora permanecía indefinidamente. Ahora
+  **8 s** si es informativo — el doble del peor tiempo de lectura medido, 73 caracteres ≈ 3,9 s a 200 ppm — y
+  **30 s** si pide atención (un rechazo, un origen bloqueado, que pueden exigir una decisión); **no** se retira
+  mientras el foco o el puntero están encima (WCAG 2.2.1), y la retirada es sin transición (una animación más
+  no informa de nada). El temporizador vive en el **cliente**: la proyección sigue siendo un plegado puro, sin
+  reloj, reproducible al releer un punto de control. Retirarse no borra nada: el resultado queda en el chat y
+  el `title` lleva la frase completa.
+- `tests/aviso-del-turno.test.mjs`: **12 pruebas** — los cuatro casos medidos (creación + actualización, tres
+  resultados mezclados, creación + rechazo, bloqueo), la frase simple que no cambia, y el contrato del tiempo
+  (los dos números, la pausa por foco, el reloj fuera del plegado).
+- La vista gana `rejected` y `blocked`; `STATE_VERSION` sube a 4 (el estado ganó dos campos).
+
 ## [2.0.0] — 2026-10-15
 
 **Una skill nace optimizada, se corrige con evidencia y se puede auditar.** Pedido así: *«asegurarme que

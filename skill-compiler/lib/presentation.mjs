@@ -87,6 +87,15 @@ export function initialLearning() {
     pending: [],     // callIds de las herramientas en vuelo: una lista, para que el esquema sea simple
     created: 0,
     updated: 0,
+    // Los resultados que **no** crearon nada también se cuentan: si un turno crea una skill y rechaza otra,
+    // decir «No se creó ninguna skill» es sencillamente falso. Un contador por tipo es lo que permite que
+    // todos los resultados del turno quepan en la frase.
+    rejected: 0,
+    blocked: 0,
+    // Las skills que este turno ha tocado, **sin repetir**: es lo que permite contar skills y no eventos.
+    // Con tres skills distintas, `created: 3` + `id: <la última>` hacía que la píldora dijera «×3» de una
+    // sola — que es exactamente lo que el usuario vio y no cuadraba con lo que había pasado.
+    ids: [],
     at: 0,
     turn: 0,
     seq: -1,
@@ -153,6 +162,9 @@ function normalize(state) {
     pending: Array.isArray(state.pending) ? state.pending.filter((x) => typeof x === 'string') : base.pending,
     created: Number.isFinite(state.created) ? state.created : base.created,
     updated: Number.isFinite(state.updated) ? state.updated : base.updated,
+    rejected: Number.isFinite(state.rejected) ? state.rejected : base.rejected,
+    blocked: Number.isFinite(state.blocked) ? state.blocked : base.blocked,
+    ids: Array.isArray(state.ids) ? state.ids.filter((x) => typeof x === 'string' && x !== '') : base.ids,
     at: Number.isFinite(state.at) ? state.at : base.at,
     turn: Number.isFinite(state.turn) ? state.turn : base.turn,
     seq: Number.isFinite(state.seq) ? state.seq : base.seq,
@@ -191,6 +203,13 @@ function fold(rawState, event) {
       id,
       created: state.created + (outcome === 'created' ? 1 : 0),
       updated: state.updated + (outcome === 'updated' ? 1 : 0),
+      rejected: state.rejected + (outcome === 'rejected' ? 1 : 0),
+      blocked: state.blocked + (outcome === 'blocked' ? 1 : 0),
+      // El id entra una sola vez, y sólo cuando de verdad se creó o se actualizó algo: un rechazo o un
+      // bloqueo no escribieron nada y no cuentan como skill tocada.
+      ids: (outcome === 'created' || outcome === 'updated') && id !== '' && !state.ids.includes(id)
+        ? [...state.ids, id]
+        : state.ids,
       at: event.time ?? state.at,
       seq: event.seq ?? state.seq,
     };
@@ -227,7 +246,9 @@ function fold(rawState, event) {
   }
 
   // Un prompt humano abre trabajo nuevo: el resultado anterior deja de estar vigente. Los contadores
-  // de la sesión NO se reinician: son el acumulado, y eso es lo que los hace útiles.
+  // de la sesión NO se reinician: son el acumulado, y eso es lo que los hace útiles (el `×N` se titula
+  // «En esta sesión»). La lista de ids sigue la misma regla: es el acumulado de la sesión, no del turno.
+  // Lo que sí se retira es el resultado anterior (`outcome`/`id`), que es lo que deja de estar vigente.
   if (type === 'user/message' && event?.data?.source?.kind === 'user') {
     const state = normalize(rawState);
     if (state.phase === 'idle' && state.outcome === '' && state.id === '') return rawState;
@@ -263,9 +284,15 @@ export function learningView(rawState) {
     phase: PHASES.includes(state.phase) ? state.phase : 'idle',
     outcome: OUTCOMES.includes(state.outcome) ? state.outcome : '',
     id: state.id,
+    // Cadena, no lista: la vista de esta unidad sólo lleva primitivos (`pending` es del ESTADO, no de la
+    // vista), y el esquema que valida cada lectura se queda en lo más simple posible. Un id kebab-case no
+    // puede contener una coma, así que la coma es un separador seguro.
+    ids: state.ids.join(','),
     analyzers: count(state.pending.length),
     created: count(state.created),
     updated: count(state.updated),
+    rejected: count(state.rejected),
+    blocked: count(state.blocked),
     at: count(state.at),
     turn: count(state.turn),
     // `-1` es "ninguna decisión": la interfaz compara esto con el `seq` del bloque que está pintando.
@@ -274,6 +301,55 @@ export function learningView(rawState) {
   };
   if (cacheable) viewCache.set(rawState, view);
   return view;
+}
+
+/**
+ * Lo que la píldora necesita para **no mentir** cuando el turno aprendió varias cosas.
+ *
+ * Con una sola skill tocada se enseña su id y, si se tocó varias veces, `×N` — que ahí dice la verdad. Con
+ * varias skills distintas se enseña cuántas son, y la lista completa va en el `title`: enseñar el id de la
+ * última junto a un `×3` es lo que hacía parecer que una skill se hubiera actualizado tres veces.
+ */
+export function resumenDeActividad(view) {
+  const ids = typeof view?.ids === 'string'
+    ? view.ids.split(',').map((x) => x.trim()).filter((x) => x !== '')
+    : [];
+  const total = count(view?.created) + count(view?.updated);
+  return {
+    skills: ids.length,
+    total,
+    ids,
+    // El `id` es el del ÚLTIMO resultado (como siempre: es el que usa la frase simple, y en una frase
+    // compuesta no se pinta, va la lista entera en el `title`). `ids` es el acumulado, que es otra cosa.
+    id: typeof view?.id === 'string' ? view.id : '',
+    repetido: ids.length <= 1 && total > 1,
+    // Lo que de verdad pasó en el turno, por tipo. `total` sigue siendo «skills creadas o actualizadas»: un
+    // rechazo no crea nada, así que no entra ahí — pero sí se cuenta, porque callarlo es mentir.
+    nuevas: count(view?.created),
+    actualizadas: count(view?.updated),
+    rechazadas: count(view?.rejected),
+    bloqueadas: count(view?.blocked),
+  };
+}
+
+/**
+ * Las partes de la frase: `['1 nueva', '2 actualizadas']`, en orden y sin perder ninguna.
+ *
+ * Con un solo resultado esto devuelve **una** parte, y el cliente pinta la frase simple de siempre
+ * («Nueva skill creada: mi-skill») — que es lo que ya funcionaba y no se toca. Con varias, cada tipo que
+ * ocurrió aparece: es lo que arregla las tres mentiras medidas (perder una creación, mezclar tipos en un
+ * `×N`, y decir «no se creó ninguna» cuando sí se creó).
+ *
+ * @param palabras - `{ created: [singular, plural], … }`, del diccionario del idioma.
+ */
+export function partesDeActividad(view, palabras = {}) {
+  const r = resumenDeActividad(view);
+  return [['created', r.nuevas], ['updated', r.actualizadas], ['rejected', r.rechazadas], ['blocked', r.bloqueadas]]
+    .filter(([, cuantas]) => cuantas > 0)
+    .map(([tipo, cuantas]) => {
+      const [singular, plural] = palabras[tipo] ?? [tipo, tipo];
+      return `${cuantas} ${cuantas === 1 ? singular : plural}`;
+    });
 }
 
 /** ¿Hay algo que enseñar? Si no, la interfaz no pinta nada — ni un hueco vacío. */

@@ -33,11 +33,17 @@
  *   node bin/skill-compiler.mjs repair <id>               # PREPARA la corrección de una skill viva (no activa)
  *   node bin/skill-compiler.mjs promote <id> [--nivel 1,2] [--dry]
  *                                                       # activa una corrección con pruebas; sin --nivel no activa nada
- *   node bin/skill-compiler.mjs history [<id>]            # qué se promocionó, con qué pruebas y por qué
+ *   node bin/skill-compiler.mjs history [<id>] [--grupo X]  # qué se promocionó, con qué pruebas y por qué
+ *                                                       # `--grupo` filtra por lote
+ *   node bin/skill-compiler.mjs check   --grupo <lote>
+ *   node bin/skill-compiler.mjs approve --grupo <lote>
+ *                                                       # un lote: varias propuestas que van juntas
+ *                                                       # (aprobarlo es entero o nada; cada una pasa su puerta)
  *   node bin/skill-compiler.mjs review [--port N]         # página local para aprobar y rechazar
  *
  * Opciones: `--project-key <clave>` para actuar sobre otro proyecto, `--force` para aprobar aunque
- * `check` avise (nunca si `check` falla), `--yes` para confirmar una retirada.
+ * `check` avise (nunca si `check` falla), `--yes` para confirmar una retirada, `--grupo <lote>` para
+ * mirar o decidir las propuestas de un lote como lo que son.
  *
  * Exit: 0 correcto · 1 problema (check en rojo, aprobación rechazada, vendorizado bloqueado) · 2 uso.
  */
@@ -82,6 +88,9 @@ for (let i = 1; i < argv.length; i++) {
   if (arg === '--estado') { flags.estado = argv[++i]; continue; }
   // Las de la promoción: qué niveles se autorizan, y ver las pruebas sin escribir nada.
   if (arg === '--nivel') { flags.nivel = argv[++i]; continue; }
+  // Un lote: la misma decisión sobre todas las propuestas que van juntas. No es un atajo —cada una pasa su
+  // puerta— es poder mirarlas y decidirlas como lo que son.
+  if (arg === '--grupo') { flags.grupo = argv[++i]; continue; }
   if (arg === '--dry') { flags.dry = true; continue; }
   if (arg.startsWith('--')) { process.stderr.write(`Opción desconocida: ${arg}\n`); process.exit(2); }
   positional.push(arg);
@@ -91,6 +100,15 @@ const root = defaultRoot();
 function usage(code) {
   process.stderr.write(readFileSync(new URL(import.meta.url), 'utf8').split('*/')[0].replace(/^\/\*\*?/, '').trim() + '\n');
   process.exit(code);
+}
+
+/**
+ * Las propuestas de un lote, leídas del mismo sitio que las lee el motor (`meta.json`). Si el lote no
+ * existe, se dice con el número de lotes que sí hay: un error que nombra lo que hay se arregla solo.
+ */
+async function idsDelLote(groupId, key) {
+  const { propuestasDelLote } = await import('../lib/promote.mjs');
+  return propuestasDelLote(groupId, key, { root }).map((p) => p.id);
 }
 
 /** El ámbito sale del cwd actual, o de `--project-key` cuando se trabaja sobre otro proyecto. */
@@ -147,8 +165,18 @@ switch (command) {
   case 'check': {
     const key = scope();
     const only = positional[0];
-    const ids = only ? [only] : pending({ root, key }).map((p) => p.id);
-    if (ids.length === 0) { process.stdout.write(`Nada pendiente en ${key}.\n`); break; }
+    // `check --grupo <id>`: las propuestas de un lote, revisadas juntas. Cada una pasa **su** puerta.
+    const ids = flags.grupo !== undefined
+      ? await idsDelLote(flags.grupo, key)
+      : only ? [only] : pending({ root, key }).map((p) => p.id);
+    if (ids.length === 0) {
+      // Un lote vacío y un proyecto sin pendientes no son lo mismo, y decir «nada pendiente» cuando se
+      // pidió un lote concreto haría pensar que está todo hecho.
+      process.stdout.write(flags.grupo !== undefined
+        ? `No hay ninguna propuesta en el lote «${flags.grupo}» de ${key}.\n`
+        : `Nada pendiente en ${key}.\n`);
+      break;
+    }
     let failures = 0;
     for (const id of ids) {
       const result = checkSkill(id, key);
@@ -161,8 +189,35 @@ switch (command) {
 
   case 'approve': {
     const id = positional[0];
-    if (!id) usage(2);
     const key = scope();
+    // Un lote se aprueba entero o no se aprueba: primero se comprueban TODAS las puertas y después se
+    // aprueban. Comprobar y aprobar de una en una dejaría media parte activada si la tercera no pasa — y
+    // eso es exactamente lo que el lote existe para evitar (la decisión humana puede ir una a una, pero
+    // entonces es `approve <id>` a propósito, no un lote que se rompió por el camino).
+    if (flags.grupo !== undefined) {
+      const ids = await idsDelLote(flags.grupo, key);
+      if (ids.length === 0) { process.stdout.write(`No hay ninguna propuesta en el lote «${flags.grupo}» de ${key}.\n`); break; }
+      const fallos = [];
+      for (const cada of ids) {
+        const comprobacion = checkSkill(cada, key);
+        if (!comprobacion.ok) { fallos.push(cada); printCheck(cada, key, comprobacion); }
+        else if (comprobacion.warnings.length && flags.force !== true) { fallos.push(cada); printCheck(cada, key, comprobacion); }
+      }
+      if (fallos.length > 0) {
+        process.stderr.write(`Aprobación del lote RECHAZADA: ${fallos.join(', ')} no pasa(n) la puerta o tiene(n) avisos.\n  No se ha aprobado ninguna: un lote se aprueba entero o no se aprueba.\n`);
+        process.exit(1);
+      }
+      const hechas = [];
+      for (const cada of ids) {
+        const movida = approve(cada, key, { root, scope: flags.global === true ? 'global' : 'project' });
+        if (!movida.ok) { process.stderr.write(`No se pudo aprobar ${cada}: ${movida.reason}\n  Ya aprobadas: ${hechas.join(', ') || '(ninguna)'}\n`); process.exit(1); }
+        hechas.push(cada);
+      }
+      const donde = flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`;
+      process.stdout.write(`Aprobadas las ${hechas.length} propuestas del lote «${flags.grupo}» en ${donde}:\n${hechas.map((c) => `  · ${c}`).join('\n')}\n`);
+      break;
+    }
+    if (!id) usage(2);
     // Aprobar algo ya aprobado no es un fallo: es un acto que ya ocurrió. Medido con el usuario delante:
     // volvió a aprobar al ver la skill todavía en la lista, y aquí leería «no existe una propuesta».
     const ambitoPedido = flags.global === true ? 'global' : 'project';
@@ -657,6 +712,8 @@ switch (command) {
     }
     const r = promover(id, key, { root, curated: curatedLibraryRoot(), cwd: process.cwd(), niveles });
     const texto = [`\npromover ${id} — proyecto ${key}`, `  nivel de la corrección: ${r.nivel ?? '?'}`];
+    // El lote se anota también en el resultado del CLI: cuando espera por el lote, se ve por qué espera.
+    if (r.grupo) texto.push(`  lote: ${r.grupo}`);
     if (r.regresion) for (const p of r.regresion.pruebas) texto.push(`  ${p.ok ? 'ok  ' : 'FALLA'} ${p.nombre.padEnd(22)} ${p.detalle}`);
     texto.push('');
     if (r.status === 'promoted') {
@@ -681,11 +738,11 @@ switch (command) {
   case 'history': {
     const { historial, ciclos } = await import('../lib/promote.mjs');
     const key = scope();
-    const filas = historial(key, { root, id: positional[0] ?? null });
+    const filas = historial(key, { root, id: positional[0] ?? null, grupo: flags.grupo ?? null });
     if (filas.length === 0) { process.stdout.write(`\nSin promociones registradas en ${key}.\n`); break; }
     const texto = [`\nhistorial de correcciones — ${key}`];
     for (const f of filas) {
-      texto.push(`  ${f.at}  ${(f.decision ?? '?').padEnd(24)} ${f.id}  nivel ${f.nivel}`);
+      texto.push(`  ${f.at}  ${(f.decision ?? '?').padEnd(24)} ${f.id}  nivel ${f.nivel}${f.group ? `  lote ${f.group}` : ''}`);
       texto.push(`      reglas: ${f.reglas.join(', ') || '(sin reglas)'} · pruebas: ${f.pruebas.join(' ')}`);
       if (f.anterior || f.resultado) texto.push(`      ${String(f.anterior).slice(0, 12)} -> ${String(f.resultado ?? '(sin resultado)').slice(0, 12)}`);
       if (f.why) texto.push(`      motivo: ${f.why}`);

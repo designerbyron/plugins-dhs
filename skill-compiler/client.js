@@ -104,6 +104,16 @@ window.__ModuleLoader__.load({
         rejected_full: 'No se creó ninguna skill',
         blocked_full: 'Bloqueado: el origen traía contenido peligroso',
         total: 'En esta sesión',
+        skills: 'Skills de este turno',
+        part_created_s: 'nueva',
+        part_created_p: 'nuevas',
+        part_updated_s: 'actualizada',
+        part_updated_p: 'actualizadas',
+        part_rejected_s: 'rechazada',
+        part_rejected_p: 'rechazadas',
+        part_blocked_s: 'bloqueada',
+        part_blocked_p: 'bloqueadas',
+        skills_short: 'skills',
         card_close: 'Cerrar este resultado',
         card_expand: 'Mostrar el resultado',
         card_collapse: 'Ocultar el resultado',
@@ -161,6 +171,16 @@ window.__ModuleLoader__.load({
         rejected_full: 'No skill was created',
         blocked_full: 'Blocked: the origin carried dangerous content',
         total: 'This session',
+        skills: 'Skills this turn',
+        part_created_s: 'new',
+        part_created_p: 'new',
+        part_updated_s: 'updated',
+        part_updated_p: 'updated',
+        part_rejected_s: 'rejected',
+        part_rejected_p: 'rejected',
+        part_blocked_s: 'blocked',
+        part_blocked_p: 'blocked',
+        skills_short: 'skills',
         card_close: 'Close this result',
         card_expand: 'Show the result',
         card_collapse: 'Hide the result',
@@ -773,6 +793,69 @@ window.__ModuleLoader__.load({
 
     /* ── el componente ───────────────────────────────────────────────────────────────────────────── */
 
+    // Cuánto permanece un aviso en pantalla. Los dos números salen de una medida, no del gusto: la frase
+    // más larga que la píldora puede pintar son 73 caracteres, que a 200 palabras por minuto se leen en
+    // 3,9 s, así que el informativo se queda el doble de eso: tiempo de verlo, mirarlo y leerlo.
+    // El que **pide atención** (un rechazo, un origen bloqueado) puede exigir una decisión y se queda más.
+    // Y ninguno es indefinido: el registro vive en el flujo del chat, así que retirarse no borra nada.
+    const MS_INFORMATIVO = 8000;
+    const MS_ATENCION = 30000;
+
+    /**
+     * La píldora, con su temporizador. Va en su propio componente porque los hooks no pueden vivir detrás
+     * de los returns tempranos del componente de fuera (sin proyección, sin vista o sin nada que decir).
+     *
+     * No se retira mientras el foco o el puntero están encima: un aviso no puede desaparecer bajo los dedos
+     * de quien lo está leyendo (WCAG 2.2.1, pausar/detener/ocultar).
+     */
+    function Pildora({ say, view, sentence, accent, Icon, analyzing, partes, ids, id, repetido, total }) {
+      const [enPausa, setEnPausa] = React.useState(false);
+      const [retirado, setRetirado] = React.useState(false);
+      // La clave identifica el resultado: cuando cambia, el aviso anterior deja de estar vigente y el
+      // temporizador vuelve a empezar. Sin esto, un aviso retirado no volvería a aparecer nunca.
+      const clave = [view.seq, view.outcome, view.ids, view.created, view.updated, view.rejected, view.blocked].join('|');
+      React.useEffect(() => { setRetirado(false); setEnPausa(false); }, [clave]);
+      const pideAtencion = (Number(view.rejected) || 0) > 0 || (Number(view.blocked) || 0) > 0;
+      React.useEffect(() => {
+        // Mientras analiza no se retira (todavía no hay nada que contar) ni cuando el humano lo tiene delante.
+        if (analyzing || retirado || enPausa) return undefined;
+        const temporizador = setTimeout(() => setRetirado(true), pideAtencion ? MS_ATENCION : MS_INFORMATIVO);
+        return () => clearTimeout(temporizador);
+      }, [clave, analyzing, retirado, enPausa, pideAtencion]);
+      if (retirado) return null;
+
+      // La frase simple (con el id) sólo vale cuando el turno hizo UNA cosa con UNA skill: con tres
+      // creaciones, partes es una sola cuenta («3 nuevas») y la frase simple perdería el 3.
+      const simple = partes.length === 1 && total === 1;
+      return h('span', {
+        className: `skc-pill${analyzing ? '' : ' skc-enter'}`,
+        // Un único estado vivo, atómico, con la frase entera. Nada de números sueltos.
+        role: 'status',
+        'aria-atomic': 'true',
+        'aria-live': 'polite',
+        // El valor completo, disponible por foco y por puntero: el recorte visual no esconde el dato, y
+        // sigue disponible cuando el aviso se retire.
+        title: sentence,
+        tabIndex: 0,
+        style: { '--skc-accent': accent },
+        // Con el foco o el puntero encima, el aviso se queda: leerlo es lo que se estaba haciendo.
+        onFocus: () => setEnPausa(true),
+        onBlur: () => setEnPausa(false),
+        onPointerEnter: () => setEnPausa(true),
+        onPointerLeave: () => setEnPausa(false),
+      },
+        h('span', { className: 'skc-mark' }, analyzing ? h(Gear) : h(Icon)),
+        // Con varias cosas en el turno, la etiqueta son las cuentas («1 nueva · 1 actualizada») y los ids
+        // completos van al `title`: un id suelto entre dos cuentas diría que todo pasó con esa skill.
+        h('span', { className: 'skc-label' }, analyzing ? say('analyzing') : simple ? say(shown) : partes.join(' · ')),
+        !analyzing && simple && id ? h('span', { className: 'skc-id' }, id) : null,
+        // Y el acumulado de la misma skill, que sí es una repetición de verdad.
+        !analyzing && simple && repetido
+          ? h('span', { className: 'skc-count', title: `${say('total')}: ${total}` }, `×${total}`)
+          : null,
+      );
+    }
+
     function SkillCompilerBadge(props) {
       const { useProjection, t } = props;
 
@@ -792,13 +875,32 @@ window.__ModuleLoader__.load({
 
       const shown = analyzing ? 'analyzing' : outcome;
       const Icon = ICONS[shown] ?? ICONS.none;
-      const id = typeof view.id === 'string' ? view.id : '';
+      // Las skills que este turno tocó, sin repetir. La cuenta se hace sobre `ids` y no sobre los
+      // contadores: `created: 3` con tres skills DISTINTAS + el id de la última es lo que pintaba
+      // «Skill actualizada: la-última ×3» — una sola skill que parecía tocada tres veces. Con un solo id,
+      // `×N` dice la verdad y se enseña; con varios, se enseña cuántas son y la lista entera va en el
+      // `title`. La regla está probada en `lib/presentation.mjs` (`resumenDeActividad`).
+      const ids = typeof view.ids === 'string' ? view.ids.split(',').map((x) => x.trim()).filter((x) => x !== '') : [];
       const total = (Number(view.created) || 0) + (Number(view.updated) || 0);
+      const id = typeof view.id === 'string' ? view.id : '';
+      const repetido = ids.length <= 1 && total > 1;
+      // Lo que pasó en el turno, por tipo: la misma regla que `partesDeActividad` en `lib/presentation.mjs`
+      // (el cliente es un artefacto de navegador sin imports, así que la repite; una prueba de coherencia
+      // vigila que las dos digan lo mismo). Antes había UN outcome: el último resultado pisaba al anterior,
+      // y un turno que creaba una skill y rechazaba otra decía «no se creó ninguna».
+      const tipos = [['created', Number(view.created) || 0, 'part_created_s', 'part_created_p'],
+        ['updated', Number(view.updated) || 0, 'part_updated_s', 'part_updated_p'],
+        ['rejected', Number(view.rejected) || 0, 'part_rejected_s', 'part_rejected_p'],
+        ['blocked', Number(view.blocked) || 0, 'part_blocked_s', 'part_blocked_p']];
+      const partes = tipos.filter(([, cuantas]) => cuantas > 0)
+        .map(([, cuantas, singular, plural]) => `${cuantas} ${say(cuantas === 1 ? singular : plural)}`);
 
       // Una sola frase con contexto: es lo que se anuncia, y es lo que se ve.
       const sentence = analyzing
         ? say('analyzing')
-        : `${say(`${shown}_full`)}${id ? `: ${id}` : ''}`;
+        : partes.length === 1 && total === 1
+          ? `${say(`${shown}_full`)}${id ? `: ${id}` : ''}`
+          : `${partes.join(' · ')}${ids.length > 0 ? ` — ${ids.join(', ')}` : ''}`;
 
       // Acentos medidos: cada uno supera 3:1 como gráfico sobre fondo oscuro Y sobre fondo claro. El
       // `blocked` anterior (#b91c1c) se quedaba en 2.93:1 sobre oscuro; #dc2626 da 3.92/4.83.
@@ -813,24 +915,7 @@ window.__ModuleLoader__.load({
 
       return h(React.Fragment, null,
         h('style', null, STYLES),
-        h('span', {
-          className: `skc-pill${analyzing ? '' : ' skc-enter'}`,
-          // Un único estado vivo, atómico, con la frase entera. Nada de números sueltos.
-          role: 'status',
-          'aria-atomic': 'true',
-          'aria-live': 'polite',
-          // El valor completo, disponible por foco y por puntero: el recorte visual no esconde el dato.
-          title: sentence,
-          tabIndex: 0,
-          style: { '--skc-accent': accent },
-        },
-          h('span', { className: 'skc-mark' }, analyzing ? h(Gear) : h(Icon)),
-          h('span', { className: 'skc-label' }, analyzing ? say('analyzing') : say(shown)),
-          id ? h('span', { className: 'skc-id' }, id) : null,
-          !analyzing && total > 1
-            ? h('span', { className: 'skc-count', title: `${say('total')}: ${total}` }, `×${total}`)
-            : null,
-        ),
+        h(Pildora, { say, view, sentence, accent, Icon, analyzing, partes, ids, id, repetido, total, shown }),
       );
     }
 

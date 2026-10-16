@@ -252,6 +252,13 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
   }
   const { data, body } = parseFrontmatter(readFileSync(join(vigente.dir, 'SKILL.md'), 'utf8'));
   const cuerpoBase = cuerpoSinTitulo(body);
+  // Si la skill vive en un lote, su reparación **sigue en el lote**: reparar un miembro no puede partir el
+  // lote en dos, o la promoción automática dejaría de poder comprobar que está entero (y el humano vería dos
+  // propuestas del mismo asunto sin saber que van juntas).
+  const metaVigente = (() => {
+    try { return JSON.parse(readFileSync(join(vigente.dir, 'meta.json'), 'utf8')); } catch { return null; }
+  })();
+  const grupoHeredado = metaVigente?.group ?? null;
 
   // La evidencia que justifica la corrección: la auditoría de ESA skill, con sus números.
   const auditoria = auditarCarpeta(vigente.dir, { cwd, id });
@@ -365,6 +372,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
     revision,
   }, {
     root, ...(curated ? { curated } : {}), references: referencesFinales, cwd: cwd ?? process.cwd(), key,
+    ...(grupoHeredado ? { group: grupoHeredado } : {}),
     extraFiles: Object.fromEntries(sinTocar.map((f) => [f.path, f.content])),
     metaExtra: {
       repair: {

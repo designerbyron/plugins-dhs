@@ -71,7 +71,7 @@ describe('activación', () => {
     // podido cargar, esto estaría vacío.
     const propose = seen.tools.find((t) => t.name === 'skill_propose');
     assert.deepEqual(Object.keys(propose.parameters.properties).sort(),
-      ['body', 'description', 'evidence', 'id', 'references', 'revision', 'tags', 'whenToUse']);
+      ['body', 'description', 'evidence', 'group', 'id', 'references', 'revision', 'tags', 'whenToUse']);
     assert.deepEqual([...propose.parameters.required].sort(), ['body', 'description', 'id', 'whenToUse']);
 
     assert.equal(seen.providers.length, 1, 'el proveedor de skills tiene que quedar registrado');

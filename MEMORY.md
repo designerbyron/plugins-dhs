@@ -1,14 +1,17 @@
 # MEMORY — estado vivo de la colección
 
 Memoria durable del repositorio. No es el historial de una sesión: es lo que hay que saber al entrar.
-Última actualización: 2026-10-13.
+Última actualización: 2026-10-16.
 
 ## Versión publicada
 
-**v1.8.0** — **primera versión estable** del plugin `skill-compiler` (el tag `v1.7.1` marca dónde se declaró)
-— `main` sincronizado con `designerbyron/plugins-dhs`.
-276 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
-con 14 comprobaciones en verde.
+**v2.0.0** publicada (`8ecd891`): la puerta de calidad vigente, `audit`, `repair`/`promote` con los tres
+niveles de riesgo y la promoción automática **apagada** por defecto. **v3.0.0** en `main` local, lista para
+sincronizar: el veto de solapamiento mide **tema** (no estilo), el **lote** permite que varias propuestas del
+mismo asunto convivan sin activarse a medias, y el aviso del turno **cuenta por tipo y se retira**.
+
+443 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
+verde.
 
 ## Qué está verificado (con la evidencia)
 
@@ -19,6 +22,9 @@ con 14 comprobaciones en verde.
 | El ámbito es por proyecto | El store tiene una sola clave de proyecto y no aparece nada suyo en otros catálogos |
 | Decidir dos veces la misma cosa no miente | Aprobar algo ya aprobado responde «Ya estaba activa» sin mover nada (repro contra el CLI real) |
 | Los bloques de resultado se cierran con X y el cierre sobrevive | `localStorage` (el cliente de escritorio se sirve desde el origen estable `dsh-app://app`). **Verificado en vivo por el autor** el 2026-10-13: cerró un bloque, reinició la aplicación y no volvió a aparecer |
+| Una sesión que aprende **varios temas** propone todos | Prueba de fuego con la **biblioteca real como corpus**: tres temas distintos → las tres propuestas (antes la 2ª y la 3ª se vetaban con 0,68). El veto mide tema: pares etiquetados, distintos **0,000** y mismo tema **0,500–1,000** (margen 0,500; era 0,06) |
+| Un **lote** no se activa a medias, y la vía humana sigue libre | Probado con dos correcciones de nivel 1 reales: con una hermana sin proponer, la promoción automática **espera**; con el lote completo y verificado, promueve. `approve <id>` no la bloquea |
+| La píldora cuenta lo que pasó por **tipo** | Congelado en `tests/aviso-del-turno.test.mjs`: creación + actualización dicen las dos, tres resultados se cuentan por tipo, y creación + rechazo **no** se resume como «no se creó ninguna» |
 
 ## Pendiente, con su estado
 
@@ -27,6 +33,7 @@ con 14 comprobaciones en verde.
 | Probar en vivo el **panel de decisiones en lote** (casillas + confirmación) en la tarjeta | Implementado en v1.5.0 y **reparado en v1.5.2**: el cliente declaraba `inject: ['slots', 'locale']` y le faltaba `'remote.commands'` (el path que el anfitrión exige, igual que su propio paquete de comandos), así que el panel no podía leer las pendientes y encima decía «no hay nada» — ahora dice el motivo y por dónde seguir. Requiere recargar el plugin para tomar efecto |
 | Filas del menú por sesión | Implementado en v1.6.0: se montan bajo el `agent.ctx` de la sesión, con el agente que el provider recibe. **Verificado en vivo por el autor**: ya no aparecen pendientes de otros proyectos |
 | **Deshabilitar y eliminar una skill** | **Implementado en v1.7.0** y **probado en vivo por el autor**: apagó una skill y el disco quedó correcto. Su prueba destapó el defecto que la v1.7.1 arregla: `skill-deshabilitar`/`skill-habilitar`/`skill-eliminar` movían la skill **sin avisar al catálogo**, así que el agente seguía viéndola ofrecida. Ahora toda acción que mueve avisa (una sola puerta, con suite que lo exige) y `/skill-propuestas` lista las apagadas con su vuelta |
+| Ver en vivo el **aviso del turno**: la retirada a los 8 s / 30 s, la pausa con el foco, y la frase compuesta con una creación y un rechazo | Implementado y con su contrato probado (los dos tiempos declarados, el foco que pausa, el reloj fuera del plegado). **Falta verlo correr**: en este puesto no hay control de navegador. El autor lo verá al usar el plugin |
 | La X en el resultado de una fila | Reparado en v1.6.1: el cliente aprende del catálogo los nombres de las filas y registra su tarjeta. La tarjeta **ya pintada** antes de aprender sigue sin X |
 | Reducir el ruido del catálogo global | Medido el 2026-10-13: de las 20 skills de `~/.dsh/skills`, al prompt llegan 13. El motivo **no está medido** (candidatos: deduplicación por similitud o presupuesto). La composición por proyecto sí: 0 skills de otros proyectos en los tres casos |
 | **Adiciones a tres skills de tenants** (`hostinger-tenant-release`, `tenant-onboarding-provision`, `tenant-maintenance-update`) | Contenido redactado, **sin aplicar**. Las tres viven ahora en `approved/` del proyecto `saas-corporative`, así que las adiciones se aplican **ahí** (ámbito del proyecto), no en la biblioteca compartida |
@@ -70,5 +77,7 @@ en todas las sesiones.
   mágica; descomprimir el fichero entero sólo lee el primero.
 - Un plugin de cliente **no puede** reemplazar la tarjeta de una herramienta: el nodo `tool` no declara hijo
   keyed y su clave ya está ocupada.
-- El cierre de un bloque **no** se guarda en `sessionStorage`: muere con la ventana.
+- El cierre de un bloque se guarda en **`localStorage`**, no en `sessionStorage`: un `sessionStorage` moría con
+  la ventana y el bloque volvía a aparecer al reiniciar (era la trampa de la v1.4.0, y está arreglada y
+  verificada en vivo por el autor).
 - Dentro de un *template literal*, un backtick en un comentario CSS rompe el fichero.

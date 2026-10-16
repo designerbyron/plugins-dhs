@@ -122,7 +122,72 @@ sirviéndose hasta que un humano decida.
 | Reintentos y ciclos sin progreso | **Implementado**: la misma corrección promocionada tres veces seguidas se para y la mira una persona |
 | Dos procesos a la vez | **Implementado**: cerrojo por skill con `O_EXCL`; si está tomado, se dice quién y desde cuándo |
 | Motor que **prepare** el parche | **Implementado, y lo pide un humano**: `repair <id>`. No hay motor que decida solo que hay que reparar algo |
+| **Aprender varias cosas en una sesión** | **Implementado** (v3.0.0): el parecido se mide por tema —descontando el estilo— y un `group` declarado permite que varias propuestas del mismo asunto convivan. Ver «Aprender varias cosas en una sesión: el lote» |
+| Un lote no se activa a medias | **Implementado** (v3.0.0): la promoción automática exige el lote completo y verificado; la vía humana queda libre |
+| Contar skills y no eventos en la interfaz | **Implementado** (v3.0.0): la vista lleva los ids del turno; la píldora y las filas del menú informan del conjunto |
 | Lo que **no** hará nunca el motor | Inventar conocimiento: una referencia que nadie escribió se declara, y la propuesta que la puerta rechazaría no se fabrica |
+
+## Aprender varias cosas en una sesión: el lote
+
+Una sesión puede aprender **varias cosas a la vez** (tres skills de temas distintos, o el mismo cambio en
+varias skills). Hasta v2.0.0 eso no funcionaba, y la auditoría lo midió antes de tocar nada:
+
+| Comprobación (medida, no supuesta) | Resultado |
+|---|---|
+| Tres skills de temas **distintos** propuestas en la misma sesión | La 2ª y la 3ª se **vetaban** por «mismo-tema» contra la 1ª (parecido 0,68) |
+| De dónde salía ese parecido | La huella comparaba descripción y disparador **completos**, así que medía el **estilo** de redacción del mismo autor, presente en 8/8 skills de la biblioteca |
+| Separación de los pares etiquetados con la huella vieja | Los que **deben** vetarse: 0,800–1,000. Los de temas distintos: 0,708–0,739. **Margen: 0,06** |
+
+### Cómo se mide el parecido desde v3.0.0
+
+La huella **descuenta lo que es estilo de la casa**: un token que aparece en casi todas las skills de la
+biblioteca no distingue un tema de otro, así que pesa cero. El peso de un token es `log(1 + N / (1 + df))`
+(`N` = skills de la biblioteca, `df` = en cuántas aparece) y los que aparecen en `df/N ≥ 0,8` **no cuentan**
+cuando hay al menos 6 skills con las que comparar. Las palabras funcionales del español (`los`, `del`, `con`,
+`para`…) tampoco cuentan: se midió que bastaban para que dos asuntos sin nada en común superaran el umbral.
+
+El umbral del veto es **0,40**, y está calibrado con pares etiquetados a mano y un corpus **neutral** (ocho
+temas de fondo que no son ninguno de los pares juzgados — si el corpus contiene el mismo tema, decide la
+gemela del corpus y no el par, y el fixture mide otra cosa):
+
+| Pares | Puntúan | Veredicto |
+|---|---|---|
+| Temas **distintos** (5 pares) | **0,000** | No se vetan |
+| **Mismo** tema, otra redacción (6 pares) | **0,500 – 1,000** | Se vetan |
+
+Margen: **0,500** (era 0,06). Con la huella vieja y umbral 0,50, dos temas distintos puntuaban 0,70–0,74 y se
+vetaban.
+
+**Lo que este criterio no ve, y no se le pide:** sinónimos sin una sola palabra en común (`respaldar` vs
+`hacer copia de seguridad`). Un parecido de vocabulario no puede verlo, y fingir que lo ve sería peor que no
+verlo. Para eso está la **etiqueta declarada** (`tags`): dos skills que declaran la misma etiqueta normalizada
+chocan de forma determinista, sin depender de cómo se redacte. Las etiquetas son identificadores, no prosa:
+kebab-case ASCII **sin acentos** (una etiqueta con acento se tolera y **se avisa** con su forma canónica,
+porque corregirla en silencio enseña a escribir mal).
+
+### El lote: declarar que varias propuestas van juntas
+
+`skill_propose` acepta `group: { id, motivo, esperadas? }`:
+
+| Regla | Por qué |
+|---|---|
+| **Dos hermanas del mismo lote no se vetan**: el parecido se **avisa**, con el id de la hermana y el número | El autor ya declaró que van juntas y por qué. Sin lote, el mismo parecido se veta igual que siempre |
+| `motivo` obligatorio (≥20 caracteres) | Sin él, `group` sería la forma de saltarse el veto escribiendo cualquier cosa. El esquema lo exige antes de ejecutar, y el motor vuelve a comprobarlo |
+| La **promoción automática** exige el lote entero: `esperadas` declarado y todas sus propuestas pasando su propia regresión | Un cambio que toca varias skills y se activa a medias deja la biblioteca contando dos historias. Sin `esperadas` no se puede saber si falta alguna, así que **espera** y lo dice |
+| La **vía humana no la bloquea el lote**: `approve <id>` y `promote` sin nivel autorizado siguen igual | Aprobar dos de tres es una decisión, no un accidente. El lote no decide por nadie |
+| El lote viaja **con la skill** (`metadata.dsh.groupId`/`groupWhy`) y **sobrevive a la reparación** | Así sigue siendo cierto aunque la skill se copie, y reparar un miembro no parte el lote en dos |
+| El diario anota el lote, y `history --grupo <lote>` lo filtra | La decisión queda auditable por lote, no sólo por skill |
+
+### La interfaz: contar skills, no eventos
+
+La píldora de estado contaba **eventos**: con tres skills distintas pintaba «Skill actualizada: la-última
+×3», que sugiere una sola skill tocada tres veces. Desde v2.1.0 la vista lleva los **ids** del turno, y:
+
+| Situación | Lo que se enseña |
+|---|---|
+| Una sola skill | Su id, y `×N` si se tocó N veces (ahí el `×N` dice la verdad) |
+| Varias skills distintas | Cuántas son (`3 skills`), con la lista completa en el `title` |
+| Un lote | Cada fila del menú dice a qué lote pertenece y **con cuántas más va**, para no dejar al humano sin saber si le falta algo por decidir |
 
 ## Compatibilidad: qué cambia en v2.0.0
 
@@ -207,3 +272,16 @@ del tamaño de la corrección.
 
 Lo que **no** está implementado: un motor que decida por su cuenta que hay que reparar algo. Hoy lo pide una
 persona (`repair`), y la autorización de nivel es una decisión por escrito en cada invocación (`--nivel`).
+
+## Compatibilidad: qué cambia en v3.0.0
+
+| Cambio | Efecto |
+|---|---|
+| El veto de solapamiento mide de otra forma (pesos por frecuencia documental, umbral 0,40) | Dos temas distintos dejan de vetarse (**era el defecto**). Los duplicados reales se siguen vetando: se comprueba con los pares etiquetados |
+| Parámetro nuevo `group` en `skill_propose` (`id`, `motivo`, `esperadas` opcional) | Opcional. Sin él, todo se comporta como antes salvo que el veto es más preciso |
+| Campos nuevos en el resultado de `skill_propose`: `group` (sólo si se declaró) y `siblings` | Declarados en el esquema: un campo devuelto sin declarar rechaza el resultado entero |
+| La vista de la proyección lleva `ids` (la lista de skills tocadas en el turno) | Aditivo. Quien leía `created`/`updated` sigue leyéndolos |
+| Aviso nuevo de la puerta: `tag-no-cánico` | Una etiqueta con acentos o mayúsculas se admite, se normaliza y **se avisa** con su forma canónica |
+| La reparación hereda el lote de la skill viva | Reparar un miembro no parte el lote |
+| `metadata.dsh.groupId`/`groupWhy` en el frontmatter | Aditivo: quien no los conozca los ignora |
+| Entradas del diario con `group` | Aditivo |
