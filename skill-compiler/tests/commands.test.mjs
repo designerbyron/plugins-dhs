@@ -454,3 +454,64 @@ describe('comandos · filas de pendientes', () => {
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'measured-decision-check', 'SKILL.md')), true);
   });
 });
+
+describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
+  /** Una pendiente mínima: estos casos sólo miran el camino «ese id no está», no la puerta. */
+  const pendiente = (root, id) => {
+    const dir = join(root, 'projects', KEY, 'proposed', id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SKILL.md'), [
+      '---', `name: ${id}`, `description: "Una propuesta pendiente llamada ${id}."`, '---', '', '# ' + id, '',
+    ].join('\n'));
+  };
+
+  it('con una letra cambiada de sitio, ofrece el id que sí está (medido con dsh-nexus-protocol)', () => {
+    const s = sandbox();
+    pendiente(s.root, 'dsh-nexus-protocol');
+    const { byName } = commands(s.root);
+
+    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'dhs-nexus-protocol --local' });
+    assert.equal(result.kind, 'error', 'no había nada con ese id: se dice');
+    assert.match(result.text, /No hay ninguna propuesta «dhs-nexus-protocol»/);
+    assert.match(result.text, /¿Querías decir «dsh-nexus-protocol»\?/);
+    assert.match(result.text, /skill-propuestas/);
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'dsh-nexus-protocol')), false, 'y no se movió nada');
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'proposed', 'dsh-nexus-protocol')), true);
+  });
+
+  it('con un id que no se parece a nada, no inventa una sugerencia', () => {
+    const s = sandbox();
+    pendiente(s.root, 'dsh-nexus-protocol');
+    const { byName } = commands(s.root);
+
+    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'otra-cosa-muy-distinta --local' });
+    assert.equal(result.kind, 'error');
+    assert.doesNotMatch(result.text, /¿Querías decir/);
+    assert.match(result.text, /Míralas con \/skill-propuestas/);
+  });
+
+  it('con dos candidatos igual de cerca, elige siempre el mismo', () => {
+    const s = sandbox();
+    pendiente(s.root, 'medida-una');
+    pendiente(s.root, 'medida-uno');
+    const { byName } = commands(s.root);
+
+    const primera = byName['skill-aprobar'].handler({ agent, rawInput: 'medida-unz --local' });
+    const segunda = byName['skill-aprobar'].handler({ agent, rawInput: 'medida-unz --local' });
+    assert.match(primera.text, /¿Querías decir «medida-una»\?/, 'el empate lo rompe el orden, no el azar');
+    assert.equal(primera.text, segunda.text);
+  });
+
+  it('la misma ayuda en /skill-ver y /skill-rechazar', () => {
+    const s = sandbox();
+    pendiente(s.root, 'dsh-nexus-protocol');
+    const { byName } = commands(s.root);
+
+    for (const comando of ['skill-ver', 'skill-rechazar']) {
+      const result = byName[comando].handler({ agent, rawInput: 'dsh-nexus-protoocl' });
+      assert.equal(result.kind, 'error', comando);
+      assert.match(result.text, /¿Querías decir «dsh-nexus-protocol»\?/, comando);
+    }
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'dsh-nexus-protocol')), false);
+  });
+});

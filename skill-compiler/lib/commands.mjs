@@ -32,7 +32,7 @@ import { join } from 'node:path';
 
 import { AUTO_COMMAND, autoApproveFromEvents, parseAutoCommand } from './auto-approve.mjs';
 import {
-  approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, pending,
+  approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, pending, sugerenciaDeId,
   projectKey, reject, retire, retired,
 } from './compiler.mjs';
 import { scopeOf } from './definitions.mjs';
@@ -96,7 +96,7 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
   const proposal = pending({ root, key }).find((row) => row.id === wanted);
   const active = listForProject(cwd, { root }).find((row) => row.id === wanted);
   const chose = proposal ?? active;
-  if (chose === undefined) return bad(`No hay ninguna skill aprendida con id «${wanted}» en ${key}. Míralas con /skill-propuestas.`);
+  if (chose === undefined) return noEstáElId(wanted, key, root, { que: 'skill aprendida' });
 
   if (proposal === undefined) {
     return ok([`Activa en este proyecto: ${wanted}`, `${chose.path}`, '', readFileSync(chose.path, 'utf8')].join('\n'));
@@ -117,6 +117,23 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
 }
 
 /** Activa una propuesta, y sólo si pasa la puerta. `force` acepta los avisos; nunca salta los fallos. */
+/**
+ * El id no está: se dice la verdad y, si huele a letra cambiada, se ofrece el que sí está.
+ *
+ * Un «no hay ninguna propuesta» que calla cuando el id correcto está a una letra es un callejón: el humano
+ * tiene que volver a mirar la lista y teclear otra vez. Medido con `dhs-nexus-protocol` (quería
+ * `dsh-nexus-protocol`): el fallo era real —no había nada con ese id— pero la respuesta no ayudaba.
+ */
+function noEstáElId(wanted, key, root, { que = 'propuesta' } = {}) {
+  const cerca = sugerenciaDeId(wanted, key, { root });
+  return bad([
+    `No hay ninguna ${que} «${wanted}» en ${key}.`,
+    ...(cerca
+      ? [`¿Querías decir «${cerca}»? Con ese id sí hay algo: repite el comando con él.`, 'Y para verlo todo: /skill-propuestas.']
+      : ['Míralas con /skill-propuestas.']),
+  ].join('\n'));
+}
+
 export function approveProposal({ root = defaultRoot(), key, id, force = false, scope = 'project', catalog } = {}) {
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
@@ -145,7 +162,7 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
       'Su copia sigue en rejected/: recuperarla es un acto manual, y a propósito.',
     ].join('\n'));
   }
-  if (where === null) return bad(`No hay ninguna propuesta «${wanted}» en ${key}. Míralas con /skill-propuestas.`);
+  if (where === null) return noEstáElId(wanted, key, root);
 
   // La misma puerta que la CLI: sin ella, esta vía sería una vía de aprobación sin validación.
   const check = checkProposal(wanted, key, { root });
@@ -199,7 +216,7 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
       'Lo aprendido y aprobado se aparta a mano, y a propósito: no hay un comando que lo deshaga sin querer.',
     ].join('\n'));
   }
-  if (where === null) return bad(`No hay ninguna propuesta «${wanted}» en ${key}. Míralas con /skill-propuestas.`);
+  if (where === null) return noEstáElId(wanted, key, root);
 
   const moved = reject(wanted, key, { root });
   if (!moved.ok) return bad(`No se pudo apartar ${wanted}: ${moved.reason}`);

@@ -187,3 +187,11 @@ en todas las sesiones.
 - **Sincronización por condición, nunca por tiempo**: marcadores que el otro espera (`arrancado`,
   `cerrojo-tomado`, `sigue`, `adelante`), con tope, y un **vigilante** dentro del hijo que lo mata si se
   atasca. Un `Atomics.wait` en bucle bloquea el hilo: los temporizadores del hijo no corren mientras gira.
+
+## v3.2.1 — un id mal tecleado deja de ser un callejón (2026-10-16)
+
+Medido en uso real: `/skill-aprobar dhs-nexus-protocol --local` (una letra cambiada de sitio) respondía «No
+hay ninguna propuesta «dhs-nexus-protocol»» —verdad, y sin salida—. Ahora los tres caminos que buscan un id
+(`/skill-ver`, `/skill-aprobar`, `/skill-rechazar`) ofrecen el más cercano con `sugerenciaDeId` (≤2 ediciones,
+candidatos ordenados ⇒ empate determinista). **Sugiere, no aprueba**: nada se mueve por parecido. Sin tag ni
+release: la autorización cubría el commit y el push, no una release adicional.

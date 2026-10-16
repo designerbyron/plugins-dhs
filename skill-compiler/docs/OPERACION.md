@@ -173,6 +173,9 @@ no es de un proyecto: y al aprobar se elige dónde vive.
 
 ```sh
 /skill-aprobar <id>                 # sin decir el ámbito, pregunta: no aprueba a ciegas
+- **Un id mal tecleado no es un callejón**: si te equivocas en una letra, el comando responde con
+  «¿Querías decir «…»?» y no mueve nada. La sugerencia es determinista y sólo sugiere: aprobar sigue siendo tuyo.
+
 /skill-aprobar <id> --local         # sólo en este proyecto
 /skill-aprobar <id> --global        # para todos tus proyectos (lo publica en la biblioteca de usuario)
 /skill-globalizar <id>              # lo mismo, dicho de otra forma (es la fila del menú)

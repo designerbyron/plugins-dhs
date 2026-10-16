@@ -4,6 +4,23 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.2.1] — 2026-10-16
+
+**Un id mal tecleado deja de ser un callejón sin salida.** Medido en uso real: `/skill-aprobar
+dhs-nexus-protocol --local` —una letra cambiada de sitio— respondía «No hay ninguna propuesta
+«dhs-nexus-protocol»» y ahí se acababa todo. Era verdad y no ayudaba: costaba una vuelta entera de mirar la
+lista, teclear otra vez, y se leía como un fallo del plugin. Sin tag ni release (no autorizado).
+
+### Añadido
+
+- **`sugerenciaDeId(wanted, key, { root })`**: el id que el humano quería decir, si lo hay, con una vara
+  determinista (≤ dos ediciones sobre los ids que existen en el ámbito del proyecto y en la biblioteca de
+  usuario) y candidatos ordenados, así que un empate se resuelve siempre igual. **Sugiere, no aprueba**: no
+  mueve ni valida nada por parecido.
+- Los tres caminos que no encontraban el id —`/skill-ver`, `/skill-aprobar` y `/skill-rechazar`— pasan por
+  una sola redacción: si huele a letra cambiada, dicen «¿Querías decir «…»?»; si no, siguen diciendo dónde
+  mirar.
+
 ## [3.2.0] — 2026-10-16
 
 **La propiedad se endurece, el inventario deja de confundir «no se pudo leer» con «no hay nada», y dos

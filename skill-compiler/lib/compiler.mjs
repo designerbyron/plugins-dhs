@@ -1928,6 +1928,62 @@ export function locate(id, key, { root = defaultRoot() } = {}) {
   return null;
 }
 
+/** Distancia de edición acotada: por encima del tope no se calcula, sólo se responde que está lejos. */
+function distanciaAcotada(a, b, tope) {
+  if (Math.abs(a.length - b.length) > tope) return tope + 1;
+  let anterior = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const actual = [i];
+    for (let j = 1; j <= b.length; j++) {
+      actual[j] = Math.min(
+        anterior[j] + 1,
+        actual[j - 1] + 1,
+        anterior[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    anterior = actual;
+  }
+  return anterior[b.length];
+}
+
+/**
+ * El id que el humano quería decir cuando tecleó otro, si lo hay.
+ *
+ * Existe por un caso medido: `/skill-aprobar dhs-nexus-protocol --local` —una letra cambiada de sitio—
+ * respondía «No hay ninguna propuesta «dhs-nexus-protocol»», que es verdad y no ayuda: cuesta una vuelta
+ * entera y se lee como un fallo del plugin. Aquí se **sugiere**; nunca se aprueba ni se mueve nada por
+ * parecido. La vara es determinista (≤ dos ediciones sobre los ids que existen en ese ámbito) y los
+ * candidatos van ordenados, así que un empate se resuelve siempre igual.
+ */
+export function sugerenciaDeId(wanted, key, { root = defaultRoot(), tope = 2 } = {}) {
+  const buscado = String(wanted ?? '').trim().toLowerCase();
+  if (buscado === '' || key === null) return null;
+  const candidatos = new Set();
+  for (const where of ['proposed', 'approved', 'disabled', 'rejected']) {
+    const base = join(root, 'projects', key, where);
+    let entradas = [];
+    try { entradas = readdirSync(base); } catch { continue; }
+    for (const id of entradas) if (existsSync(join(base, id, 'SKILL.md'))) candidatos.add(id);
+  }
+  // La biblioteca de usuario también entra: un id global tecleado con una letra de más se sugiere igual.
+  const curada = curatedLibraryRoot();
+  try {
+    for (const id of readdirSync(curada)) if (existsSync(join(curada, id, 'SKILL.md'))) candidatos.add(id);
+  } catch { /* sin biblioteca legible: no hay nada más que sugerir */ }
+
+  let mejor = null;
+  let mejorDistancia = tope + 1;
+  for (const id of [...candidatos].sort()) {
+    if (id.toLowerCase() === buscado) continue;
+    const d = distanciaAcotada(buscado, id.toLowerCase(), tope);
+    if (d < mejorDistancia) {
+      mejorDistancia = d;
+      mejor = id;
+    }
+  }
+  return mejorDistancia <= tope ? mejor : null;
+}
+
 /** Propuestas pendientes de un proyecto. Solo lectura: no decide nada. */
 export function pending({ root = defaultRoot(), key }) {
   return scanTree(join(root, 'projects', key, 'proposed'), 'propuesto')
