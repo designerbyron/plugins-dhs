@@ -227,4 +227,80 @@ describe('activación', () => {
     disposeAll();
     assert.equal(registry.size, 0, 'ni al descargar el plugin quedan filas colgando');
   });
+
+  // ── El montaje no puede rendirse en silencio ────────────────────────────────────────────────────
+  //
+  // El caso real: la sesión era válida, las pendientes estaban en el almacén y `/skill-propuestas` las
+  // listaba… pero el catálogo de esa sesión no tenía ninguna fila, así que el menú no ofrecía nada y la
+  // tarjeta sólo decía «no hay filas que decidir en el catálogo de esta sesión». El montaje se caía sin
+  // decirlo y el agente quedaba cacheado, de modo que ningún intento posterior podía arreglarlo.
+  /** Un registro de comandos en miniatura, con nombres y disposers de verdad. */
+  function registroFalso() {
+    const map = new Map();
+    return {
+      map,
+      commands: {
+        register: (definition) => {
+          const dispose = () => map.delete(definition.name);
+          map.set(definition.name, definition);
+          return dispose;
+        },
+      },
+    };
+  }
+
+  it('el comando humano monta las filas que el provider no llegó a montar', async () => {
+    const s = sandbox();
+    const signal = createCatalogSignal({ root: s.root, watch: false });
+    assert.equal(propose(goodInput({ id: 'pendiente-del-comando' }), { root: s.root, curated: s.curated, cwd: CWD }).status, 'proposed');
+    const global = registroFalso();
+    const deLaSesion = registroFalso();
+    const agent = { session: { header: { cwd: CWD } }, ctx: fakeContext({ commands: deLaSesion.commands }).ctx };
+    const { ctx, disposeAll } = fakeContext({ commands: global.commands });
+    apply(ctx, { root: s.root, catalog: signal });
+
+    const propuestas = global.map.get('skill-propuestas');
+    assert.ok(propuestas, 'el comando tiene que estar registrado');
+    assert.equal(deLaSesion.map.size, 0, 'nadie ha montado todavía las filas de esta sesión');
+
+    const r = propuestas.handler({ agent, rawInput: '' });
+    assert.equal(r.kind, 'success');
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-del-comando']);
+    assert.equal(r.text.includes('Aviso: las filas del menú'), false, 'montadas: no hay nada que avisar');
+    disposeAll();
+    assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
+  });
+
+  it('si el montaje no registra nada, el comando lo dice, y un intento posterior puede montarlo', () => {
+    const s = sandbox();
+    const signal = createCatalogSignal({ root: s.root, watch: false });
+    assert.equal(propose(goodInput({ id: 'pendiente-con-montaje-roto' }), { root: s.root, curated: s.curated, cwd: CWD }).status, 'proposed');
+    const global = registroFalso();
+    const deLaSesion = registroFalso();
+    let elInjectFunciona = false;
+    // El primer intento: el `inject` del hijo no llama a su callback (el montaje queda a medias).
+    const agent = {
+      session: { header: { cwd: CWD } },
+      ctx: {
+        effect: (callback) => callback(),
+        inject: (deps, callback) => (elInjectFunciona ? callback({ commands: deLaSesion.commands }) : undefined),
+      },
+    };
+    const { ctx, disposeAll } = fakeContext({ commands: global.commands });
+    apply(ctx, { root: s.root, catalog: signal });
+    const propuestas = global.map.get('skill-propuestas');
+
+    const roto = propuestas.handler({ agent, rawInput: '' });
+    assert.equal(roto.kind, 'success', 'el comando funciona aunque el montaje falle: hay vía manual');
+    assert.match(roto.text, /Aviso: las filas del menú «\/» no se pudieron anunciar/);
+    assert.equal(deLaSesion.map.size, 0, 'sin inject no hay filas');
+
+    // El inject empieza a funcionar: el siguiente comando vuelve a intentar el montaje y esta vez sí monta.
+    elInjectFunciona = true;
+    const sano = propuestas.handler({ agent, rawInput: '' });
+    assert.equal(sano.kind, 'success');
+    assert.equal(sano.text.includes('Aviso: las filas del menú'), false, 'ya no hay nada que avisar');
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-con-montaje-roto']);
+    disposeAll();
+  });
 });

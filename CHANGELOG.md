@@ -4,6 +4,67 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.0.1] — 2026-10-16
+
+**El motor preparaba correcciones que su propia puerta rechazaba.** Medido al reparar el almacén real: tres
+skills con `body-max` prepararon propuestas que `promote` rechazó por `tamano` —16 secciones movidas cuando la
+puerta admitía 3, y 6 cuando admitía 3—. La causa era una doble vara: `repair` movía material **hasta bajar del
+umbral** (en bytes, sin límite) y `promote` acotaba la corrección contando **trozos** (`1 + exceso/5.000`). Dos
+fórmulas para la misma regla producen, tarde o temprano, una propuesta condenada — y preparar algo que la
+puerta va a rechazar no es preparar.
+
+### Corregido
+
+- **Una sola vara para el tope.** `topeDeMovimiento(bytesAntes, { umbral, objetivo, paso })` vive en
+  `lib/repair.mjs` y la usan las dos partes: el motor al preparar y `pruebasDeRegresion` al promocionar. Se mide
+  **en bytes** —el trabajo delegado al automático es el exceso, no su troceado— y cubre la distancia al objetivo
+  (80% del umbral) más el trozo mayor disponible, porque una sección no se parte y con pasos discretos el
+  exceso solo no cruza.
+- **El motor no propone lo que quedaría por encima del umbral.** Si el movimiento no deja el cuerpo por debajo
+  del techo, no se crea propuesta: se declara en `sinReparacion` con el motivo y lo dice el CLI. Es la
+  garantía real, y no depende de que la fórmula acierte.
+- **`sin-ciclos` mide progreso, no repeticiones.** Tres promociones seguidas del mismo arreglo **con el cuerpo
+  bajando** ya no se confunden con un bucle: el ciclo es repetir sin avanzar, y el avance se mide (cada ronda
+  parte de un cuerpo estrictamente menor). Un bucle de verdad —mismo arreglo, cuerpo clavado— se sigue parando.
+- `meta.repair` publica la ronda: `topeBytes`, `paso`, `bytesMovidos`, `cuerpoTrasBytes` y `alcanzoObjetivo`; el
+  diario anota `cuerpoBytes` en cada promoción.
+- **`conservacion` mide sin el título de nivel 1**, igual que el resto del motor. El H1 lo compone
+  `renderSkill` a partir de la descripción, así que no es contenido: medirlo contaba como conocimiento perdido
+  y hacía **impromovible** cualquier corrección de una skill con el H1 editado a mano («desaparece rutas:
+  Nuxt/Vue» con todo el material en su sitio). Y cuando la corrección normaliza un H1 que decía otra cosa, la
+  revisión **lo declara** en vez de que desaparezca del diff.
+- **Un aviso no arrastra a nivel humano la corrección de un error.** Si un aviso cuyo arreglo es de nivel 3
+  (`absolute-path`) convive con un error de nivel 2 (`body-max`), la propuesta entera subía a nivel 3 y la
+  corrección del error se quedaba esperando a una persona. Ahora se planifica lo que bloquea más los avisos que
+  no suben el nivel; los demás se declaran en `sinReparacion` para que los decida quien puede.
+
+### El montaje de las filas del menú: ni se cae en silencio, ni se rinde
+
+Caso real medido en el almacén: las pendientes estaban, `/skill-propuestas` las listaba con sus doce filas…
+pero el catálogo de esa sesión no tenía ninguna, así que el menú no ofrecía nada y la tarjeta se limitaba a
+decir «no hay filas que decidir en el catálogo de esta sesión». El montaje se caía sin decirlo —y la
+documentación prometía que el plugin «lo deja dicho en vez de fingir»— y el agente quedaba cacheado con el
+montaje a medias, de modo que ningún intento posterior podía arreglarlo.
+
+- **El comando humano monta las filas.** Cualquier comando ejecutado asegura antes las filas de **su** sesión:
+  si el provider no las montó (o no llegó a montarlas), el humano es el otro camino que conoce al agente.
+- **El fallo se declara donde se lee**: `/skill-propuestas` avisa con el motivo y recuerda que las decisiones
+  funcionan igual escribiendo el comando entero.
+- **Un montaje a medias no se cachea**: se reintenta (hasta tres veces, con el motivo del último intento) y los
+  efectos retirados se sueltan todos, no sólo el primero.
+
+
+### Pruebas
+
+- `tests/repair.test.mjs`: el tope se mide en bytes y es cero por debajo del umbral; el movimiento no pasa del
+  tope y declara que no llegó al objetivo; **lo que el motor prepara cabe en su tope y deja el cuerpo por debajo
+  del umbral** (26 secciones pequeñas: el caso que la cuenta por trozos rechazaba).
+- `tests/promote.test.mjs`: lo que el motor prepara pasa su propia puerta con el tope publicado en bytes; un
+  parche que pasa del tope no se promociona; la puerta recalcula el tope con la misma función aunque el parche
+  venga a mano; y los ciclos se miden por progreso (bajando pasa, clavado se para).
+
+451 pruebas en verde · suite hermética con huella idéntica.
+
 ## [3.0.0] — 2026-10-16
 
 **Una sesión que aprende varias cosas puede proponerlas todas, y la interfaz deja de contar eventos.** Preguntado

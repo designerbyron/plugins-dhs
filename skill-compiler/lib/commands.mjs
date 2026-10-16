@@ -42,9 +42,9 @@ const ok = (text) => ({ kind: 'success', text });
 const bad = (text) => ({ kind: 'error', text });
 
 /** Los comandos son superficie humana: un fallo se cuenta como texto, nunca se lanza hacia el harness. */
-const guarded = (run) => (invocation) => {
+const guarded = (run) => (invocation, ...rest) => {
   try {
-    return run(invocation);
+    return run(invocation, ...rest);
   } catch (error) {
     return bad(`No se pudo completar: ${error.message}`);
   }
@@ -220,7 +220,7 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
  *   por tanto el momento de tener sus filas anunciadas en el menú.
  * @returns las definiciones, en la forma que espera `ctx.commands.register(...)`.
  */
-export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) {
+export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount } = {}) {
   /**
    * Envuelve una acción que **mueve** una skill para que avise al catálogo cuando de verdad movió algo.
    *
@@ -238,11 +238,11 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
   const enableSkill = moveAction(enable);
   const retireSkill = moveAction(retire);
 
-  return [
+  const definiciones = [
     {
       name: 'skill-propuestas',
       description: 'Qué skills aprendidas esperan tu aprobación en este proyecto y cuáles están activas.',
-      handler: guarded(({ agent }) => {
+      handler: guarded(({ agent }, montaje = { ok: true }) => {
         const { cwd, key } = scopeOfAgent(agent);
         if (key === null) return bad(NO_SCOPE);
 
@@ -275,6 +275,10 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
           `Aprobación automática en esta sesión: ${auto ? 'ACTIVA' : 'desactivada'}`,
           auto ? '  (las propuestas que pasen la validación se activan solas; /skill-auto desactivar para pararlo)' : '  (actívala con /skill-auto activar)',
           '',
+          ...(montaje.ok ? [] : [
+            `Aviso: las filas del menú «/» no se pudieron anunciar en esta sesión (${montaje.motivo}).`,
+            '  Las decisiones funcionan igual escribiendo el comando entero; si esto se repite, es un fallo del montaje y conviene reportarlo.',
+          ]),
           'Con un id a mano: /skill-ver <id> · /skill-aprobar <id> [--force] · /skill-rechazar <id>',
         ].join('\n'));
       }),
@@ -497,6 +501,23 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed } = {}) 
       }),
     },
   ];
+
+  // ── El humano es el otro camino que conoce al agente ────────────────────────────────────────────
+  //
+  // Si el provider no llegó a montar las filas de esta sesión, ejecutar un comando es la ocasión de
+  // intentarlo otra vez —y de saber si no se pudo—: sin esto, la sesión se quedaba sin superficie de
+  // decisión y el único aviso era «no hay filas que decidir en el catálogo de esta sesión».
+  const montar = (invocation) => {
+    try {
+      return onMount?.(invocation?.agent) ?? { ok: true };
+    } catch (error) {
+      return { ok: false, motivo: error.message };
+    }
+  };
+  return definiciones.map((command) => ({
+    ...command,
+    handler: (invocation) => command.handler(invocation, montar(invocation)),
+  }));
 }
 
 /**

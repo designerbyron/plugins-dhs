@@ -45,8 +45,15 @@ ofrecidas y condenadas a fallar, porque la puerta —que sí comprueba el ámbit
 Se recomponen cuando cambia el almacén (aprobada una pendiente, su fila deja de ofrecerse) y decidir en una
 sesión **no** toca las filas de las demás. Al descargar el plugin no queda ninguna: el plugin conserva las
 retiradas de cada agente, porque el harness avisa de que descargarse él no libera por su cuenta lo
-registrado bajo `agent.ctx`. Y si el `agent.ctx` de un anfitrión no admitiera el montaje, el plugin lo deja
-dicho en vez de fingir: quedan el comando con argumentos y la tarjeta, que resuelven por la misma puerta.
+registrado bajo `agent.ctx`.
+
+**Y se montan por dos caminos, no por uno.** El primero es el provider de skills, que recibe cada sesión con su
+agente cuando el harness le pide el catálogo. El segundo es **cualquier comando humano**: al ejecutarlo, el
+plugin vuelve a intentar el montaje de esa sesión antes de responder. Hizo falta porque el montaje podía caerse
+sin decirlo —la documentación prometía lo contrario— y el agente quedaba cacheado a medias, así que ningún
+intento posterior lo arreglaba: la sesión se quedaba sin menú y el único rastro era «no hay filas que decidir
+en el catálogo de esta sesión». Ahora, si el montaje no registra nada, `/skill-propuestas` **lo dice** con el
+motivo, reintenta hasta tres veces y recuerda que las decisiones funcionan igual escribiendo el comando entero.
 
 Dos cosas que no se delegan nunca: **la puerta de validación** (una propuesta que no la pase no se activa,
 ni con el modo automático) y **el registro** (todo queda en el log de la sesión).
@@ -308,7 +315,8 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | `promote` no activa una corrección de un lote y dice que espera | El lote no está completo o alguna hermana no pasa su regresión: un lote no se activa a medias | Completa el lote, o activa a mano lo que quieras con `approve <id>` (la vía humana no la bloquea el lote) |
 | `upstream` dice que cambió y quiero la versión nueva | Nuestra versión está adaptada | Vendoriza otra vez con el mismo id: se propone como actualización y, al aprobar, la anterior se aparta en `superseded/` |
 | La píldora del feedback visual no aparece nunca | El perfil no resolvió `zod`, o el servicio de proyección no está, o la unidad no cumplió el contrato (entonces **no se registra**) | `node bin/skill-compiler.mjs doctor`: dice si la proyección cumple el contrato y si el registro real proyecta. Con las herramientas funcionando, es un adorno ausente, no una avería |
-| Veo la lista de pendientes pero no encuentro cómo elegir una | El comando con argumentos hay que escribirlo entero, y el compositor no ofrece lista pulsable para los argumentos de un comando del host | Escribe `/` y elige la fila `skill-aprobar-<id>` (o `skill-ver-…`, `skill-rechazar-…`). `/skill-propuestas` las anuncia por su nombre exacto. Si no aparecen en el menú, ejecútalo: es lo que las arma |
+| Veo la lista de pendientes pero no encuentro cómo elegir una | El comando con argumentos hay que escribirlo entero, y el compositor no ofrece lista pulsable para los argumentos de un comando del host | Escribe `/` y elige la fila `skill-aprobar-<id>` (o `skill-ver-…`, `skill-rechazar-…`). `/skill-propuestas` las anuncia por su nombre exacto y, si las filas no estaban montadas en tu sesión, **las monta al ejecutarlo** |
+| La tarjeta dice «no hay filas que decidir en el catálogo de esta sesión» | El montaje de las filas de esa sesión no llegó a registrar nada (el `inject` del hijo de un agente no siempre corre, y el agente podía quedar cacheado a medias) | Ejecuta `/skill-propuestas`: reintenta el montaje —hasta tres veces— y, si no lo consigue, **dice el motivo**. Las decisiones funcionan igual escribiendo el comando entero. Si se repite, es un fallo del montaje: repórtalo con el motivo que muestre |
 | La tarjeta dice que no pudo leer las pendientes | El anfitrión no expone `commands.list` a la pieza de interfaz, o la sesión no está abierta | El motivo exacto lo dice el propio panel. La vía es el menú `/` o el terminal: la aprobación funciona igual y pasa por la misma puerta |
 | Apruebo algo y sigue apareciendo como pendiente | El bloque que tienes delante se pintó antes de la decisión: su texto es lo que había entonces | El bloque de la decisión trae la lista al día al final. Si el bloque viejo no se marcó como anterior, es que la decisión llegó por una vía que no pasa por el log de la sesión (el CLI en otra terminal, o una aprobación automática): vuelve a ejecutar `/skill-propuestas` |
 | Aprobar dos veces dice que ya está activa | No es un fallo: es idempotente a propósito | Nada que hacer. El mensaje dice también cómo queda la lista |

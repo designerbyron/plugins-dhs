@@ -36,6 +36,15 @@ export const inject = ['tools', 'skills', 'systemPrompt'];
 /** Orden de la sección estática: después de la guía del harness y antes del sufijo de personalidad. */
 const SECTION_ORDER = 9000;
 
+/**
+ * Cuántas veces se intenta montar las filas del menú de una sesión antes de darse por vencido.
+ *
+ * El montaje puede quedar a medias —el `inject` del hijo de un agente no siempre corre en el momento—, y
+ * reintentarlo cuando aún no hay nada registrado es barato: un nombre repetido lo rechaza el registro. Lo que
+ * no es barato es rendirse en silencio, así que el último intento deja el motivo por escrito.
+ */
+const MAX_INTENTOS_DE_MONTAJE = 3;
+
 /** La clave de la proyección vive con la unidad, donde está probada; se re-exporta aquí porque es parte
  *  de la identidad pública del plugin (el cliente la pide con `useProjection('skillCompiler')`). */
 export { LEARNING_KEY } from './lib/projection.mjs';
@@ -149,23 +158,36 @@ export function apply(ctx, config = {}) {
       };
 
       /**
-       * Monta las filas de un agente bajo **su** contexto, que es lo que las hace suyas y sólo suyas.
-       * Dentro de un mismo agente el conjunto no se toca si no cambió: re-registrar lo mismo emitiría
-       * `commands/change` en vano y haría parpadear el menú.
+       * Monta las filas de un agente y **devuelve el resultado** en vez de callarse.
+       *
+       * Las filas se montan bajo **su** contexto, que es lo que las hace suyas y sólo suyas: registrarlas en
+       * el global las ofrecía a todas las sesiones, y el humano acabó viendo, en el menú de un proyecto, las
+       * pendientes de otro. Dentro de un mismo agente el conjunto no se toca si no cambió: re-registrar lo
+       * mismo emitiría `commands/change` en vano y haría parpadear el menú.
+       *
+       * Dos defectos reales lo obligan. El primero: si el `inject` del hijo no llegaba a correr, la sesión
+       * quedaba sin filas y nadie lo decía —`/skill-propuestas` anunciaba «no hay filas que decidir en el
+       * catálogo de esta sesión»—, mientras la documentación prometía que el plugin «lo deja dicho en vez de
+       * fingir». El segundo: el agente quedaba cacheado aunque el montaje hubiera quedado a medias, así que
+       * ningún intento posterior podía arreglarlo.
+       *
+       * Ahora se reintenta mientras no haya filas registradas (un nombre repetido se rechaza solo, así que
+       * montar de más no estorba), los intentos se acotan, y el motivo viaja a quien pregunte.
        */
       const mountFor = (agent) => {
-        // `scopeOf` lee el ámbito del `exec` del agente, que es el mismo camino que usan las herramientas:
-        // una regla, una implementación. Llamarla con el agente pelado devolvía `undefined` y el montaje
-        // se caía en silencio — sin filas para nadie, que es peor que con filas de más.
+        if (agent === undefined || agent === null) return { ok: false, motivo: 'la sesión no se anunció con su agente' };
         const cwd = scopeOf({ agent });
-        if (typeof cwd !== 'string' || cwd.trim() === '' || perAgent.has(agent)) return;
-        // El plugin guarda **sus propias** retiradas: el harness avisa de que descargar el plugin no
-        // libera por su cuenta lo registrado bajo `agent.ctx`, así que la limpieza no puede depender de
-        // lo que devuelva el `inject` ni del orden en que el marco recorra los efectos.
-        const entry = { applied: '', refresh: null, dispose: null, clear: null };
-        // Un solo efecto bajo `agent.ctx`: cuando el agente muere, sus filas se van con él. Y el plugin
-        // conserva el disposer porque descargarse él **no** retira por su cuenta lo registrado ahí.
-        entry.dispose = agent.ctx.effect(() => {
+        if (typeof cwd !== 'string' || cwd.trim() === '') {
+          return { ok: false, motivo: 'la sesión no tiene un directorio de trabajo utilizable' };
+        }
+        const previo = perAgent.get(agent);
+        if (previo !== undefined && typeof previo.refresh === 'function') return { ok: true };
+        const entry = previo ?? { applied: '', refresh: null, clear: null, disposers: [], intentos: 0, motivo: null };
+        if (entry.intentos >= MAX_INTENTOS_DE_MONTAJE) {
+          return { ok: false, motivo: entry.motivo ?? 'el montaje no llegó a registrar nada en los intentos hechos' };
+        }
+        entry.intentos += 1;
+        const disposer = agent.ctx.effect(() => {
           let inner = null;
           try {
             inner = agent.ctx.inject(['commands'], (scopedRows) => {
@@ -208,8 +230,8 @@ export function apply(ctx, config = {}) {
               apply();
               return clear;
             });
-          } catch {
-            /* sin filas propias quedan el comando con argumentos y la tarjeta: nunca se queda sin vía */
+          } catch (error) {
+            entry.motivo = `el montaje de las filas lanzó: ${error.message}`;
           }
           return () => {
             try {
@@ -219,7 +241,14 @@ export function apply(ctx, config = {}) {
             }
           };
         });
+        entry.disposers.push(disposer);
+        if (entry.refresh === null) {
+          entry.motivo = entry.motivo ?? 'el anfitrión no expone el registro de comandos en el contexto del agente';
+          perAgent.set(agent, entry);
+          return { ok: false, motivo: entry.motivo };
+        }
         perAgent.set(agent, entry);
+        return { ok: true };
       };
 
       refreshPendingRows = () => {
@@ -234,7 +263,9 @@ export function apply(ctx, config = {}) {
       };
 
       try {
-        for (const command of skillCommands({ root, catalog, onListed: refreshPendingRows })) base.push(registry.register(command));
+        // `onMount` entra aquí porque el humano es el otro camino que conoce al agente: si el provider no
+        // llegó a montar sus filas, ejecutar `/skill-propuestas` las monta antes de listar.
+        for (const command of skillCommands({ root, catalog, onListed: refreshPendingRows, onMount: (agent) => mountSession(agent) })) base.push(registry.register(command));
       } catch {
         // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.
       }
@@ -242,14 +273,14 @@ export function apply(ctx, config = {}) {
       // El montaje lo dispara el provider, que recibe cada sesión con su agente (vía medida contra el
       // registro real). No se usa un evento del ciclo de vida del agente: su entrega desde el contexto
       // raíz no está garantizada, y una fila que no aparece no se distingue de una que no existe.
+      // Y si el provider no llegó a montarlas, el comando humano vuelve a intentarlo.
       mountSession = (agent) => {
-        if (agent === undefined || agent === null) return false;
-        mountFor(agent);
-        return perAgent.has(agent);
+        if (agent === undefined || agent === null) return { ok: false, motivo: 'la sesión no se anunció con su agente' };
+        return mountFor(agent);
       };
 
       return () => {
-        mountSession = () => false;
+        mountSession = () => ({ ok: false, motivo: 'el plugin se está descargando' });
         refreshPendingRows = () => false;
         for (const entry of perAgent.values()) {
           // Las filas primero, con las retiradas que guarda el propio plugin: el ámbito del agente no se
@@ -259,10 +290,14 @@ export function apply(ctx, config = {}) {
           } catch {
             /* ya retiradas */
           }
-          try {
-            entry.dispose?.();
-          } catch {
-            /* ya retirado */
+          // Todos los efectos del agente, no sólo el primero: un montaje reintentado deja más de uno, y
+          // dejar vivos los demás sería dejar filas apuntando a una sesión que ya no está.
+          for (const dispose of entry.disposers ?? []) {
+            try {
+              dispose?.();
+            } catch {
+              /* ya retirado */
+            }
           }
         }
         perAgent.clear();
