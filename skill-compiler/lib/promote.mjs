@@ -27,10 +27,10 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { dirname, join, relative, sep } from 'node:path';
 
 import {
-  approve, checkProposal, defaultRoot, folderHash, materialPreservado, parseFrontmatter, projectKey,
-  treeOf, treeOfConErrores, vigenteDe,
+  approve, checkProposal, cuerpoSinTitulo, defaultRoot, folderHash, materialPreservado, parseFrontmatter,
+  projectKey, treeOf, treeOfConErrores, vigenteDe,
 } from './compiler.mjs';
-import { inventario, inventarioPerdido } from './repair.mjs';
+import { inventario, inventarioPerdido, seccionesDe, topeDeMovimiento } from './repair.mjs';
 
 /**
  * Qué niveles se activan solos **si nadie dice otra cosa**. Vacío, y a propósito: la promoción automática es
@@ -137,7 +137,15 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
     const referenciasPropuestas = (puerta.meta?.references ?? []).map((r) => {
       try { return readFileSync(join(dirname(puerta.file), r.path), 'utf8'); } catch { return ''; }
     }).join('\n');
-    const perdido = inventarioPerdido(inventario(contenidoBase), inventario(`${cuerpoPropuesto}\n${referenciasPropuestas}`));
+    // Las dos partes se miden **sin el título de nivel 1**: `renderSkill` lo compone de la descripción, así
+    // que no es contenido de la skill sino forma. Medirlo aquí lo contaba como conocimiento y hacía
+    // impromovible cualquier corrección de una skill cuyo H1 se hubiera editado a mano — «desaparece rutas:
+    // Nuxt/Vue» con el material entero en su sitio—. El resto del motor ya mide sin título; esta era la
+    // única comparación que medía el documento entero.
+    const perdido = inventarioPerdido(
+      inventario(cuerpoSinTitulo(contenidoBase)),
+      inventario(cuerpoSinTitulo(`${cuerpoPropuesto}\n${referenciasPropuestas}`)),
+    );
     const justificado = (puerta.meta?.revision?.removed ?? '').trim();
     const claves = Object.keys(perdido);
     const graves = claves.filter((c) => c !== 'numeros' && c !== 'pasos');
@@ -168,17 +176,22 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
     ? `todo lo escrito vive en la skill (${escritos.length} fichero(s): ${escritos.slice(0, 4).join(', ')}${escritos.length > 4 ? '…' : ''})`
     : `fuera del alcance autorizado: ${fuera.join(', ')}`);
 
-  // 5. El tamaño del diff: una promoción automática es acotada o no es automática. Y se cuentan dos cosas
-  //    distintas, porque no son el mismo riesgo: **trocear** el propio cuerpo (el conocimiento cambia de
-  //    sitio dentro de la skill, con su vínculo, y su número va en proporción a lo que haya que sacar) y
-  //    **añadir** material de fuera (que sí se acota en seco: cinco piezas nuevas por corrección).
+  // 5. El tamaño del diff: una promoción automática es acotada o no es automática. Se miden dos cosas
+  //    distintas, porque no son el mismo riesgo: **sacar** material del propio cuerpo (el conocimiento
+  //    cambia de sitio dentro de la skill, con su vínculo) y **añadir** material de fuera (que se acota en
+  //    seco: cinco piezas nuevas por corrección). Lo que sale del cuerpo se mide **en bytes** —el trabajo
+  //    delegado al automático es el exceso, no su troceado— y con la MISMA función que usó el motor al
+  //    prepararlo: con dos varas distintas, el motor preparaba parches que esta puerta rechazaba.
   const lineas = (meta?.diff?.lineas?.anadidas?.length ?? 0) + (meta?.diff?.lineas?.eliminadas?.length ?? 0);
-  const movidas = meta?.repair?.movidas?.length ?? 0;
-  const exceso = Math.max(0, (meta?.repair?.bytesAntes ?? 0) - (meta?.repair?.umbral ?? 24000));
-  const maxMovidas = Math.max(1, 1 + Math.floor(exceso / 5000)); // un trozo por cada 5.000 caracteres de exceso, más uno
-  const nuevas = Math.max(0, (meta?.diff?.references?.anadidas?.length ?? 0) - movidas) + (meta?.diff?.references?.modificadas?.length ?? 0);
-  anota('tamano', lineas <= maxLineas && nuevas <= maxFicheros && movidas <= maxMovidas,
-    `diff de ${lineas} línea(s) (máximo ${maxLineas}) · ${nuevas} pieza(s) de material nuevo (máximo ${maxFicheros}) · ${movidas} trozo(s) que salen del cuerpo (máximo ${maxMovidas})`);
+  const movidas = meta?.repair?.movidas ?? [];
+  const bytesAntes = Number(meta?.repair?.bytesAntes ?? Buffer.byteLength(contenidoBase));
+  const umbralMov = Number(meta?.repair?.umbral ?? 24000);
+  const paso = Number(meta?.repair?.paso ?? Math.max(0, ...seccionesDe(contenidoBase).map((s) => s.bytes)));
+  const topeBytes = topeDeMovimiento(bytesAntes, { umbral: umbralMov, paso });
+  const bytesMovidos = Number(meta?.repair?.bytesMovidos ?? movidas.reduce((suma, m) => suma + (Number(m?.bytes) || 0), 0));
+  const nuevas = Math.max(0, (meta?.diff?.references?.anadidas?.length ?? 0) - movidas.length) + (meta?.diff?.references?.modificadas?.length ?? 0);
+  anota('tamano', lineas <= maxLineas && nuevas <= maxFicheros && bytesMovidos <= topeBytes,
+    `diff de ${lineas} línea(s) (máximo ${maxLineas}) · ${nuevas} pieza(s) de material nuevo (máximo ${maxFicheros}) · ${bytesMovidos} byte(s) fuera del cuerpo (máximo ${topeBytes})`);
 
   // 6. La reversibilidad: la versión anterior tiene que poder volver con su huella.
   const reversibles = vigente !== null ? folderHash(vigente.dir) === vigente.hash : false;
@@ -186,13 +199,20 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
     ? `la versión vigente (${vigente.hash.slice(0, 12)}) está entera y se puede reponer`
     : 'la versión vigente no se puede leer entera: sin ella no hay vuelta atrás');
 
-  // 7. Los ciclos: la misma corrección repetida sin progreso no se promociona sola otra vez.
+  // 7. Los ciclos: la misma corrección repetida **sin progreso** no se promociona sola otra vez. El progreso
+  //    se mide, no se supone: cada ronda del mismo arreglo tiene que partir de un cuerpo estrictamente menor.
+  //    Sin esto, una corrección legítima que necesita varias rondas —de 50.000 bytes a 24.000 en pasos
+  //    acotados— se confundía con un bucle; y un bucle de verdad, con el cuerpo bajando siempre, no existe.
   const reglas = [...(meta?.repair?.reglas ?? [])].sort().join('+');
-  const previas = leerDiario(key, { root }).filter((e) => e.id === id && e.decision === 'promovida');
-  const seguidas = previas.slice(-ciclosMaximos).filter((e) => [...(e.reglas ?? [])].sort().join('+') === reglas).length;
-  anota('sin-ciclos', seguidas < ciclosMaximos, seguidas < ciclosMaximos
-    ? `${seguidas} promoción(es) previas de ${reglas || '(sin reglas)'}`
-    : `la misma corrección (${reglas}) se ha promocionado ${seguidas} veces seguidas: puede ser un ciclo sin progreso, y eso lo mira una persona`);
+  const previas = leerDiario(key, { root })
+    .filter((e) => e.id === id && e.decision === 'promovida' && [...(e.reglas ?? [])].sort().join('+') === reglas);
+  const ultimas = previas.slice(-ciclosMaximos);
+  const cuerpos = [...ultimas.map((e) => (typeof e.cuerpoBytes === 'number' ? e.cuerpoBytes : null)), bytesAntes];
+  const progresa = cuerpos.every((b, i) => i === 0 || (b !== null && cuerpos[i - 1] !== null && b < cuerpos[i - 1]));
+  const enCiclo = ultimas.length >= ciclosMaximos && !progresa;
+  anota('sin-ciclos', !enCiclo, enCiclo
+    ? `la misma corrección (${reglas}) se ha promocionado ${ultimas.length} veces seguidas sin que el cuerpo baje: puede ser un ciclo sin progreso, y eso lo mira una persona`
+    : `${ultimas.length} promoción(es) previas de ${reglas || '(sin reglas)'}${ultimas.length > 0 && progresa ? ', con el cuerpo bajando en cada ronda' : ''}`);
 
   // 8. El material: la propuesta no puede perder ni un fichero de la skill viva. Es la comprobación más
   //    importante de todas, porque una pérdida aquí es conocimiento que se va sin que nadie lo note.
@@ -316,7 +336,7 @@ export function promover(id, key, {
     }
 
     if (problemas.length === 0) {
-      anotarEnDiario(key, { id, key, group: grupo?.id ?? null, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'promovida', por, hashResultante: huellaActivada, hashAnterior, superseded: resultado.superseded ?? null }, { root, now });
+      anotarEnDiario(key, { id, key, group: grupo?.id ?? null, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'promovida', por, hashResultante: huellaActivada, hashAnterior, superseded: resultado.superseded ?? null, cuerpoBytes: meta?.repair?.bytesAntes ?? null }, { root, now });
       return { status: 'promoted', id, nivel, regresion, hashAnterior, hashResultante: huellaActivada, superseded: resultado.superseded ?? null };
     }
 

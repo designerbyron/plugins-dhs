@@ -23,7 +23,7 @@ import { after, describe, it } from 'node:test';
 import { approve, checkProposal, propose, projectKey, vigenteDe } from '../lib/compiler.mjs';
 import {
   aplicarMecanicas, canonico, inventario, inventarioPerdido, moverMaterialPesado, planDeReparacion,
-  reparar, seccionesDe, TRANSFORMACIONES,
+  reparar, seccionesDe, topeDeMovimiento, TRANSFORMACIONES,
 } from '../lib/repair.mjs';
 import { cleanupSandboxes, sandbox } from './helpers.mjs';
 
@@ -142,6 +142,50 @@ describe('nivel 2: mover el material pesado conserva el conocimiento', () => {
     assert.deepEqual(s.map((x) => x.titulo), ['Primera', 'Segunda']);
     assert.match(s[1].texto, /^## Segunda/);
   });
+
+  // ── El tope: una sola vara para preparar y para promocionar ─────────────────────────────────────
+  //
+  // El defecto que cierran estas pruebas, medido en el almacén real: el motor movía «hasta bajar del
+  // umbral» y la puerta contaba TROZOS con otra fórmula, así que preparaba propuestas que su propia
+  // puerta rechazaba (16 secciones movidas con tope 3, y 6 con tope 3). Preparar algo condenado no es
+  // preparar: es prometer en falso.
+  it('el tope se mide en bytes, al objetivo del motor más un paso, y por debajo del umbral es cero', () => {
+    // 50.000 byte con umbral 24.000: la distancia al objetivo (80% = 19.200) más el paso entero disponible.
+    assert.equal(topeDeMovimiento(50000, { umbral: 24000, paso: 3000 }), 50000 - 19200 + 3000);
+    assert.equal(topeDeMovimiento(20000, { umbral: 24000, paso: 3000 }), 0, 'por debajo del umbral no se saca nada');
+    assert.equal(topeDeMovimiento(50000, { umbral: 24000, objetivo: 40000, paso: 0 }), 10000, 'el objetivo manda cuando se dice');
+  });
+
+  it('el movimiento no pasa del tope que se le da, y declara que no llegó al objetivo', () => {
+    const cuerpo = Array.from({ length: 30 }, (_, i) => `## Sección ${i}\n\n${'x'.repeat(1500)}\n`).join('\n');
+    const conTope = moverMaterialPesado({ id: 'tope', body: cuerpo, budget: 20000, objetivo: 16000, topeBytes: 4000 });
+    assert.ok(conTope, 'con 45.000 bytes y presupuesto 20.000 hay material que mover');
+    assert.ok(conTope.bytesMovidos <= 4000, `movió ${conTope.bytesMovidos}, y el tope era 4000`);
+    assert.equal(conTope.alcanzoObjetivo, false, 'con ese tope no llega al objetivo, y eso se declara');
+    const sinTope = moverMaterialPesado({ id: 'tope', body: cuerpo, budget: 20000, objetivo: 16000 });
+    assert.ok(sinTope.bytesMovidos > 4000 && sinTope.bodyBytes <= 16000, 'sin tope sigue bajando hasta el objetivo');
+  });
+
+  it('lo que el motor prepara cabe en su tope y deja el cuerpo por debajo del umbral', () => {
+    const arena = sandbox({ curated: false });
+    const id = 'catalogo-que-no-cabe-de-una-vez';
+    const input = TEMA(id);
+    assert.equal(propose(input, { root: arena.root, curated: arena.curated, cwd: CWD }).status, 'proposed');
+    assert.equal(approve(id, KEY, { root: arena.root, curated: arena.curated }).ok, true);
+    const dir = join(arena.root, 'projects', KEY, 'approved', id);
+    const texto = readFileSync(join(dir, 'SKILL.md'), 'utf8');
+    const cabecera = texto.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n\r?\n#\s[^\n]*\r?\n/)[0];
+    // Muchas secciones pequeñas: el caso que el tope por trozos rechazaba.
+    const secciones = Array.from({ length: 26 }, (_, i) => `## Pieza ${i}\n\n${'q'.repeat(1800)}\n`).join('\n');
+    writeFileSync(join(dir, 'SKILL.md'), `${cabecera}${input.body}\n\n${secciones}`);
+    const prep = reparar(id, KEY, { root: arena.root, curated: arena.curated, cwd: CWD });
+    assert.equal(prep.status, 'proposed', JSON.stringify(prep.bloqueos ?? prep.reason));
+    const meta = JSON.parse(readFileSync(join(arena.root, 'projects', KEY, 'proposed', id, 'meta.json'), 'utf8'));
+    assert.ok(meta.repair.bytesMovidos > 0, 'tiene que haber sacado material');
+    assert.ok(meta.repair.bytesMovidos <= meta.repair.topeBytes, `${meta.repair.bytesMovidos} pasa del tope ${meta.repair.topeBytes}`);
+    assert.ok(meta.repair.cuerpoTrasBytes <= meta.repair.umbral, `el cuerpo quedó en ${meta.repair.cuerpoTrasBytes}, por encima del umbral`);
+    assert.ok(meta.repair.movidas.length > 1, 'este caso mueve varias secciones, que es justo lo que la cuenta vieja rechazaba');
+  });
 });
 
 describe('el catálogo: qué repara cada hallazgo y quién lo firma', () => {
@@ -168,6 +212,31 @@ describe('el catálogo: qué repara cada hallazgo y quién lo firma', () => {
     const { plan, sinReparacion } = planDeReparacion([{ severity: 'info', rule: 'link-unverifiable' }]);
     assert.equal(plan.length, 0);
     assert.equal(sinReparacion.length, 0);
+  });
+
+  // Un aviso no puede volver humana una corrección que sí es automática: si lo hiciera, el motor dejaría de
+  // activar por sí mismo lo que sabe arreglar (un `absolute-path` de nivel 3 al lado de un `body-max` de nivel
+  // 2 subía la propuesta entera a nivel 3 y la corrección del error se quedaba esperando a una persona).
+  it('un aviso de nivel más alto no arrastra a nivel humano la corrección de un error', () => {
+    const { plan, sinReparacion, nivel } = planDeReparacion([
+      { severity: 'error', rule: 'body-max', observed: 30000, threshold: 24000 },
+      { severity: 'warn', rule: 'absolute-path', observed: 'ruta absoluta' },
+    ]);
+    assert.equal(nivel, 2, 'el error manda: la corrección sigue siendo automática');
+    assert.deepEqual(plan.map((p) => p.regla), ['body-max']);
+    assert.equal(sinReparacion.length, 1);
+    assert.match(sinReparacion[0].motivo, /es un aviso y su arreglo es de nivel 3/);
+  });
+
+  it('los avisos que no suben el nivel se planifican, y sin errores se planifican los avisos', () => {
+    const mixto = planDeReparacion([
+      { severity: 'error', rule: 'body-max', observed: 30000, threshold: 24000 },
+      { severity: 'warn', rule: 'body-budget', observed: 9000, threshold: 8000 },
+    ]);
+    assert.deepEqual(mixto.plan.map((p) => p.regla).sort(), ['body-budget', 'body-max']);
+    const soloAvisos = planDeReparacion([{ severity: 'warn', rule: 'body-budget', observed: 9000, threshold: 8000 }]);
+    assert.equal(soloAvisos.nivel, 2);
+    assert.equal(soloAvisos.plan.length, 1, 'sin errores, lo que hay que arreglar son los avisos');
   });
 });
 

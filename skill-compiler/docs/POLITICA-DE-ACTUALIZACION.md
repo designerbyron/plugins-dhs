@@ -254,24 +254,39 @@ activar** —no quien propone el parche— y quedan todas registradas en `journa
 | `base-vigente` | La versión sobre la que se construyó **sigue siendo la vigente** (por huella) | Que alguien la haya movido |
 | `conservacion` | Nada del inventario del conocimiento (comandos, cifras, rutas, encabezados) desaparece sin justificarlo | Una propuesta que borra sin decir por qué |
 | `alcance` | Lo que se escribe está **dentro de la skill**: lo que ya tenía —incluido el `upstream/` y el `provenance.json` de una vendorizada— más `references/` | Un fichero colado |
-| `tamano` | Ver abajo: lo que cambia está acotado, y se mide distinto lo que se **trocea** de lo que se **añade** | Una corrección desmedida |
+| `tamano` | Ver abajo: lo que cambia está acotado, y se mide distinto lo que **sale del cuerpo** de lo que se **añade** | Una corrección desmedida |
 | `sin-perdida-de-ficheros` | La propuesta lleva **todos** los ficheros de la skill viva | Una propuesta que pierde material |
 | `reversible` | La versión viva está entera y se puede reponer | Una skill ilegible |
-| `sin-ciclos` | La misma corrección no se ha promocionado ya tres veces seguidas | Un ciclo sin progreso |
+| `sin-ciclos` | La misma corrección no se ha promocionado ya tres veces seguidas **sin que el cuerpo baje** (el progreso se mide; repetir bajando no es un ciclo) | Un ciclo sin progreso |
 | `material-preservado` | Si se retira material, sigue conservado en el cuerpo o en otra referencia | Una retirada que pierde conocimiento |
 
 **El límite del tamaño, y por qué son dos cuentas.** Un cambio de texto se acota en seco: 200 líneas. Pero
 «mover el material pesado a `references/`» no es añadir material de fuera: es el **mismo conocimiento
 cambiando de sitio dentro de la skill**, con su vínculo y su huella. Contarlo como si fueran ficheros nuevos
 bloqueaba la corrección de las skills más grandes del almacén —las que más lo necesitan—, así que se cuenta
-aparte y en proporción a lo que haya que sacar del cuerpo: **un trozo por cada 5.000 caracteres de exceso,
-más uno**. Un cuerpo de 3 KB por encima del techo mueve un fichero; uno de 97 KB mueve hasta quince. Lo que
-**no** se relaja es que cada trozo viaje entero y con su huella, y que el inventario del conocimiento se
-conserve: eso lo comprueban `conservacion`, `sin-perdida-de-ficheros` y `material-preservado`, que no dependen
-del tamaño de la corrección.
+aparte. Y se cuenta **en bytes**, con **la misma función** que usa el motor al preparar la corrección
+(`topeDeMovimiento`): lo que puede salir del cuerpo es la distancia de su tamaño al objetivo del motor
+(80% del umbral) más el tamaño del trozo mayor disponible —un paso entero, porque una sección no se parte—.
+
+Son **una sola vara** a propósito. Con dos fórmulas distintas —el motor moviendo en bytes «hasta bajar del
+umbral» y la puerta contando trozos (`1 + exceso/5.000`)— el motor preparaba correcciones que su propia
+puerta rechazaba: medido en el almacén real, 16 secciones movidas con tope 3, y 6 con tope 3. Preparar algo
+condenado no es preparar: es prometer en falso. Y la garantía no es la fórmula: el motor **no propone** si el
+cuerpo resultante se queda por encima del umbral. Lo que **no** se relaja es que cada trozo viaje entero y
+con su huella, y que el inventario del conocimiento se conserve: eso lo comprueban `conservacion`,
+`sin-perdida-de-ficheros` y `material-preservado`, que no dependen del tamaño de la corrección.
 
 Lo que **no** está implementado: un motor que decida por su cuenta que hay que reparar algo. Hoy lo pide una
 persona (`repair`), y la autorización de nivel es una decisión por escrito en cada invocación (`--nivel`).
+
+## Compatibilidad: qué cambia en v3.0.1
+
+| Cambio | Efecto |
+|---|---|
+| El tope de material que sale del cuerpo se mide **en bytes** con una sola función (`topeDeMovimiento`), compartida por `repair` y `promote` | El motor deja de preparar correcciones que su propia puerta rechazaba. Una corrección que antes pasaba por trocear mucho con poco exceso sigue pasando; una que movía 16 trozos con tope 3 ahora se prepara dentro del tope |
+| `sin-ciclos` mide **progreso** (el cuerpo baja en cada ronda) en vez de contar repeticiones | Una corrección que necesita varias rondas deja de confundirse con un bucle. Un bucle real —mismo arreglo, cuerpo clavado— se sigue parando |
+| `repair` **no propone** si el cuerpo resultante se queda por encima del umbral | Antes fabricaba una propuesta condenada; ahora lo declara en `sinReparacion` y lo dice el CLI |
+| `meta.repair` gana `topeBytes`, `paso`, `bytesMovidos`, `cuerpoTrasBytes` y `alcanzoObjetivo`; el diario gana `cuerpoBytes` | Aditivo: los consumidores anteriores siguen leyendo lo mismo |
 
 ## Compatibilidad: qué cambia en v3.0.0
 

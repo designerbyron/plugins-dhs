@@ -106,35 +106,73 @@ const slug = (texto) => String(texto ?? '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'material';
 
 /**
+ * El tope de material que una corrección automática puede sacar del cuerpo, **medido en bytes**.
+ *
+ * Se mide en bytes y no en trozos porque el trabajo que se delega al automático es el exceso, no su
+ * troceado: con dos fórmulas distintas —una contando secciones al promocionar y otra contando bytes al
+ * preparar— el motor preparaba parches que su propia puerta rechazaba, que es justo la «propuesta
+ * condenada» que este repositorio prohíbe. Una sola fuente: la usan `moverMaterialPesado` al preparar y
+ * `pruebasDeRegresion` al promocionar.
+ *
+ * `paso` es el tamaño del trozo más grande que hay que sacar: el corte es por secciones enteras y una
+ * sección no se parte, así que el exceso solo no llega para cruzar el umbral —hace falta un trozo más—.
+ * Sin ese margen, el motor pararía justo antes de cruzar y la puerta rechazaría el cuerpo por alto.
+ *
+ * @param bytesAntes - bytes del cuerpo de la versión viva sobre la que se corrige.
+ * @param umbral - techo del cuerpo (`body-max` 24.000 · `body-budget` 8.000).
+ * @param objetivo - a dónde quiere llegar el motor; por defecto, el umbral mismo.
+ * @param paso - bytes del trozo mayor disponible, para poder cruzar con secciones enteras.
+ */
+export function topeDeMovimiento(bytesAntes, { umbral = 24000, objetivo = null, paso = 0 } = {}) {
+  const antes = Number(bytesAntes ?? 0);
+  // Por debajo del umbral no hay nada legítimo que sacar del cuerpo: el tope es cero, y una corrección que
+  // mueva material ahí se rechaza en vez de colarse.
+  if (antes <= Number(umbral ?? 24000)) return 0;
+  // La distancia se mide al **objetivo** del motor (por defecto, el 80% del umbral), no al umbral: quedarse
+  // justo por debajo del techo es lo que dejaba al cuerpo a un paso de cruzarlo, y con pasos discretos ese
+  // paso no cabía en el tope.
+  const destino = objetivo ?? Math.round(umbral * 0.8);
+  return Math.max(0, antes - destino) + Math.max(0, Number(paso) || 0);
+}
+
+/**
  * Mueve la sección más pesada a `references/` y deja el vínculo en su lugar.
  *
  * Se elige **la más larga** y no «la que parezca de consulta»: eso sería un juicio, y un juicio no puede
  * aplicarse solo. Lo que sí es determinista es el criterio de tamaño, y el corte se hace de modo que el
- * cuerpo baje del umbral. El material no se reescribe: viaja entero, con su encabezado.
+ * cuerpo baje del objetivo —hasta donde llegue `topeBytes`, que es lo que la puerta admite—. El material
+ * no se reescribe: viaja entero, con su encabezado.
  *
- * @returns `{ body, references, movidas, bodyBytes }` o `null` si no hace falta o no se puede.
+ * @returns `{ body, references, movidas, bodyBytes, bytesMovidos, alcanzoObjetivo }`, o `null` si no hace
+ *   falta o no se puede mover nada (una sola sección, o la primera candidata ya pasa del tope).
  */
-export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000 }) {
+export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000, topeBytes = Infinity }) {
   const original = String(body ?? '');
   if (Buffer.byteLength(original) <= budget) return null;
   const secciones = seccionesDe(original).sort((a, b) => b.bytes - a.bytes);
   if (secciones.length < 2) return null; // sin una segunda sección no hay nada que mover sin dejar el cuerpo vacío
   const movidas = [];
   let restante = original;
+  let bytesMovidos = 0;
   const references = [];
   for (const seccion of secciones) {
     if (Buffer.byteLength(restante) <= objetivo) break;
     // El cuerpo no puede quedarse sin procedimiento: como mínimo tiene que quedar una sección.
     if (seccionesDe(restante).length < 2) break;
+    // El tope acota la corrección **entera**: pasarlo la haría impromovible, y preparar algo que la puerta
+    // va a rechazar no es preparar, es prometer en falso.
+    if (bytesMovidos + seccion.bytes > topeBytes) break;
     const ruta = `references/${slug(seccion.titulo)}.md`;
     if (references.some((r) => r.path === ruta)) continue;
     const contenido = `${seccion.texto.replace(/\s+$/, '')}\n`;
     references.push({ path: ruta, content: contenido });
     restante = restante.replace(seccion.texto, `## ${seccion.titulo}\n\nEl detalle está en \`${ruta}\`: léelo antes de aplicar esta parte.\n`).replace(/\n{3,}/g, '\n\n');
     movidas.push({ titulo: seccion.titulo, ruta, bytes: seccion.bytes });
+    bytesMovidos += seccion.bytes;
   }
   if (movidas.length === 0) return null;
-  return { body: restante, references, movidas, bodyBytes: Buffer.byteLength(restante) };
+  const bodyBytes = Buffer.byteLength(restante);
+  return { body: restante, references, movidas, bodyBytes, bytesMovidos, alcanzoObjetivo: bodyBytes <= objetivo };
 }
 
 // ── El catálogo: qué repara cada hallazgo, y quién lo firma ──────────────────────────────────────
@@ -210,7 +248,7 @@ export const REPARACIONES = {
 
 /** ¿Qué hallazgos de esta skill tienen reparación, y de qué nivel? */
 export function planDeReparacion(hallazgos) {
-  const plan = [];
+  const reparables = [];
   const sinReparacion = [];
   for (const hallazgo of hallazgos) {
     if (hallazgo.severity === 'info') continue; // lo informativo no se repara
@@ -223,7 +261,27 @@ export function planDeReparacion(hallazgos) {
       sinReparacion.push({ ...hallazgo, motivo: `no se repara sola — ${entrada.como}` });
       continue;
     }
-    plan.push({ regla: hallazgo.rule, nivel: entrada.nivel, automatica: entrada.automatica, describe: entrada.describe, como: entrada.como, hallazgo });
+    reparables.push({ regla: hallazgo.rule, nivel: entrada.nivel, automatica: entrada.automatica, describe: entrada.describe, como: entrada.como, hallazgo });
+  }
+  // Un **aviso** no puede convertir en humana una corrección que sólo arregla un error: si pudiera, el motor
+  // dejaría de poder activar por sí mismo lo que sí sabe arreglar —un aviso de nivel 3 al lado de un error de
+  // nivel 2 subía la propuesta entera a nivel 3, y la corrección del error se quedaba esperando a una
+  // persona—. Se planifica lo que bloquea (los errores) más los avisos que no suben el nivel; los demás se
+  // declaran, para que los decida quien puede decidirlos.
+  const hayErrores = reparables.some((p) => p.hallazgo.severity === 'error');
+  const nivelDeErrores = reparables
+    .filter((p) => p.hallazgo.severity === 'error')
+    .reduce((max, p) => Math.max(max, p.nivel), 0);
+  const plan = [];
+  for (const candidata of reparables) {
+    if (hayErrores && candidata.hallazgo.severity !== 'error' && candidata.nivel > nivelDeErrores) {
+      sinReparacion.push({
+        ...candidata.hallazgo,
+        motivo: `es un aviso y su arreglo es de nivel ${candidata.nivel}: no se mete en una corrección automática de un error de nivel ${nivelDeErrores} — decídelo tú, con la propuesta delante`,
+      });
+      continue;
+    }
+    plan.push(candidata);
   }
   // El nivel de la propuesta es el más alto de sus reparaciones: lo que manda es lo más delicado.
   const nivel = plan.reduce((max, p) => Math.max(max, p.nivel), 0);
@@ -252,6 +310,12 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
   }
   const { data, body } = parseFrontmatter(readFileSync(join(vigente.dir, 'SKILL.md'), 'utf8'));
   const cuerpoBase = cuerpoSinTitulo(body);
+  // El título de nivel 1 lo **compone** `renderSkill` a partir de la descripción: si el de la skill viva dice
+  // otra cosa, la corrección lo normaliza. Se declara —es un cambio que se ve en el diff— en vez de
+  // desaparecer en silencio, que fue el defecto que dejó una corrección impromovible.
+  const tituloVivo = (String(body).match(/^\s*#\s+(.+)$/m) ?? [])[1]?.trim() ?? null;
+  const tituloCanonico = String(data?.description ?? '').trim();
+  const tituloSeNormaliza = tituloVivo !== null && tituloVivo !== '' && tituloVivo !== tituloCanonico;
   // Si la skill vive en un lote, su reparación **sigue en el lote**: reparar un miembro no puede partir el
   // lote en dos, o la promoción automática dejaría de poder comprobar que está entero (y el humano vería dos
   // propuestas del mismo asunto sin saber que van juntas).
@@ -325,20 +389,37 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
     }
   }
   const movidas = [];
+  let ronda = null;
   if (plan.some((p) => p.regla === 'body-max' || p.regla === 'body-budget')) {
-    umbral = plan.some((p) => p.regla === 'body-max') ? 24000 : 8000;
-    const movimiento = moverMaterialPesado({ id, body: cuerpo, budget: umbral, objetivo: Math.round(umbral * 0.8) });
-    if (movimiento) {
+    const entrada = plan.find((p) => p.regla === 'body-max' || p.regla === 'body-budget');
+    umbral = entrada.regla === 'body-max' ? 24000 : 8000;
+    const objetivo = Math.round(umbral * 0.8);
+    // El tope se calcula sobre el cuerpo de la versión **viva** (el mismo que medirá la puerta al
+    // promocionar) y se le pasa al movimiento: así el parche que se prepara es, por construcción, uno que
+    // la puerta admite. Antes se movía «hasta bajar del umbral» y la puerta contaba trozos: el motor
+    // preparaba propuestas condenadas.
+    const bytesAntes = Buffer.byteLength(cuerpoBase);
+    const paso = Math.max(0, ...seccionesDe(cuerpo).map((s) => s.bytes));
+    const topeBytes = topeDeMovimiento(bytesAntes, { umbral, paso });
+    const movimiento = moverMaterialPesado({ id, body: cuerpo, budget: umbral, objetivo, topeBytes });
+    // La garantía no es la fórmula: es que el cuerpo resultante quede por debajo del umbral. Si no queda,
+    // la puerta rechazaría la propuesta —por alto— y aquí no se fabrica lo que la puerta va a rechazar.
+    if (movimiento !== null && movimiento.bodyBytes <= umbral) {
       cuerpo = movimiento.body;
       material.push(...movimiento.references);
       movidas.push(...movimiento.movidas);
+      ronda = {
+        umbral, objetivo, bytesAntes, topeBytes, paso,
+        bytesMovidos: movimiento.bytesMovidos,
+        cuerpoTrasBytes: movimiento.bodyBytes,
+        alcanzoObjetivo: movimiento.alcanzoObjetivo,
+      };
     } else {
-      const entrada = plan.find((p) => p.regla === 'body-max' || p.regla === 'body-budget');
       sinReparacion.push({
         severity: 'warn', rule: entrada.regla, observed: Buffer.byteLength(cuerpo), threshold: umbral,
-        message: 'el cuerpo pasa del umbral pero no se puede trocear sin dejarlo sin procedimiento (una sola sección)',
+        message: 'el cuerpo pasa del umbral y no cabe en una corrección automática: el corte dejaría el cuerpo sin procedimiento, o la sección que habría que sacar ya supera el tope',
         fix: 'Divide el cuerpo a mano en secciones y vuelve a intentarlo, o mueve tú el material de consulta',
-        motivo: 'el motor no parte un cuerpo de una sola sección: decidir el corte es criterio',
+        motivo: 'el motor no parte secciones ni deja el cuerpo sin procedimiento: decidir ese corte es criterio',
       });
       plan.splice(plan.indexOf(entrada), 1);
     }
@@ -359,9 +440,14 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
     measurement: `Auditoría de solo lectura sobre la versión vigente (huella ${vigente.hash.slice(0, 16)}): cuerpo de ${Buffer.byteLength(cuerpoBase)} bytes${movidas.length ? `, ${movidas.length} sección(es) movida(s) a references/` : ''}.`,
     change: plan.map((p) => `${p.regla}: ${p.describe}`).join(' · ') || 'Forma canónica.',
   };
+  const notasRetiradas = [];
   if (movidas.length > 0) {
-    revision.removed = `Las secciones ${movidas.map((m) => `«${m.titulo}»`).join(', ')} NO se eliminan: viajan enteras a ${movidas.map((m) => `«${m.ruta}»`).join(', ')} y el cuerpo las sigue enlazando.`;
+    notasRetiradas.push(`Las secciones ${movidas.map((m) => `«${m.titulo}»`).join(', ')} NO se eliminan: viajan enteras a ${movidas.map((m) => `«${m.ruta}»`).join(', ')} y el cuerpo las sigue enlazando.`);
   }
+  if (tituloSeNormaliza) {
+    notasRetiradas.push(`El título de nivel 1 se normaliza al de la casa —lo compone la descripción—: «${tituloVivo}» pasa a «${tituloCanonico}». No es conocimiento del cuerpo: el inventario mide sin título.`);
+  }
+  if (notasRetiradas.length > 0) revision.removed = notasRetiradas.join(' ');
 
   const base = { state: vigente.state, hash: vigente.hash };
   const propuesta = propose({
@@ -382,6 +468,17 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
         reglas: plan.map((p) => p.regla),
         automatica: plan.every((p) => p.automatica),
         movidas: movidas.map((m) => ({ titulo: m.titulo, ruta: m.ruta, bytes: m.bytes })),
+        // La ronda: con qué tope se preparó y cuánto salió del cuerpo. La puerta lo RE-CALCULA con la
+        // misma función y comprueba que no se pasó; sin esto, preparar y verificar medían con varas distintas.
+        ...(ronda
+          ? {
+            topeBytes: ronda.topeBytes,
+            paso: ronda.paso,
+            bytesMovidos: ronda.bytesMovidos,
+            cuerpoTrasBytes: ronda.cuerpoTrasBytes,
+            alcanzoObjetivo: ronda.alcanzoObjetivo,
+          }
+          : {}),
         sinReparacion: sinReparacion.map((s) => ({ rule: s.rule, motivo: s.motivo ?? 'sin catálogo' })),
         hallazgos: hallazgosDeForma.map((f) => ({ rule: f.rule, severity: f.severity, observed: f.observed, threshold: f.threshold })),
         baseHash: base.hash,

@@ -30,8 +30,9 @@ import {
 import { auditarAlmacen } from '../lib/audit.mjs';
 import { reparar } from '../lib/repair.mjs';
 import {
-  ciclos, conCerrojo, historial, leerDiario, NIVELES_POR_DEFECTO, pruebasDeRegresion, promover,
+  ciclos, conCerrojo, historial, leerDiario, NIVELES_POR_DEFECTO, pruebasDeRegresion, promover, anotarEnDiario,
 } from '../lib/promote.mjs';
+import { topeDeMovimiento } from '../lib/repair.mjs';
 import { cleanupSandboxes, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
@@ -410,5 +411,130 @@ describe('el alcance y el tamaño, medidos sobre material de verdad', () => {
     const viva = vigenteDe(id, KEY, opts(arena));
     assert.equal(existsSync(join(viva.dir, 'provenance.json')), true, 'la procedencia sigue ahí');
     assert.equal(existsSync(join(viva.dir, 'upstream', 'SKILL.md')), true, 'y el original ajeno también');
+  });
+});
+
+// ── El tope del material y los ciclos: dos pruebas que se medían mal ───────────────────────────────
+//
+// Medido en el almacén real: el motor preparaba parches que su propia puerta rechazaba, porque preparaba
+// en bytes («hasta bajar del umbral») y la puerta contaba trozos (`1 + exceso/5.000`). Y una corrección
+// legítima que necesitaba varias rondas se confundía con un bucle. Las dos cosas se cierran aquí: una
+// sola función para el tope —la usan las dos partes— y el ciclo se decide por **progreso medido**, no por
+// número de repeticiones.
+describe('el tope del material: una sola vara para preparar y para promocionar', () => {
+  /** Una skill viva con el cuerpo por encima del techo, reparada de verdad por el motor. */
+  function preparada(arena, id) {
+    const input = TEMA(id);
+    assert.equal(propose(input, { ...opts(arena), cwd: CWD }).status, 'proposed');
+    assert.equal(approve(id, KEY, opts(arena)).ok, true);
+    const dir = dirAprob(arena, id);
+    const texto = readFileSync(join(dir, 'SKILL.md'), 'utf8');
+    const cabecera = texto.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n\r?\n#\s[^\n]*\r?\n/)[0];
+    // Muchas secciones pequeñas y un cuerpo muy por encima del techo: el caso que la cuenta por trozos rechazaba.
+    const secciones = Array.from({ length: 26 }, (_, i) => `## Pieza ${i}\n\n${'q'.repeat(1800)}\n`).join('\n');
+    writeFileSync(join(dir, 'SKILL.md'), `${cabecera}${input.body}\n\n${secciones}`);
+    const prep = reparar(id, KEY, { ...opts(arena), cwd: CWD });
+    assert.equal(prep.status, 'proposed', JSON.stringify(prep.bloqueos ?? prep.reason));
+    return { prep, meta: JSON.parse(readFileSync(join(dirProps(arena, id), 'meta.json'), 'utf8')) };
+  }
+
+  it('lo que el motor prepara pasa su propia puerta, y el tope se publica en bytes', () => {
+    const arena = sandbox({ curated: false });
+    const id = 'catalogo-de-piezas-cortas';
+    const { meta } = preparada(arena, id);
+    assert.ok(meta.repair.movidas.length > 1, 'el caso mueve varias secciones');
+    assert.ok(meta.repair.bytesMovidos <= meta.repair.topeBytes, `${meta.repair.bytesMovidos} pasa del tope`);
+    const pruebas = pruebasDeRegresion(id, KEY, meta, opts(arena));
+    const tamano = pruebas.pruebas.find((p) => p.nombre === 'tamano');
+    assert.equal(tamano.ok, true, tamano.detalle);
+    assert.match(tamano.detalle, new RegExp(`máximo ${meta.repair.topeBytes}`));
+    assert.match(tamano.detalle, /byte\(s\) fuera del cuerpo/);
+  });
+
+  it('un parche que pasa del tope no se promociona', () => {
+    const arena = sandbox({ curated: false });
+    const id = 'catalogo-de-piezas-excedido';
+    const { meta } = preparada(arena, id);
+    meta.repair.bytesMovidos = meta.repair.topeBytes + 1;
+    const tamano = pruebasDeRegresion(id, KEY, meta, opts(arena)).pruebas.find((p) => p.nombre === 'tamano');
+    assert.equal(tamano.ok, false);
+    assert.match(tamano.detalle, /byte\(s\) fuera del cuerpo/);
+  });
+
+  it('la puerta recalcula el tope con la misma función, también sin el dato del motor', () => {
+    const arena = sandbox({ curated: false });
+    const id = 'catalogo-sin-dato-de-motor';
+    const { meta } = preparada(arena, id);
+    // Un parche a mano (sin `topeBytes`/`bytesMovidos`) sigue acotado: el tope se recalcula del cuerpo vivo.
+    const sinDatos = { ...meta, repair: { ...meta.repair, topeBytes: undefined, bytesMovidos: undefined, paso: undefined } };
+    const bytesVivos = readFileSync(join(dirAprob(arena, id), 'SKILL.md'), 'utf8');
+    const tope = topeDeMovimiento(Buffer.byteLength(bytesVivos), { umbral: 24000, paso: 100000 });
+    assert.ok(tope > 0, 'con ese cuerpo hay tope');
+    const tamano = pruebasDeRegresion(id, KEY, sinDatos, opts(arena)).pruebas.find((p) => p.nombre === 'tamano');
+    assert.match(tamano.detalle, /byte\(s\) fuera del cuerpo/);
+  });
+});
+
+describe('el título de nivel 1 es forma, no conocimiento', () => {
+  it('una skill con el H1 editado a mano se repara, se declara la normalización y la puerta no ve pérdida', () => {
+    const arena = sandbox({ curated: false });
+    const id = 'catalogo-con-titulo-a-mano';
+    const input = TEMA(id);
+    assert.equal(propose(input, { ...opts(arena), cwd: CWD }).status, 'proposed');
+    assert.equal(approve(id, KEY, opts(arena)).ok, true);
+    const dir = dirAprob(arena, id);
+    const cabecera = readFileSync(join(dir, 'SKILL.md'), 'utf8').match(/^---\r?\n[\s\S]*?\r?\n---\r?\n\r?\n#\s[^\n]*\r?\n/)[0];
+    // El caso real: un H1 escrito a mano que NO es la descripción, y un cuerpo por encima del techo.
+    const secciones = Array.from({ length: 20 }, (_, i) => `## Pieza ${i}\n\n${'q'.repeat(1800)}\n`).join('\n');
+    writeFileSync(join(dir, 'SKILL.md'), `${cabecera.replace(/^# .*$/m, '# Nuxt/Vue storefront front end')}${input.body}\n\n${secciones}`);
+    const prep = reparar(id, KEY, { ...opts(arena), cwd: CWD });
+    assert.equal(prep.status, 'proposed', JSON.stringify(prep.bloqueos ?? prep.reason));
+    assert.match(String(prep.revision?.removed ?? ''), /título de nivel 1 se normaliza/);
+    const meta = JSON.parse(readFileSync(join(dirProps(arena, id), 'meta.json'), 'utf8'));
+    const conservacion = pruebasDeRegresion(id, KEY, meta, opts(arena)).pruebas.find((p) => p.nombre === 'conservacion');
+    assert.equal(conservacion.ok, true, conservacion.detalle);
+    // Y se promociona de verdad: la corrección que antes quedaba condenada ahora activa.
+    const r = promover(id, KEY, { ...opts(arena), cwd: CWD, niveles: [1, 2] });
+    assert.equal(r.status, 'promoted', JSON.stringify(r.regresion?.pruebas));
+  });
+});
+describe('los ciclos se miden por progreso, no por repeticiones', () => {
+  /** Siembra una skill viva con el cuerpo grande y devuelve la propuesta real de su corrección. */
+  function propuestaReal(arena, id) {
+    const input = TEMA(id);
+    assert.equal(propose(input, { ...opts(arena), cwd: CWD }).status, 'proposed');
+    assert.equal(approve(id, KEY, opts(arena)).ok, true);
+    const dir = dirAprob(arena, id);
+    const cabecera = readFileSync(join(dir, 'SKILL.md'), 'utf8').match(/^---\r?\n[\s\S]*?\r?\n---\r?\n\r?\n#\s[^\n]*\r?\n/)[0];
+    writeFileSync(join(dir, 'SKILL.md'), `${cabecera}${input.body}\n\n## Piezas\n\n${'z'.repeat(30000)}\n`);
+    const prep = reparar(id, KEY, { ...opts(arena), cwd: CWD });
+    assert.equal(prep.status, 'proposed', JSON.stringify(prep.bloqueos ?? prep.reason));
+    return { meta: JSON.parse(readFileSync(join(dirProps(arena, id), 'meta.json'), 'utf8')), reglas: prep.reparaciones.map((p) => p.regla) };
+  }
+
+  it('rondas sucesivas del mismo arreglo que bajan el cuerpo no son un ciclo', () => {
+    const arena = sandbox({ curated: false });
+    const id = 'catalogo-que-baja-por-rondas';
+    const { reglas, meta } = propuestaReal(arena, id);
+    // Tres promociones previas del MISMO arreglo, cada una desde un cuerpo más pequeño: hay progreso.
+    for (const cuerpoBytes of [60000, 50000, 40000]) {
+      anotarEnDiario(KEY, { id, key: KEY, reglas, decision: 'promovida', cuerpoBytes }, opts(arena));
+    }
+    const progresiva = { ...meta, repair: { ...meta.repair, reglas, bytesAntes: 30000 } };
+    const pasa = pruebasDeRegresion(id, KEY, progresiva, opts(arena)).pruebas.find((p) => p.nombre === 'sin-ciclos');
+    assert.equal(pasa.ok, true, pasa.detalle);
+    assert.match(pasa.detalle, /bajando en cada ronda/);
+  });
+
+  it('las mismas tres promociones con el cuerpo clavado sí son un ciclo', () => {
+    const arena = sandbox({ curated: false });
+    const id = 'catalogo-que-no-baja';
+    const { reglas, meta } = propuestaReal(arena, id);
+    for (let i = 0; i < 3; i += 1) {
+      anotarEnDiario(KEY, { id, key: KEY, reglas, decision: 'promovida', cuerpoBytes: meta.repair.bytesAntes }, opts(arena));
+    }
+    const tamano = pruebasDeRegresion(id, KEY, meta, opts(arena)).pruebas.find((p) => p.nombre === 'sin-ciclos');
+    assert.equal(tamano.ok, false);
+    assert.match(tamano.detalle, /ciclo sin progreso/);
   });
 });
