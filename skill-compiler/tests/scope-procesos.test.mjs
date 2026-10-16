@@ -37,7 +37,7 @@ after(cleanupSandboxes);
 const RAIZ_DEL_PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';
 const KEY = projectKey(CWD);
-const ESPERA_MAXIMA = 25000;
+const ESPERA_MAXIMA = 60000;
 
 // Los hijos importan por **URL de fichero**: en ESM un `C:\…` se leería como un esquema de URL, no como
 // una ruta, y el hijo moriría al arrancar (que es exactamente lo que pasó al escribirlo con la ruta cruda).
@@ -45,7 +45,7 @@ const rutaLib = (nombre) => JSON.stringify(pathToFileURL(join(RAIZ_DEL_PLUGIN, '
 
 /** El hijo: se escribe en la caja de arena al vuelo, así no hay ficheros fixture sueltos en el repositorio. */
 const HIJO = `
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { conCerrojo } from ${rutaLib('lock.mjs')};
 import { propose } from ${rutaLib('compiler.mjs')};
@@ -54,6 +54,7 @@ import { promover } from ${rutaLib('promote.mjs')};
 import { declararPropiedad } from ${rutaLib('scope.mjs')};
 
 const [modo, root, key, id, marcas, cwd, extra] = process.argv.slice(2);
+const tema0 = id.replace(/-/g, ' ');
 const curada = join(root, '..', 'skills');
 
 // Las esperas son **por condición** (el marcador existe o no): el tiempo solo es el tope.
@@ -68,15 +69,27 @@ const esperarSync = (nombre) => {
   }
 };
 const marcar = (nombre) => writeFileSync(join(marcas, nombre), String(process.pid));
-const anotar = (nombre, datos) => writeFileSync(join(marcas, nombre), JSON.stringify(datos));
+// Vigilante: si el hijo se atasca en una espera, muere solo y lo deja escrito. Sin esto, un atasco del
+// hijo se convierte en un tiempo agotado del padre, que es peor diagnóstico.
+setTimeout(() => { try { writeFileSync(join(marcas, 'vigilante.txt'), 'el hijo se atascó: ' + modo); } catch {} process.exit(9); }, 20000);
+// Atómico: se escribe en un temporal y se renombra. Un fichero a medio escribir que el padre lea es un
+// fallo de la PRUEBA —JSON truncado—, no del motor, y no puede confundirse con uno.
+const anotar = (nombre, datos) => { const destino = join(marcas, nombre); writeFileSync(destino + '.tmp', JSON.stringify(datos)); renameSync(destino + '.tmp', destino); };
+marcar('arrancado'); // la primera cosa que hace el hijo: distingue «no arrancó» de «arrancó y se bloqueó»
 
 // El texto depende del id: dos skills distintas tienen que tener **temas distintos**, o el veto de
 // solapamiento las compara entre sí (y entonces la prueba mediría el veto, no el cerrojo).
-const tema = id.replace(/-/g, ' ');
-const textoDe = (id, n) => ({ description: 'Procedimiento de ' + tema + ' con detalle suficiente para pasar la puerta de calidad.', whenToUse: 'Cuando haya que trabajar con ' + tema + ' y haga falta decidir con evidencia medida.', body: Array.from({ length: 10 }, (_, i) => '## Apartado de ' + tema + ' ' + i + '\\n\\n' + ('Detalle operativo de ' + tema + ' con números 42. ').repeat(30) + '\\n').join('\\n') });
+// El texto entero lo decide quien lanza el hijo, en «extra» con el formato «descripcion|whenToUse|tema».
+// Con una plantilla compartida, el veto de solapamiento veía el mismo andamiaje y vetaba las dos: la prueba
+// habría medido el veto en lugar del cerrojo.
+const partes = String(extra ?? '').split('|');
+const [descripcion, cuando, tema] = [partes[0] ?? 'Procedimiento de ' + tema0, partes[1] ?? 'Cuando haga falta trabajar con ' + tema0, partes[2] ?? tema0];
+const textoDe = () => ({ description: descripcion, whenToUse: cuando, body: Array.from({ length: 8 }, (_, i) => '## Apartado ' + (i + 1) + ' de ' + tema + '\\n\\n' + ('Se detalla aquí el paso ' + (i + 1) + ' de ' + tema + ', con su orden y su número 42. ').repeat(10) + '\\n').join('\\n') });
 
 if (modo === 'tomar-y-esperar') {
+  const destino = join(root, 'pruebas-cerrojo');
   const hecho = conCerrojo(root, key, id, () => {
+    writeFileSync(join(destino, 'escrito-por-' + id + '.txt'), 'escrito por ' + modo);
     marcar('cerrojo-tomado');
     const visto = esperarSync('sigue'); // no suelta hasta que el padre lo diga
     return visto ? 'dueño terminó' : 'dueño se cansó de esperar';
@@ -93,10 +106,19 @@ if (modo === 'tomar-y-morir') {
   process.exit(0);
 }
 
-if (modo === 'proponer') {
-  const r = propose({ id, ...textoDe(id), evidence: ['un gate real'] }, { root, curated: curada, cwd });
-  marcar('propuesto');
-  anotar('resultado-propuesta.json', { status: r.status, errors: r.errors ?? [], conflicts: (r.conflicts ?? []).map((c) => c.reason) });
+if (modo === 'tomar-cerrojo') {
+  // Lo que se mide es EL CERROJO: el hijo lo intenta y deja constancia de qué le dijo. Si lo toma, escribe
+  // un fichero —así se puede comprobar después que sólo el dueño escribió—. No se llama a «propose» a
+  // propósito: la puerta tiene su propio juicio (veto de solapamiento, límites de tamaño) y meterlo aquí
+  // haría que la prueba midiera ese juicio en vez de la exclusión.
+  const destino = join(root, 'pruebas-cerrojo');
+  const resultado = conCerrojo(root, key, id, () => {
+    writeFileSync(join(destino, 'escrito-por-' + id + '.txt'), 'escrito por ' + modo);
+    return { tomo: true, cuando: Date.now() };
+  });
+  anotar('resultado-cerrojo.json', resultado?.tomo === true
+    ? { tomo: true }
+    : { tomo: false, reason: resultado?.reason ?? 'sin motivo', lock: resultado?.lock ?? null });
   process.exit(0);
 }
 
@@ -121,26 +143,42 @@ writeFileSync(join(marcas, 'error.txt'), 'modo desconocido: ' + modo);
 process.exit(2);
 `;
 
-/** Un hijo con su propia memoria y su propio proceso, con la caja de arena pasada explícita. */
+/**
+ * Un hijo con su propia memoria y su propio proceso, con la caja de arena pasada explícita.
+ *
+ * La salida se captura **al lanzarlo**, no cuando se va a esperar: `exit` se emite una sola vez y, si el
+ * hijo ya había salido (un hijo que muere en el acto, por ejemplo), un `on('exit')` puesto después no se
+ * dispara nunca. Ese fue el defecto medido: el padre esperaba 60 s a un proceso que ya había terminado.
+ */
 function lanzarHijo({ marcas, root, key = KEY, id, modo, extra = '' }) {
   const script = join(marcas, `hijo-${modo}-${id}.mjs`);
   writeFileSync(script, HIJO, 'utf8');
-  return spawn(process.execPath, [script, modo, root, key, id, marcas, CWD, extra], {
+  const hijo = spawn(process.execPath, [script, modo, root, key, id, marcas, CWD, extra], {
     env: { ...process.env, DSH_HOME: root },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  let salida = '';
+  let errores = '';
+  hijo.stdout.on('data', (d) => { salida += d; });
+  hijo.stderr.on('data', (d) => { errores += d; });
+  hijo.salida = new Promise((listo) => hijo.on('exit', (codigo) => listo({ codigo, salida, errores })));
+  return hijo;
 }
 
 /** Espera a que el hijo termine, o falla declarando lo que dijo. */
-function esperarHijo(hijo, { timeout = ESPERA_MAXIMA } = {}) {
-  return new Promise((listo, fallo) => {
-    let salida = '';
-    let errores = '';
-    const reloj = setTimeout(() => { hijo.kill(); fallo(new Error(`el hijo no terminó en ${timeout} ms · stdout: ${salida} · stderr: ${errores}`)); }, timeout);
-    hijo.stdout.on('data', (d) => { salida += d; });
-    hijo.stderr.on('data', (d) => { errores += d; });
-    hijo.on('exit', (codigo) => { clearTimeout(reloj); listo({ codigo, salida, errores }); });
+async function esperarHijo(hijo, { timeout = ESPERA_MAXIMA, quien = '(hijo)' } = {}) {
+  let reloj = null;
+  const tope = new Promise((_, fallo) => {
+    reloj = setTimeout(() => {
+      hijo.kill();
+      fallo(new Error(`${quien} no terminó en ${timeout} ms`));
+    }, timeout);
   });
+  try {
+    return await Promise.race([hijo.salida, tope]);
+  } finally {
+    clearTimeout(reloj);
+  }
 }
 
 /** Espera a que aparezca un marcador: la sincronización es una condición, no un tiempo. */
@@ -153,7 +191,24 @@ async function esperarMarca(marcas, nombre, { timeout = ESPERA_MAXIMA } = {}) {
   }
 }
 
-const leerJson = (marcas, nombre) => JSON.parse(readFileSync(join(marcas, nombre), 'utf8'));
+/**
+ * Lee un resultado **esperando a que esté entero**: el fichero aparece y se parsea, o se agota el tiempo.
+ * Un JSON truncado no se lee como un veredicto: se espera a que el hijo termine de escribirlo.
+ */
+async function leerJson(marcas, nombre, { timeout = ESPERA_MAXIMA } = {}) {
+  const fichero = join(marcas, nombre);
+  const desde = Date.now();
+  for (;;) {
+    if (existsSync(fichero)) {
+      const texto = readFileSync(fichero, 'utf8');
+      if (texto.trim() !== '') {
+        try { return JSON.parse(texto); } catch { /* aún a medio escribir: se reintenta */ }
+      }
+    }
+    if (Date.now() - desde > timeout) throw new Error(`el resultado «${nombre}» no llegó entero en ${timeout} ms`);
+    await new Promise((listo) => setTimeout(listo, 15));
+  }
+}
 const marcadores = (marcas) => { mkdirSync(marcas, { recursive: true }); return marcas; };
 
 /** La huella de un árbol: rutas y contenido. Es la prueba de «no se tocó». */
@@ -191,75 +246,90 @@ describe('dos procesos sobre la misma skill: sólo uno escribe', () => {
   it('el que no obtiene el cerrojo NO modifica nada, y el dueño completa y libera', async () => {
     const s = sandbox();
     const marcas = marcadores(join(s.base, 'marcas'));
-    // El id está libre a propósito: así el competidor pasa la puerta de entrada y llega **al cerrojo**, que es
-    // el recurso en disputa. (Con un id que ya vive aquí, la puerta lo pararía antes por otro motivo y la
-    // prueba mediría otra cosa.)
-    const dueño = lanzarHijo({ marcas, root: s.root, id: 'medida-en-disputa', modo: 'tomar-y-esperar' });
-    await esperarMarca(marcas, 'cerrojo-tomado'); // el cerrojo está tomado: desde aquí se compite de verdad
+    const zona = join(s.root, 'pruebas-cerrojo');
+    mkdirSync(zona, { recursive: true });
 
-    const antes = huellaDelArbol(join(s.root, 'projects'));
-    const competidor = lanzarHijo({ marcas, root: s.root, id: 'medida-en-disputa', modo: 'proponer' });
-    const salidaCompetidor = await esperarHijo(competidor);
-    const intento = leerJson(marcas, 'resultado-propuesta.json');
+    const dueño = lanzarHijo({ marcas, root: s.root, id: 'medida-en-disputa', modo: 'tomar-y-esperar' });
+    await esperarMarca(marcas, 'arrancado');
+    await esperarMarca(marcas, 'cerrojo-tomado'); // el cerrojo está tomado: desde aquí se compite de verdad
+    // La huella se toma AHORA, con el dueño ya dentro y su fichero escrito: lo que se mide es que el que
+    // llega después no añade nada.
+    const antes = huellaDelArbol(zona);
+
+    const competidor = lanzarHijo({ marcas, root: s.root, id: 'medida-en-disputa', modo: 'tomar-cerrojo' });
+    const salidaCompetidor = await esperarHijo(competidor, { quien: 'el competidor' });
+    const intento = await leerJson(marcas, 'resultado-cerrojo.json');
 
     assert.equal(salidaCompetidor.codigo, 0, salidaCompetidor.errores);
-    assert.equal(intento.status, 'invalid', 'el que llega segundo no propone');
-    assert.match(intento.errors[0], /ya hay una operación en curso sobre medida-en-disputa/);
-    assert.equal(huellaDelArbol(join(s.root, 'projects')), antes, 'el que no obtiene el cerrojo no toca el almacén');
+    assert.equal(intento.tomo, false, 'el que llega segundo no obtiene el cerrojo');
+    assert.match(intento.reason, /ya hay una operación en curso sobre medida-en-disputa/);
+    assert.match(intento.reason, /el motor no rompe cerrojos/, 'y dice qué hacer con el que está');
+    assert.equal(huellaDelArbol(zona), antes, 'y no escribió nada');
+    // El fichero lo escribió el DUEÑO: si el que llegó después hubiera entrado, lo habría reescrito con su
+    // firma. Se comprueba el contenido, no sólo que exista.
+    assert.equal(readFileSync(join(zona, 'escrito-por-medida-en-disputa.txt'), 'utf8'), 'escrito por tomar-y-esperar');
+    assert.equal(readFileSync(join(zona, 'escrito-por-medida-en-disputa.txt'), 'utf8').includes('tomar-cerrojo'), false);
 
-    // El dueño suelta cuando el padre se lo dice, y lo deja libre.
+    // El dueño suelta cuando el padre se lo dice; mientras tanto, sólo él escribió.
     writeFileSync(join(marcas, 'sigue'), 'adelante');
-    const salidaDueño = await esperarHijo(dueño);
+    const salidaDueño = await esperarHijo(dueño, { quien: 'el que tenía el cerrojo' });
     assert.equal(salidaDueño.codigo, 0, salidaDueño.errores);
     assert.equal(existsSync(join(marcas, 'resultado-ok')), true, 'el dueño completó su sección crítica');
     assert.equal(existsSync(rutaDelCerrojo(s.root, KEY, 'medida-en-disputa')), false, 'y lo liberó');
+    assert.equal(readFileSync(join(zona, 'escrito-por-medida-en-disputa.txt'), 'utf8'), 'escrito por tomar-y-esperar', 'el dueño sí escribió, y sigue siendo el suyo');
 
-    // Con el cerrojo libre, otro proceso con otro id entra sin problema: el rechazo era por el cerrojo.
-    const despues = lanzarHijo({ marcas, root: s.root, id: 'medida-sin-disputa', modo: 'proponer' });
-    await esperarHijo(despues);
-    assert.equal(leerJson(marcas, 'resultado-propuesta.json').status, 'proposed');
+    // Con el cerrojo libre, un proceso con OTRO id entra sin problema: el rechazo era por el cerrojo.
+    const despues = lanzarHijo({ marcas, root: s.root, id: 'medida-sin-disputa', modo: 'tomar-cerrojo' });
+    await esperarHijo(despues, { quien: 'el que llegó con el cerrojo libre' });
+    assert.equal((await leerJson(marcas, 'resultado-cerrojo.json')).tomo, true);
   });
 
   it('una muerte con el cerrojo tomado NO se rompe sola: el siguiente se para y lo declara', async () => {
     const s = sandbox();
     const marcas = marcadores(join(s.base, 'marcas'));
+    const zona = join(s.root, 'pruebas-cerrojo');
+    mkdirSync(zona, { recursive: true });
     const rutaCerrojo = rutaDelCerrojo(s.root, KEY, 'medida-huerfana');
 
     const muerto = lanzarHijo({ marcas, root: s.root, id: 'medida-huerfana', modo: 'tomar-y-morir' });
+    await esperarMarca(marcas, 'arrancado');
     await esperarMarca(marcas, 'cerrojo-tomado');
-    const salidaMuerto = await esperarHijo(muerto);
+    const salidaMuerto = await esperarHijo(muerto, { quien: 'el que murió con el cerrojo' });
     assert.notEqual(salidaMuerto.codigo, 0, 'el hijo murió con el cerrojo tomado');
     assert.equal(existsSync(rutaCerrojo), true, 'el cerrojo queda: una muerte no lo borra');
 
-    const antes = huellaDelArbol(join(s.root, 'projects'));
-    const siguiente = lanzarHijo({ marcas, root: s.root, id: 'medida-huerfana', modo: 'proponer' });
-    await esperarHijo(siguiente);
-    const intento = leerJson(marcas, 'resultado-propuesta.json');
-    assert.equal(intento.status, 'invalid');
-    assert.match(intento.errors[0], /el motor no rompe cerrojos/, 'y dice qué hacer con él');
+    const antes = huellaDelArbol(zona);
+    const siguiente = lanzarHijo({ marcas, root: s.root, id: 'medida-huerfana', modo: 'tomar-cerrojo' });
+    await esperarHijo(siguiente, { quien: 'el que llegó tras la muerte' });
+    const intento = await leerJson(marcas, 'resultado-cerrojo.json');
+    assert.equal(intento.tomo, false);
+    assert.match(intento.reason, /el motor no rompe cerrojos/, 'y dice qué hacer con él');
     assert.equal(existsSync(rutaCerrojo), true, 'el cerrojo del que murió sigue ahí: no lo rompe nadie');
-    assert.equal(huellaDelArbol(join(s.root, 'projects')), antes);
+    assert.equal(huellaDelArbol(zona), antes, 'y el que llegó no escribió nada');
 
-    // Recuperarlo es una decisión humana: se retira a mano y entonces sí entra.
+    // Recuperarlo es una decisión humana: se retira a mano, y entonces sí entra.
     rmSync(rutaCerrojo, { force: true });
-    const despues = lanzarHijo({ marcas, root: s.root, id: 'medida-huerfana', modo: 'proponer' });
-    await esperarHijo(despues);
-    assert.equal(leerJson(marcas, 'resultado-propuesta.json').status, 'proposed');
+    const despues = lanzarHijo({ marcas, root: s.root, id: 'medida-huerfana', modo: 'tomar-cerrojo' });
+    await esperarHijo(despues, { quien: 'el que entró tras recuperar el cerrojo' });
+    assert.equal((await leerJson(marcas, 'resultado-cerrojo.json')).tomo, true);
+    assert.equal(existsSync(join(zona, 'escrito-por-medida-huerfana.txt')), true, 'y el que entró sí escribió');
   });
 
   it('dos skills distintas no se estorban: cada proceso entra con su propio cerrojo', async () => {
     const s = sandbox();
     const marcasA = marcadores(join(s.base, 'marcas-a'));
     const marcasB = marcadores(join(s.base, 'marcas-b'));
+    const zona = join(s.root, 'pruebas-cerrojo');
+    mkdirSync(zona, { recursive: true });
 
-    const a = lanzarHijo({ marcas: marcasA, root: s.root, id: 'medida-uno', modo: 'proponer' });
-    const b = lanzarHijo({ marcas: marcasB, root: s.root, id: 'medida-dos', modo: 'proponer' });
-    const [ra, rb] = await Promise.all([esperarHijo(a), esperarHijo(b)]);
+    const a = lanzarHijo({ marcas: marcasA, root: s.root, id: 'medida-uno', modo: 'tomar-cerrojo' });
+    const b = lanzarHijo({ marcas: marcasB, root: s.root, id: 'medida-dos', modo: 'tomar-cerrojo' });
+    const [ra, rb] = await Promise.all([esperarHijo(a, { quien: 'el del id uno' }), esperarHijo(b, { quien: 'el del id dos' })]);
     assert.equal(ra.codigo, 0, ra.errores);
     assert.equal(rb.codigo, 0, rb.errores);
-    assert.equal(leerJson(marcasA, 'resultado-propuesta.json').status, 'proposed');
-    assert.equal(leerJson(marcasB, 'resultado-propuesta.json').status, 'proposed');
-    assert.deepEqual(readdirSync(join(s.root, 'projects', KEY, 'proposed')).sort(), ['medida-dos', 'medida-uno'], 'las dos, y ninguna pisó a la otra');
+    assert.equal((await leerJson(marcasA, 'resultado-cerrojo.json')).tomo, true);
+    assert.equal((await leerJson(marcasB, 'resultado-cerrojo.json')).tomo, true);
+    assert.deepEqual(readdirSync(zona).sort(), ['escrito-por-medida-dos.txt', 'escrito-por-medida-uno.txt'], 'escribieron los dos, cada uno en su sitio');
     assert.deepEqual(existsSync(join(s.root, 'locks')) ? readdirSync(join(s.root, 'locks')) : [], [], 'sin cerrojos colgando');
   });
 });
@@ -272,8 +342,9 @@ describe('la versión base se mueve durante la operación: se detecta ANTES de p
 
     // Un proceso prepara la reparación sobre la versión viva de ahora, y espera.
     const hijo = lanzarHijo({ marcas, root: s.root, id: 'medida-movida', modo: 'reparar-esperar-y-promover' });
+    await esperarMarca(marcas, 'arrancado');
     await esperarMarca(marcas, 'propuesto');
-    const preparada = leerJson(marcas, 'resultado-reparacion.json');
+    const preparada = await leerJson(marcas, 'resultado-reparacion.json');
     assert.equal(preparada.status, 'proposed', preparada.reason ?? '');
 
     // Mientras espera, OTRO proceso mueve la base: la skill viva cambia de contenido.
@@ -282,8 +353,8 @@ describe('la versión base se mueve durante la operación: se detecta ANTES de p
     writeFileSync(fichero, `${original}\n\n## Añadido por el otro proceso\n\nEsto mueve la huella de la base.\n`, 'utf8');
 
     writeFileSync(join(marcas, 'adelante'), 'sigue');
-    const salida = await esperarHijo(hijo);
-    const resultado = leerJson(marcas, 'resultado-promocion.json');
+    const salida = await esperarHijo(hijo, { quien: 'el que reparó y esperaba para promover' });
+    const resultado = await leerJson(marcas, 'resultado-promocion.json');
 
     assert.equal(salida.codigo, 0, salida.errores);
     assert.equal(resultado.status, 'regression', 'la regresión para la promoción, y el estado lo dice');
@@ -300,8 +371,8 @@ describe('la versión base se mueve durante la operación: se detecta ANTES de p
 
     const hijo = lanzarHijo({ marcas, root: s.root, id: 'cualquiera', modo: 'declarar-propiedad', extra: 'machine' });
     writeFileSync(join(marcas, 'adelante'), 'sigue');
-    await esperarHijo(hijo);
-    assert.equal(leerJson(marcas, 'resultado-propiedad.json').ok, true);
+    await esperarHijo(hijo, { quien: 'el que declaró la propiedad' });
+    assert.equal((await leerJson(marcas, 'resultado-propiedad.json')).ok, true);
     const escrita = JSON.parse(readFileSync(join(s.root, 'ownership.json'), 'utf8'));
     assert.equal(escrita.ownership, 'machine');
     assert.equal(typeof escrita.declaredAt, 'string', 'la declaración escrita por otro proceso está entera, no a medias');

@@ -170,3 +170,20 @@ en todas las sesiones.
   la ventana y el bloque volvía a aparecer al reiniciar (era la trampa de la v1.4.0, y está arreglada y
   verificada en vivo por el autor).
 - Dentro de un *template literal*, un backtick en un comentario CSS rompe el fichero.
+
+## Trampas de las pruebas con procesos independientes (medidas el 2026-10-16)
+
+- **`exit` se emite UNA vez, y quien no estaba escuchando se lo pierde.** Un hijo que muere en el acto
+  (el caso de «qué pasa si se cae con el cerrojo tomado») salía antes de que el padre se suscribiera, así
+  que el padre esperaba 60 s a un proceso que ya había terminado. La salida se captura **al lanzar** el
+  hijo (`hijo.salida = new Promise(...)`) y luego se espera esa promesa con un tope.
+- **Dentro de un *template literal* —el guion del hijo, aquí— un backtick cierra la cadena, aunque esté en
+  un comentario.** Pasó tres veces: «propose», «rename» y «extra». Se escribe con «» y se comprueba
+  con `node --check` **después** de cada edición, no después de la tercera.
+- **No midas la heurística que no estás probando.** Los hijos proponían skills de verdad y el veto de
+  solapamiento (o el tope de 24.000 caracteres del cuerpo) decidía el resultado: la prueba hablaba del
+  cerrojo y medía otra cosa. El cerrojo se mide con el cerrojo (`conCerrojo`), y lo que se comprueba de una
+  escritura es su **firma** (quién la escribió), no que el fichero exista.
+- **Sincronización por condición, nunca por tiempo**: marcadores que el otro espera (`arrancado`,
+  `cerrojo-tomado`, `sigue`, `adelante`), con tope, y un **vigilante** dentro del hijo que lo mata si se
+  atasca. Un `Atomics.wait` en bucle bloquea el hilo: los temporizadores del hijo no corren mientras gira.
