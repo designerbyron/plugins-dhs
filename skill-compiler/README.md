@@ -26,6 +26,7 @@ skill es **nueva** o si se **actualizó** una existente.
 | [`docs/OPERACION.md`](docs/OPERACION.md) | Referencia de uso: herramientas, CLI, variables, qué se ve en la interfaz, y qué hacer cuando algo no cuadra |
 | [`docs/DIAGNOSTICO-2026-10-15.md`](docs/DIAGNOSTICO-2026-10-15.md) | El diagnóstico medido de las 11 skills del almacén que no pasan la puerta: regla, valor observado, umbral, causa raíz, y quién tendría que firmar cada arreglo. **Diagnostica, no repara** |
 | [`docs/POLITICA-DE-ACTUALIZACION.md`](docs/POLITICA-DE-ACTUALIZACION.md) | Los tres niveles de riesgo de una actualización automática, sus salvaguardas y **cómo se comprueba cada criterio**, con el catálogo de reglas y umbrales que aplica `audit`: la automatización sigue siendo especificación, y lo que ya está implementado se dice por su nombre |
+| [`docs/PROPIEDAD-Y-COLISIONES.md`](docs/PROPIEDAD-Y-COLISIONES.md) | La propiedad del proceso de creación de skills en el puesto (sólo DSH o todo el PC) y la política frente a los demás sistemas: qué se mide, las tres invariantes, y qué decide la puerta ante un id que ya vive fuera |
 | [`docs/DESARROLLO.md`](docs/DESARROLLO.md) | Cómo ampliarlo sin romperlo: mapa de ficheros, cómo añadir reglas, herramientas y piezas de interfaz, pruebas, versionado |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Historial de versiones |
 | [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md) | **Trabajo pendiente**: acciones en la tarjeta del resultado y decidir en lote (checkbox, paso a paso), con el contrato medido y las fases. Sin implementar |
@@ -128,6 +129,15 @@ El plugin **no se instala solo**: escribirlo en el perfil es cosa del gestor de 
    harness.
 4. Verifica que las dos herramientas aparecen en el catálogo de herramientas y que el protocolo entra en
    el prompt.
+5. **Declara de quién es el proceso de creación de skills de este puesto.** El harness no tiene un diálogo
+   de instalación que un plugin pueda bloquear, así que la pregunta vive donde se ve y donde la respuesta
+   tiene efecto: `node bin/skill-compiler.mjs doctor` y `ownership` la imprimen mientras no haya respuesta,
+   `/skill-propiedad` la imprime entera y la declara con un argumento, y las filas
+   `skill-propiedad-dsh-only` / `skill-propiedad-machine` del menú `/` la resuelven en un clic.
+
+   Sin declarar, el plugin no compite con los demás sistemas y **lo dice**; con `machine` además mira los
+   almacenes ajenos y avisa de cada choque de id —sin escribir nunca en ellos—. El detalle, en
+   [`docs/PROPIEDAD-Y-COLISIONES.md`](docs/PROPIEDAD-Y-COLISIONES.md).
 
 ### Si la fila falla al activarse
 
@@ -156,9 +166,11 @@ El modelo propone; tú decides.
 ```
 /skill-propuestas                 qué espera tu decisión y qué está activo, en este proyecto
 /skill-ver <id>                   leer una propuesta entera antes de decidir
-/skill-aprobar <id> [--force]     activarla (exige la misma puerta que el terminal)
+/skill-aprobar [<id>] [--force]   activarla (misma puerta que el terminal); sin id, enseña lo que hay
 /skill-rechazar <id>              apartarla sin borrarla
 /skill-auto activar|desactivar    aprobar automáticamente en ESTA sesión
+/skill-propiedad [dsh-only|machine]  de quién es el proceso de creación de skills en este puesto
+/skill-sistemas                   los sistemas del puesto y los ids que viven en más de uno
 ```
 
 Y cada pendiente aparece además en el menú `/` como **tres filas elegibles** —leer, activar, apartar—, sin

@@ -24,6 +24,8 @@ import { existsSync, mkdirSync, cpSync, readdirSync, readFileSync, renameSync, r
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
+import { MAQUINA, SOLO_DSH, dondeMasViveEseId, leerPropiedad, proyectosConocidos } from './scope.mjs';
+
 /** Raíz de datos por defecto: hermana de `skills/`, para no mezclarse con la biblioteca curada. */
 export function defaultRoot() {
   const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
@@ -1211,6 +1213,37 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
   // contenido. Con eso: se exige la revisión, se calcula el diff real y se comprueba que lo que
   // desaparece no se evapora. Sin base viva, esto es una propuesta nueva y nada de esto aplica.
   const base = vigenteDe(candidate.id, clave, { root, curated });
+  // ── La propiedad del puesto y los choques entre sistemas ────────────────────────────────────────
+  //
+  // Un id que ya vive en otro sistema —otro agente, otro editor, la biblioteca de DSH— no es un detalle:
+  // es donde nacen dos verdades sobre lo mismo. Se mira **sólo** cuando la propuesta es nueva (actualizar
+  // lo nuestro no puede ser una colisión) y lo que se hace depende de lo declarado:
+  //
+  //   · `dsh-only`  → se rechaza: fuera de DSH este plugin no compite.
+  //   · `machine`   → se avisa y se sigue: lo ajeno se lee y se cita, jamás se sobrescribe.
+  //   · sin declarar → se avisa de que nadie ha respondido, y se sigue: bloquear trabajo por una respuesta
+  //     que no se ha pedido sería peor que decir que falta.
+  if (base === null) {
+    const sitios = dondeMasViveEseId(candidate.id, { root, curada: curated, proyectos: proyectosConocidos({ root }) });
+    if (sitios.length > 0) {
+      const donde = sitios.map((sitio) => `${sitio.sistema} (${sitio.ruta})`).join(', ');
+      const propiedad = leerPropiedad({ root });
+      if (propiedad.ownership === SOLO_DSH) {
+        return {
+          status: 'conflict',
+          conflicts: [{
+            id: candidate.id,
+            score: 1,
+            reason: `«${candidate.id}» ya vive en otro sistema: ${donde}. Con la propiedad declarada «${SOLO_DSH}» este plugin no compite fuera de DSH: elige otro id, o cambia la propiedad con /skill-propiedad`,
+          }],
+          warnings: validation.warnings,
+        };
+      }
+      validation.warnings.push(propiedad.ownership === MAQUINA
+        ? `aviso de propiedad («${MAQUINA}»): «${candidate.id}» ya vive en ${donde}. Se propone una copia NUESTRA con procedencia; lo de otro sistema no se sobrescribe`
+        : `«${candidate.id}» ya vive en ${donde}, y la propiedad del proceso de creación de skills no está declarada en este puesto: /skill-propiedad ${SOLO_DSH} o /skill-propiedad ${MAQUINA}`);
+    }
+  }
   let diff = null;
   let revisionValidada = null;
   let evidenciaObservada = false;

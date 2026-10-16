@@ -23,9 +23,11 @@ del modelo. El registro de la sesión guarda cada ejecución.
 ```
 /skill-propuestas              qué espera tu aprobación y qué está activo, en este proyecto
 /skill-ver <id>                la propuesta entera (o la ya activa), con el veredicto de la puerta
-/skill-aprobar <id> [--force]  activarla; exige que pase la misma puerta que la CLI
+/skill-aprobar [<id>] [--force]  activarla; SIN id, enseña lo que hay (y arma las filas)
 /skill-rechazar <id>           apartarla sin borrarla
 /skill-auto [activar|desactivar]  aprobar automáticamente en ESTA sesión
+/skill-propiedad [dsh-only|machine]  quién manda en la creación de skills de este puesto
+/skill-sistemas                los sistemas del puesto y los ids que viven en más de uno
 ```
 
 ### Elegir en el menú, en vez de escribir sintaxis
@@ -207,6 +209,8 @@ node bin/skill-compiler.mjs <comando> [argumentos] [opciones]
 | Comando | Qué hace | Exit 1 cuando… |
 |---|---|---|
 | `where` | El ámbito de este directorio y dónde está el almacén | — |
+| `ownership [dsh-only\|machine]` | La propiedad del proceso de creación de skills de este puesto: sin argumento la dice (o imprime la pregunta), con argumento la declara | No es una de las dos respuestas válidas |
+| `systems` | **Sólo lectura**: los sistemas de skills del puesto, sus almacenes y los ids que viven en más de uno | — |
 | `list` | Qué hay propuesto, aprobado y rechazado, por proyecto | — |
 | `show <id>` | Imprime una propuesta entera, tal cual | No existe |
 | `check [<id>]` | Pasa la puerta de validación a las pendientes (o a una) | Alguna falla |
@@ -240,6 +244,31 @@ mismo estado dan el mismo informe byte a byte (sin fechas, y con el orden puesto
 no por el recorrido del disco). Y **no se cae**: una carpeta denegada o un `SKILL.md` ilegible son un
 hallazgo de esa skill; las demás se auditan igual. Los detalles de qué mide cada regla y con qué umbral, en
 [`POLITICA-DE-ACTUALIZACION.md`](POLITICA-DE-ACTUALIZACION.md).
+
+## La propiedad del puesto, y los choques entre sistemas
+
+Este plugin **no es el único que escribe skills en la máquina**: comparte puesto con la biblioteca curada del
+harness y con los almacenes de otros agentes y editores. Nadie declaraba quién manda sobre qué, y el mismo
+id podía acabar en dos sitios con contenido distinto sin que nadie lo dijera.
+
+Se declara **una vez**, con dos respuestas posibles y **ninguna por defecto**:
+
+```
+/skill-propiedad                      # estado, o la pregunta si nadie ha respondido
+/skill-propiedad dsh-only             # sólo se trabaja con DSH: no compite fuera
+/skill-propiedad machine              # todo el PC: mira los demás, avisa de cada choque, no sobrescribe nada ajeno
+```
+
+En el menú `/` están las filas `skill-propiedad-dsh-only` y `skill-propiedad-machine`: seleccionarlas **es**
+declararlo, sin teclear nada. Y desde el terminal: `node bin/skill-compiler.mjs ownership [dsh-only|machine]`.
+
+Sin declarar, el plugin **lo dice** —al proponer, en `/skill-propiedad` y en `doctor`/`ownership`— y sigue
+sin competir fuera. Con `dsh-only`, un id que ya viva en otro sistema **se rechaza** al proponerlo, con el
+sitio de la otra copia. Con `machine`, se propone con un aviso que dice dónde más vive.
+
+**Nunca se escribe en el almacén de otro sistema**, ni importando: lo ajeno se lee y, como mucho, se copia
+**hacia dentro** como propuesta con procedencia. La política entera, con lo medido y las tres invariantes, en
+[`PROPIEDAD-Y-COLISIONES.md`](PROPIEDAD-Y-COLISIONES.md).
 
 ## Qué se ve en la interfaz
 
@@ -280,6 +309,7 @@ node bin/skill-compiler.mjs upstream mi-skill
 |---|---|---|
 | `DSH_HOME` | Dónde está el almacén (`$DSH_HOME/skill-compiler`) y la biblioteca curada (`$DSH_HOME/skills`) | `~/.dsh` |
 | `SKILL_COMPILER_CLI` | Sólo si el CLI vive **fuera** del paquete: la ruta que el plugin le dice al usuario para aprobar | *(vacío)* — se deriva de la ruta del propio plugin |
+| `SKILL_COMPILER_SISTEMAS` | Almacenes de skills **ajenos** que este módulo no puede adivinar, separados por el delimitador del sistema (`;`). Se miran para avisar de choques; jamás se escriben | *(vacío)* |
 
 `SKILL_COMPILER_CLI` existe porque el plugin instalado vive en el perfil y no puede deducir dónde está el
 repositorio. En otra máquina, expórtala tras clonar.
@@ -287,6 +317,7 @@ repositorio. En otra máquina, expórtala tras clonar.
 ## Dónde está todo
 
 ```
+$DSH_HOME/skill-compiler/ownership.json    la propiedad declarada del puesto (o no existe: sin declarar)
 $DSH_HOME/skill-compiler/projects/<clave>/
   proposed/<id>/   SKILL.md · meta.json · provenance.json · upstream/
   approved/<id>/   lo que el proveedor sirve

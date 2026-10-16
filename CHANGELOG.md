@@ -4,6 +4,55 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.1.0] — 2026-10-16
+
+**El plugin daba por hecho que el puesto era suyo.** Y no lo es: en esta máquina escriben skills también la
+biblioteca curada del harness (22 carpetas, de las que **20 no las escribió este plugin**) y los almacenes de
+otros agentes y editores. Nada declaraba quién manda sobre qué, así que el mismo id podía acabar en dos sitios
+con contenido distinto — dos verdades sobre lo mismo y ninguna señal. Se añade la **propiedad del proceso de
+creación de skills**, con dos respuestas y ninguna por defecto, y la política frente a los demás sistemas.
+
+### Añadido
+
+- **La propiedad del puesto, declarada y medida**: `dsh-only` (sólo se trabaja con DSH: escribe en su almacén y
+  en la biblioteca curada, y **rechaza** un id que ya viva fuera) o `machine` (todo el PC: además **mira** los
+  demás sistemas, avisa de cada choque con su sitio y puede traer lo ajeno como propuesta con procedencia).
+  Vive en `<almacén>/ownership.json`. **Sin declarar, la propiedad es `null`** — elegir «todo el PC» solo no es
+  una decisión del motor — y el plugin lo dice al proponer, en `/skill-propiedad` y en `doctor`/`ownership`.
+- **`/skill-propiedad [dsh-only|machine]`** y sus dos filas de un clic en el menú `/`
+  (`skill-propiedad-dsh-only`, `skill-propiedad-machine`); y en el CLI, `ownership [dsh-only|machine]`.
+- **`/skill-sistemas`** y `node bin/skill-compiler.mjs systems`: inventario de sólo lectura —cada sistema con su
+  ruta y sus skills, y **los ids que viven en más de uno**, con el sitio de cada copia—. Mide 7 sistemas
+  conocidos y los que se declaren por `SKILL_COMPILER_SISTEMAS` (almacenes que el módulo no puede adivinar).
+- **La puerta mira fuera, sólo al proponer algo nuevo**: con `dsh-only` un id que ya vive en otro sistema se
+  rechaza con el sitio de la otra copia; con `machine` se propone con el aviso; sin declarar se avisa de que
+  falta la respuesta. Actualizar lo nuestro nunca es una colisión.
+- **`/skill-aprobar` sin id no es un error de sintaxis**: enseña lo que hay (y arma las filas). Pedir a un
+  humano que recuerde un identificador para decidir era la nota al pie que este plugin venía evitando.
+
+### Las tres invariantes
+
+1. **Nunca se escribe en el almacén de otro sistema** — ni con `machine`: lo ajeno se lee, se cita y, como
+   mucho, se copia **hacia dentro** con procedencia.
+2. **Nunca se sobrescribe lo que no es nuestro**, tampoco dentro de la curada: sin nuestro `origin` no se toca.
+3. **Una copia publicada no es una colisión**: la publicada vive en la curada y deja constancia en `published/`,
+   y el inventario la lee como una sola copia efectiva. Medido en el almacén real: **0 choques**, y los dos ids
+   que viven en ambos sitios son nuestras propias publicaciones.
+
+### Corregido
+
+- El inventario **no inventa un choque consigo mismo**: un almacén declarado dos veces se cuenta una sola vez
+  (deduplicado por ruta), y una declaración ilegible no se finge — se lee como «sin declarar» y se vuelve a
+  preguntar.
+- El protocolo dice que la propiedad existe y cómo se declara, en una línea (1.121 caracteres · 281 tokens,
+  contra el tope de 1.200 de `tests/definitions.test.mjs`).
+
+### Pruebas
+
+- `tests/scope.test.mjs`: **14 nuevas** (propiedad sin declarar / declarada / declaración ilegible; inventario y
+  choques; la copia publicada que no es choque; el almacén declarado dos veces; y los tres casos de la puerta).
+  Suite completa: **470/470**.
+
 ## [3.0.1] — 2026-10-16
 
 **El motor preparaba correcciones que su propia puerta rechazaba.** Medido al reparar el almacén real: tres

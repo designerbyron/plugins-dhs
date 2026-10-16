@@ -112,7 +112,8 @@ describe('activación', () => {
     assert.deepEqual(registered.map((c) => c.name).sort(),
       [
         'skill-ambito', 'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar', 'skill-habilitar',
-        'skill-propuestas', 'skill-rechazar', 'skill-retiradas', 'skill-ver',
+        'skill-propiedad', 'skill-propiedad-dsh-only', 'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar',
+        'skill-retiradas', 'skill-sistemas', 'skill-ver',
       ]);
     for (const command of registered) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/);
@@ -172,7 +173,7 @@ describe('activación', () => {
       { root: s.root, curated: s.curated, cwd: OTRO });
 
     // Nadie ha montado todavía: sin sesión no hay filas, ni en el global ni por agente.
-    assert.equal(global.map.size, 11, 'el global tiene los comandos base y ninguna fila');
+    assert.equal(global.map.size, 15, 'el global tiene los comandos base y ninguna fila');
 
     // El montaje entra por el provider, que el registro llama con `{ cwd, agent }`: es la vía medida
     // contra el registro real, y no depende de que un evento alcance el contexto raíz.
@@ -183,7 +184,7 @@ describe('activación', () => {
     const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-aprobar-'));
     assert.deepEqual(filasDe(CWD), ['skill-aprobar-measured-decision-check'], 'la sesión ve lo suyo');
     assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
-    assert.equal(global.map.size, 11, 'las filas no se registran en el global: ahí se ofrecerían a todos');
+    assert.equal(global.map.size, 15, 'las filas no se registran en el global: ahí se ofrecerían a todos');
 
     // Decidir en una sesión no toca las filas de la otra.
     const fila = perAgent.get(CWD).map.get('skill-aprobar-measured-decision-check');

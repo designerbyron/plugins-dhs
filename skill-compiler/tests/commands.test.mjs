@@ -116,7 +116,8 @@ describe('comandos · descriptor', () => {
     assert.deepEqual(list.map((c) => c.name).sort(),
       [
         'skill-ambito', 'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar', 'skill-habilitar',
-        'skill-propuestas', 'skill-rechazar', 'skill-retiradas', 'skill-ver',
+        'skill-propiedad', 'skill-propiedad-dsh-only', 'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar',
+        'skill-retiradas', 'skill-sistemas', 'skill-ver',
       ]);
     for (const command of list) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/, `${command.name} no cumple la gramática del harness`);
@@ -214,11 +215,13 @@ describe('comandos · /skill-aprobar', () => {
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'published', 'measured-decision-check')), false);
     assert.equal(catalog.count(), 0, 'preguntar no avisa al catálogo: no cambió nada');
   });
-  it('pide el id si falta', () => {
-    const { byName } = commands('C:\\tmp');
+  it('sin id no pide sintaxis: enseña lo que hay (y arma las filas)', () => {
+    const s = sandbox();
+    const { byName } = commands(s.root);
     const result = byName['skill-aprobar'].handler({ agent, rawInput: '' });
-    assert.equal(result.kind, 'error');
-    assert.match(result.text, /Uso: \/skill-aprobar <id>/);
+    assert.equal(result.kind, 'success', 'debe listar, no exigir que el humano recuerde un id');
+    assert.match(result.text, /Pendientes de tu aprobación/);
+    assert.match(result.text, /Aprobadas y activas/);
   });
 
   it('no aprueba lo que no existe', () => {

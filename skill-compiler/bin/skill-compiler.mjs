@@ -27,6 +27,9 @@
  *                                                         # nuestra versión de una skill externa
  *   node bin/skill-compiler.mjs upstream <id>             # ¿se movió el origen?
  *   node bin/skill-compiler.mjs provenance <id>           # procedencia guardada, entera
+ *   node bin/skill-compiler.mjs ownership                 # quién manda en la creación de skills de este puesto
+ *   node bin/skill-compiler.mjs ownership dsh-only|machine  # declararlo (sin respuesta, se pregunta)
+ *   node bin/skill-compiler.mjs systems                   # los sistemas del puesto y los ids que chocan
  *   node bin/skill-compiler.mjs doctor                    # ¿están las dependencias en su sitio?
  *   node bin/skill-compiler.mjs audit [--json] [--estado X] [--todo]
  *                                                       # audita TODO el almacén (solo lectura)
@@ -56,6 +59,9 @@ import {
   overview, pending, projectKey, reject, restore, retire, retired, retiredRoot,
 } from '../lib/compiler.mjs';
 import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
+import {
+  MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeLaPregunta,
+} from '../lib/scope.mjs';
 
 /**
  * La ruta de este propio CLI. Se deriva en tiempo de ejecución en vez de escribirse: el mensaje que la
@@ -420,6 +426,55 @@ switch (command) {
     break;
   }
 
+  case 'ownership': {
+    const respuesta = String(positional[0] ?? '').trim();
+    if (respuesta === '') {
+      const { ownership, declaredAt, declaredBy, motivo } = leerPropiedad({ root });
+      if (ownership === null) {
+        console.log(textoDeLaPregunta());
+        console.log('');
+        console.log(`Estado: sin declarar (${motivo}).`);
+        process.exit(0);
+      }
+      console.log(`Propiedad del proceso de creación de skills: «${ownership}»`);
+      console.log(`  ${PROPIEDADES[ownership]}`);
+      console.log(`  declarada por ${declaredBy ?? '(sin autor)'} el ${declaredAt ?? '(sin fecha)'}`);
+      process.exit(0);
+    }
+    const r = declararPropiedad(respuesta, { root, por: 'humano' });
+    if (!r.ok) {
+      console.error(r.reason);
+      process.exit(2);
+    }
+    console.log(`Declarada la propiedad: «${respuesta}»`);
+    console.log(`  ${PROPIEDADES[respuesta]}`);
+    process.exit(0);
+  }
+
+  case 'systems': {
+    const { ownership } = leerPropiedad({ root });
+    const datos = inventario({ root, curada: curatedLibraryRoot(), proyectos: proyectosConocidos({ root }) });
+    console.log(`Sistemas de skills del puesto (existen ${datos.totales.existentes} de ${datos.totales.sistemas}):`);
+    for (const sistema of datos.sistemas) {
+      console.log(`  ${sistema.existe ? '·' : '·(no existe)'} ${sistema.nombre} — ${sistema.ids.length} skill(s)${sistema.nuestro ? ' [nuestro]' : ''}`);
+      console.log(`      ${sistema.ruta}`);
+    }
+    console.log('');
+    if (ownership === null) console.log(`Propiedad declarada: SIN DECLARAR — responde con: ownership ${SOLO_DSH} | ownership ${MAQUINA}`);
+    else console.log(`Propiedad declarada: «${ownership}»`);
+    if (datos.totales.colisiones === 0) {
+      console.log('Sin choques de id entre sistemas.');
+      process.exit(0);
+    }
+    console.log('');
+    console.log(`Choques de id (${datos.totales.colisiones}) — el mismo identificador en más de un sistema:`);
+    for (const [id, sitios] of Object.entries(datos.colisiones)) {
+      console.log(`  · ${id}`);
+      for (const sitio of sitios) console.log(`      ${sitio.sistema}${sitio.nuestro ? ' [nuestro]' : ''}`);
+    }
+    process.exit(0);
+  }
+
   case 'doctor': {
     // Existe por un fallo real: el plugin importaba un paquete del harness sin declararlo, funcionaba
     // en la máquina donde estaba suelto y fallaba al instalarse en un perfil con «failed to import».
@@ -571,6 +626,23 @@ switch (command) {
         'ejecuta «npm test» y mira la primera prueba en rojo: dice qué contrato se rompió y con qué dato');
     } catch (error) {
       line(false, `no se pudieron ejecutar las puertas del harness: ${error.message}`, 'npm install');
+    }
+
+    // ── La propiedad del puesto: se informa, no se suspende por ella ───────────────────────────────
+    //
+    // Sin declarar, el plugin trabaja igual —no compite fuera de DSH—, así que esto **no** es un fallo:
+    // es el recordatorio donde el humano lo va a ver. Un diagnóstico que se pone rojo por una decisión
+    // que nadie ha tomado enseña a ignorar el rojo.
+    try {
+      const { inventario, leerPropiedad, proyectosConocidos, SOLO_DSH, MAQUINA } = await import(pathToFileURL(join(packageRoot, 'lib', 'scope.mjs')).href);
+      const { ownership, motivo } = leerPropiedad({ root });
+      const datos = inventario({ root, curada: curatedLibraryRoot(), proyectos: proyectosConocidos({ root }) });
+      line(true, ownership === null
+        ? `propiedad del puesto: SIN DECLARAR (${motivo}) — ${datos.totales.existentes} sistemas de skills existen aquí; declárala con «ownership ${SOLO_DSH}» o «ownership ${MAQUINA}»`
+        : `propiedad del puesto: «${ownership}» — ${datos.totales.colisiones} choque(s) de id entre ${datos.totales.existentes} sistemas`,
+        '');
+    } catch (error) {
+      line(false, `no se pudo leer la propiedad del puesto: ${error.message}`, 'revisa lib/scope.mjs');
     }
 
     process.stdout.write(bad === 0

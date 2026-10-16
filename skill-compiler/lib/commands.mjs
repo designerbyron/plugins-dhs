@@ -32,11 +32,14 @@ import { join } from 'node:path';
 
 import { AUTO_COMMAND, autoApproveFromEvents, parseAutoCommand } from './auto-approve.mjs';
 import {
-  approve, checkProposal, defaultRoot, disable, enable, listForProject, locate, pending, projectKey,
-  reject, retire, retired,
+  approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, pending,
+  projectKey, reject, retire, retired,
 } from './compiler.mjs';
 import { scopeOf } from './definitions.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
+import {
+  MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeLaPregunta,
+} from './scope.mjs';
 
 const ok = (text) => ({ kind: 'success', text });
 const bad = (text) => ({ kind: 'error', text });
@@ -238,11 +241,13 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
   const enableSkill = moveAction(enable);
   const retireSkill = moveAction(retire);
 
-  const definiciones = [
-    {
-      name: 'skill-propuestas',
-      description: 'Qué skills aprendidas esperan tu aprobación en este proyecto y cuáles están activas.',
-      handler: guarded(({ agent }, montaje = { ok: true }) => {
+  /**
+   * El listado que ve el humano: qué espera su aprobación, qué está activo y qué está apagado. Vive en una
+   * función porque lo usan **dos** comandos —`/skill-propuestas` y `/skill-aprobar` sin id—: pedir a un
+   * humano que recuerde un identificador para decidir es la nota al pie que este plugin viene evitando
+   * desde su primera versión.
+   */
+  const listar = ({ agent, montaje = { ok: true } } = {}) => {
         const { cwd, key } = scopeOfAgent(agent);
         if (key === null) return bad(NO_SCOPE);
 
@@ -281,7 +286,69 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           ]),
           'Con un id a mano: /skill-ver <id> · /skill-aprobar <id> [--force] · /skill-rechazar <id>',
         ].join('\n'));
-      }),
+  };
+
+  /** El texto del estado de propiedad, con la pregunta cuando nadie ha respondido. */
+  const textoDePropiedad = () => {
+    const { ownership, declaredAt, declaredBy, motivo } = leerPropiedad({ root });
+    if (ownership === null) return [textoDeLaPregunta(), '', `Estado: sin declarar (${motivo}).`].join('\n');
+    return [
+      `Propiedad del proceso de creación de skills: «${ownership}»`,
+      `  ${PROPIEDADES[ownership]}`,
+      `  declarada por ${declaredBy ?? '(sin autor)'} el ${declaredAt ?? '(sin fecha)'}`,
+      '',
+      ownership === MAQUINA
+        ? 'Los choques de id con otros sistemas se avisan al proponer, y /skill-sistemas los lista.'
+        : `Este plugin escribe sólo en su almacén y rechaza ids que ya vivan fuera de DSH. Para que además los avise y los mire: /skill-propiedad ${MAQUINA}`,
+    ].join('\n');
+  };
+
+  /** Declara la propiedad y devuelve el resultado en la forma que espera un comando. */
+  const declararLaPropiedad = (ownership) => {
+    const r = declararPropiedad(ownership, { root, por: 'humano' });
+    if (!r.ok) return bad(r.reason);
+    return ok([
+      `Declarada la propiedad: «${ownership}».`,
+      `  ${PROPIEDADES[ownership]}`,
+      '',
+      ownership === MAQUINA
+        ? 'Desde ahora, proponer un id que ya vive en otro sistema se AVISA con su sitio, y nunca se sobrescribe lo ajeno.'
+        : 'Desde ahora, proponer un id que ya vive en otro sistema se RECHAZA con su sitio.',
+    ].join('\n'));
+  };
+
+  /** El inventario del puesto: qué sistemas hay, qué tiene cada uno y dónde choca un id. */
+  const textoDeSistemas = () => {
+    const { ownership } = leerPropiedad({ root });
+    const datos = inventario({ root, curada: curatedLibraryRoot(), proyectos: proyectosConocidos({ root }) });
+    const lineas = [`Sistemas de skills del puesto (existen ${datos.totales.existentes} de ${datos.totales.sistemas}):`];
+    for (const sistema of datos.sistemas) {
+      lineas.push(`  ${sistema.existe ? '·' : '·(no existe)'} ${sistema.nombre} — ${sistema.ids.length} skill(s)${sistema.nuestro ? ' [nuestro]' : ''}`);
+      lineas.push(`      ${sistema.ruta}`);
+    }
+    lineas.push('', `Propiedad declarada: ${ownership === null ? 'SIN DECLARAR' : `«${ownership}»`}`);
+    if (datos.totales.colisiones > 0) {
+      lineas.push('', `Choques de id (${datos.totales.colisiones}) — el mismo identificador en más de un sistema:`);
+      for (const [id, sitios] of Object.entries(datos.colisiones)) {
+        lineas.push(`  · ${id}`);
+        for (const sitio of sitios) lineas.push(`      ${sitio.sistema}${sitio.nuestro ? ' [nuestro]' : ''}`);
+      }
+    } else {
+      lineas.push('', 'Sin choques de id entre sistemas.');
+    }
+    if (ownership !== MAQUINA) {
+      lineas.push('', `Con la propiedad en «${ownership ?? 'sin declarar'}» el plugin no compite fuera de DSH:`,
+        'los ids que ya vivan en otro sistema se rechazan al proponer.',
+        `Para que además los avise y los cite: /skill-propiedad ${MAQUINA}`);
+    }
+    return lineas.join('\n');
+  };
+
+  const definiciones = [
+    {
+      name: 'skill-propuestas',
+      description: 'Qué skills aprendidas esperan tu aprobación en este proyecto y cuáles están activas.',
+      handler: guarded(({ agent }, montaje) => listar({ agent, montaje })),
     },
 
     {
@@ -298,9 +365,11 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       name: 'skill-aprobar',
       description: 'Activa una skill propuesta, si pasa la puerta de validación: en este proyecto, o para todos los tuyos si lo dices. Sin decir dónde, pregunta. Aprobar es tuyo: el modelo no puede.',
       input: { hint: '<id> [--global|--local] [--force]' },
-      handler: guarded(({ agent, rawInput }) => {
+      handler: guarded(({ agent, rawInput }, montaje) => {
         const { key } = scopeOfAgent(agent);
         const input = String(rawInput ?? '').trim();
+        // Sin id no es un error de sintaxis: es «enséñame qué hay». Además arma las filas de la sesión.
+        if (input === '') return listar({ agent, montaje });
         const force = /(?:^|\s)--force$/.test(input);
         const global = /(?:^|\s)--global(?:\s|$)/.test(input);
         const local = /(?:^|\s)--local(?:\s|$)/.test(input);
@@ -489,6 +558,34 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           'Con un id a mano: /skill-habilitar <id> lo devuelve · /skill-eliminar <id> --yes lo retira del todo.',
         ].join('\n'));
       }),
+    },
+
+    {
+      name: 'skill-propiedad',
+      description: 'Quién manda en el proceso de creación de skills de este puesto: sólo DSH o todo el PC. Sin argumento, dice lo declarado.',
+      input: { hint: `${SOLO_DSH}|${MAQUINA}` },
+      handler: guarded(({ rawInput }) => {
+        const input = String(rawInput ?? '').trim();
+        return input === '' ? ok(textoDePropiedad()) : declararLaPropiedad(input);
+      }),
+    },
+
+    {
+      name: `skill-propiedad-${SOLO_DSH}`,
+      description: 'Declara que este plugin escribe skills SÓLO mientras se trabaja con DSH: no compite con los demás sistemas del puesto.',
+      handler: guarded(() => declararLaPropiedad(SOLO_DSH)),
+    },
+
+    {
+      name: `skill-propiedad-${MAQUINA}`,
+      description: 'Declara que este plugin se hace cargo del proceso de creación de skills en TODO el PC: mira los demás sistemas, avisa de cada choque de id y no sobrescribe lo ajeno.',
+      handler: guarded(() => declararLaPropiedad(MAQUINA)),
+    },
+
+    {
+      name: 'skill-sistemas',
+      description: 'Los sistemas de skills de este puesto, sus almacenes y los identificadores que viven en más de uno.',
+      handler: guarded(() => ok(textoDeSistemas())),
     },
 
     {

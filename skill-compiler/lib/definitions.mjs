@@ -26,27 +26,29 @@ export const PROVIDER_RANK = 150;
  * Protocolo estático. Entra en el prompt de todas las sesiones, así que se paga entero cada vez: corto a
  * propósito, y sin repetir nada de `AGENTS.md`, que ya se inyecta por su cuenta.
  *
- * Presupuesto, medido (2026-10-15, con la vara del propio harness: `CHARS_PER_TOKEN = 4` + `BLOCK_OVERHEAD
- * = 4`, las constantes de `@deepseek-ai/dsh-token-meter`): **941 caracteres · 240 tokens**, contra el tope
- * de 1.200 caracteres que exige `tests/definitions.test.mjs`. Antes de esta fase: 1.175 caracteres · 298
- * tokens. Lo que se recortó fue la **redundancia** con la descripción de `skill_vendor` —que ya explica el
- * proceso de vendorizado entero—, nunca criterio de decisión: las tres vías siguen dichas.
+ * Presupuesto, medido (2026-10-16, con la vara del propio harness: `CHARS_PER_TOKEN = 4` + `BLOCK_OVERHEAD
+ * = 4`, las constantes de `@deepseek-ai/dsh-token-meter`): **1.121 caracteres · 281 tokens**, contra el tope
+ * de 1.200 caracteres que exige `tests/definitions.test.mjs`. Antes de la propiedad del puesto: 941
+ * caracteres · 240 tokens, y antes de aquella fase 1.175 · 298. Lo que se recortó entonces fue la
+ * **redundancia** con la descripción de `skill_vendor` —que ya explica el proceso de vendorizado entero—,
+ * nunca criterio de decisión: las tres vías siguen dichas. Lo que se añadió después es lo único que el
+ * agente no puede deducir del resto: que existe una propiedad del puesto que hay que declarar.
  */
 export const PROTOCOL = [
   '## Aprendizaje progresivo (skill-compiler)',
   '',
-  'Propón (`skill_propose`) con **evidencia**: un contrato, una trampa ya pagada, un orden operativo, o un',
+  'Propón (`skill_propose`) con **evidencia**: un contrato, una trampa ya pagada, un orden operativo, un',
   'valor exacto que reutilizarás. No basta «podría reutilizarse», ni una consulta resuelta, ni repetir',
-  '`AGENTS.md`, ni contar lo que hiciste.',
+  '`AGENTS.md`.',
   '',
-  '- **Nuevo** → procedimiento, no relato: entra el detalle que hace la diferencia (valor, orden, bandera, ruta),',
-  '  no la narración. Lo pesado va a `references/`.',
-  '- **Ya existe y esto lo supera o lo corrige** → `skill_propose` **con el mismo id**: es una actualización, no un duplicado;',
-  '  al aprobarla, la anterior queda apartada, nunca borrada. Consulta antes `skill_review` y di con qué lo mediste.',
+  '- **Nuevo** → procedimiento, no relato: el detalle que hace la diferencia (valor, orden, bandera, ruta);',
+  '  lo pesado va a `references/`.',
+  '- **Ya existe y esto lo supera** → `skill_propose` **con el mismo id**: es una actualización, no un duplicado;',
+  '  al aprobarla, la anterior queda apartada, nunca borrada. Consulta `skill_review` y di con qué lo mediste.',
   '- **De un repositorio** → `skill_vendor`: nuestra versión; un origen con secretos u órdenes al agente **se bloquea**.',
   '',
-  'Si otra skill ya cubre el tema, se rechaza y dice con cuál choca. **Nada se activa solo**: espera aprobación',
-  'humana; di cómo se aprueba.',
+  'Si otra skill cubre el tema, se rechaza y dice con cuál choca. **Nada se activa solo**: espera aprobación',
+  'humana; di cómo se aprueba. La **propiedad del puesto** (sólo DSH o todo el PC): `/skill-propiedad`.',
 ].join('\n');
 
 /** El cwd de la sesión es el único origen válido del ámbito: el modelo no lo declara. */

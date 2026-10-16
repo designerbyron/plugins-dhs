@@ -5,7 +5,10 @@ Memoria durable del repositorio. No es el historial de una sesión: es lo que ha
 
 ## Versión publicada
 
-**v3.0.1** en `main` local (sin publicar): cierra los defectos que aparecieron al reparar el almacén real —
+**v3.1.0** en `main` local: la **propiedad del proceso de creación de skills** en el puesto (sólo DSH o todo el
+PC) y la política frente a los demás sistemas —`/skill-propiedad`, `/skill-sistemas`, la puerta que mira fuera
+al proponer, y las tres invariantes (nunca se escribe fuera, nunca se sobrescribe lo ajeno, una publicación no
+es un choque)—. **v3.0.1** en `main` local: cierra los defectos que aparecieron al reparar el almacén real —
 el motor preparaba correcciones que su propia puerta rechazaba (doble vara para el tope: bytes al preparar,
 trozos al promocionar), `conservacion` medía el título de nivel 1 como conocimiento, un aviso de nivel 3
 arrastraba a nivel humano la corrección de un error de nivel 2, y el montaje de las filas del menú se caía en
@@ -15,7 +18,7 @@ medias, y el aviso del turno **cuenta por tipo y se retira**. **v2.0.0** publica
 calidad vigente, `audit`, `repair`/`promote` con los tres niveles de riesgo y la promoción automática
 **apagada** por defecto.
 
-456 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
+470 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
 verde.
 
 ## Almacén: el objetivo del `DIAGNOSTICO-2026-10-15`, alcanzado
@@ -55,6 +58,28 @@ Queda **declarado, no escondido**: 16 `body-budget` (aviso, no error: cuerpos en
 | **El montaje de las filas no se cae en silencio ni se rinde** | `tests/activation.test.mjs`: un comando humano monta las filas que el provider no montó, y cuando el `inject` del hijo no registra nada el resultado **lo declara** con el motivo y un intento posterior sí monta (el agente ya no queda cacheado a medias) |
 | **El motor no prepara correcciones que su puerta rechace** | `tests/repair.test.mjs` + `tests/promote.test.mjs`: el tope se mide en bytes con la misma función en las dos partes; lo que el motor prepara cabe en su tope y deja el cuerpo bajo el umbral; `sin-ciclos` mide progreso; y el H1 de una skill editada a mano no impide promover |
 | **El almacén queda sin errores vivos** | `audit --estado approved,disabled,proposed,published` → 30 skills · ERROR 0 (antes 11) |
+| **El plugin ya no da por hecho que el puesto es suyo** | `tests/scope.test.mjs` (14): sin declarar avisa y no compite; `dsh-only` **rechaza** el id que ya vive fuera; `machine` avisa con el sitio; un id libre no genera ruido; una publicación no es un choque; un almacén declarado dos veces se cuenta una |
+| **El inventario no se inventa choques ni los esconde** | `systems` sobre el almacén real: 7 sistemas, 4 existentes, **0 choques**, 50 ids únicos |
+
+## La propiedad del puesto: declarada, y sin declarar por nadie todavía
+
+Medido el 2026-10-16: este plugin **no es el único que escribe skills aquí** — 7 sistemas conocidos, 4 existen:
+
+| Sistema | Almacén | Skills |
+|---|---|---:|
+| skill-compiler (nuestro) | `~/.dsh/skill-compiler/projects` | 29 |
+| DSH · biblioteca curada | `~/.dsh/skills` | 22 (**2 nuestras, 20 ajenas**) |
+| Hermes · perfil `byron-saas-corporative` | `~/AppData/Local/hermes/profiles/…/skills` | 1 |
+| Hermes · perfil por defecto | `~/AppData/Local/hermes/skills` | 0 |
+
+`node bin/skill-compiler.mjs systems` → **0 choques** de id entre sistemas, y los dos ids que viven en la curada
+**y** en nuestro almacén (`dsh-local-mcp-integration`, `php-pdo-mariadb-local-contracts`) son nuestras propias
+publicaciones: una sola copia efectiva.
+
+**La declaración está PENDIENTE y es una decisión del autor, no del motor** (`ownership.json` no existe →
+propiedad `null`): `/skill-propiedad dsh-only` o `/skill-propiedad machine` en cualquier sesión, o
+`node bin/skill-compiler.mjs ownership dsh-only|machine` en el terminal. Mientras no se declare, el plugin lo
+dice donde importa (al proponer, en `doctor` y en `/skill-propiedad`) y **no compite fuera de DSH**.
 
 ## Pendiente, con su estado
 
@@ -68,6 +93,7 @@ Queda **declarado, no escondido**: 16 `body-budget` (aviso, no error: cuerpos en
 | Reducir el ruido del catálogo global | Medido el 2026-10-13: de las 20 skills de `~/.dsh/skills`, al prompt llegan 13. El motivo **no está medido** (candidatos: deduplicación por similitud o presupuesto). La composición por proyecto sí: 0 skills de otros proyectos en los tres casos |
 | **Adiciones a tres skills de tenants** (`hostinger-tenant-release`, `tenant-onboarding-provision`, `tenant-maintenance-update`) | Contenido redactado, **sin aplicar**. Las tres viven ahora en `approved/` del proyecto `saas-corporative`, así que las adiciones se aplican **ahí** (ámbito del proyecto), no en la biblioteca compartida |
 | **Cruces entre repos** | **Resuelto el 2026-10-13.** El cruce estaba fuera del plugin: cinco skills de proyecto en la biblioteca global y una nota del README de `prompt-doctor` que citaba la ruta de un proyecto. Ambas fuentes cerradas; evidencia en [`docs/AUDITORIA-2026-10-13-cruces-entre-repos.md`](docs/AUDITORIA-2026-10-13-cruces-entre-repos.md) |
+| **Declarar la propiedad del puesto** | Implementado y probado, **sin declarar**: la respuesta es del autor. `ownership.json` no existe, así que la política activa es «sin declarar» (no compite fuera de DSH y lo dice). Un comando la declara |
 | **16 skills con `body-budget` (aviso)** | Cuerpos entre 8.000 y 24.000 caracteres: aviso, no error — el motor sabe mover ese material a `references/` con `repair` + `promote --nivel 2`. **No se ha hecho**: es una tanda de 16 promociones y el objetivo del diagnóstico eran los errores. Se puede lanzar cuando el autor lo diga |
 | **Un H1 que no coincide con la descripción no está en la auditoría** | El motor **compone** el H1 desde la descripción al escribir, así que la divergencia se normaliza en la siguiente corrección y ya no impide promoverla (era el defecto). Lo que no hay es una regla de auditoría que la señale por sí sola: una skill con el H1 cambiado y nada más no aparece en el informe |
 | **El `absolute-path` casa con el `project:` del frontmatter** | El patrón `[A-Za-z]:\\…` encuentra la ruta del proyecto que el propio motor escribe en el `meta` de cada skill (y escapes de código, como `\n`). Hoy es un aviso por skill; si molesta, la regla debe excluir el frontmatter y los bloques de código —**medir antes** cuántos avisos eran falsos positivos |
