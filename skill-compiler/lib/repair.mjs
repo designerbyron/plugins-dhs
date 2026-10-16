@@ -22,11 +22,12 @@
  *   la evidencia.
  */
 import { isUtf8 } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  auditarCarpeta, cuerpoSinTitulo, defaultRoot, folderHash, parseFrontmatter, projectKey, propose,
+  auditarCarpeta, cuerpoSinTitulo, defaultRoot, folderHash, parseFrontmatter, propose,
   treeOfConErrores, vigenteDe,
 } from './compiler.mjs';
 
@@ -106,6 +107,34 @@ const slug = (texto) => String(texto ?? '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'material';
 
 /**
+ * Un nombre de referencia **único**, legible y estable, para el material que sale del cuerpo.
+ *
+ * El slug solo no basta, y el defecto se midió (2026-10-16): `design-taste-frontend` tiene 11 secciones
+ * cuyo slug **ya existía** como fichero en su propio `references/` —material que trajo el vendorizado—, y
+ * `imagegen-frontend-web` otras 6. El motor creaba la ruta igual, con contenido distinto, y la puerta
+ * rechazaba la propuesta entera por «dos contenidos distintos en la misma ruta». Antes había un
+ * `continue` que solo miraba los ficheros creados en esa misma pasada, así que la colisión con el material
+ * que la skill **ya tenía** no se veía; y cuando veía una, **dejaba la sección sin mover en silencio**.
+ *
+ * La desambiguación es determinista y no depende del orden: se añade una huella corta del **título
+ * completo** (no del truncado), que es la misma entre ejecuciones y distinta para títulos distintos. Así el
+ * vínculo sección → fichero → contenido se conserva, y dos títulos iguales —o que solo coinciden al
+ * truncarse— acaban en ficheros distintos, cada uno con su material entero.
+ */
+export function nombreDeReferencia(titulo, ocupados) {
+  const base = slug(titulo);
+  if (!ocupados.has(base)) return base;
+  const huella = createHash('sha256').update(String(titulo)).digest('hex').slice(0, 6);
+  let candidato = `${base.slice(0, 33).replace(/-+$/, '')}-${huella}`;
+  let n = 2;
+  while (ocupados.has(candidato)) {
+    candidato = `${base.slice(0, 31).replace(/-+$/, '')}-${huella}-${n}`;
+    n += 1;
+  }
+  return candidato;
+}
+
+/**
  * El tope de material que una corrección automática puede sacar del cuerpo, **medido en bytes**.
  *
  * Se mide en bytes y no en trozos porque el trabajo que se delega al automático es el exceso, no su
@@ -146,7 +175,7 @@ export function topeDeMovimiento(bytesAntes, { umbral = 24000, objetivo = null, 
  * @returns `{ body, references, movidas, bodyBytes, bytesMovidos, alcanzoObjetivo }`, o `null` si no hace
  *   falta o no se puede mover nada (una sola sección, o la primera candidata ya pasa del tope).
  */
-export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000, topeBytes = Infinity }) {
+export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000, topeBytes = Infinity, nombresOcupados = [] }) {
   const original = String(body ?? '');
   if (Buffer.byteLength(original) <= budget) return null;
   const secciones = seccionesDe(original).sort((a, b) => b.bytes - a.bytes);
@@ -155,6 +184,9 @@ export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000
   let restante = original;
   let bytesMovidos = 0;
   const references = [];
+  // Lo que ya está ocupado en la skill (sus `references/…` de siempre) cuenta igual que lo que esta pasada
+  // va creando: un nombre libre solo lo es si no lo usa nadie.
+  const ocupados = new Set(nombresOcupados);
   for (const seccion of secciones) {
     if (Buffer.byteLength(restante) <= objetivo) break;
     // El cuerpo no puede quedarse sin procedimiento: como mínimo tiene que quedar una sección.
@@ -162,8 +194,9 @@ export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000
     // El tope acota la corrección **entera**: pasarlo la haría impromovible, y preparar algo que la puerta
     // va a rechazar no es preparar, es prometer en falso.
     if (bytesMovidos + seccion.bytes > topeBytes) break;
-    const ruta = `references/${slug(seccion.titulo)}.md`;
-    if (references.some((r) => r.path === ruta)) continue;
+    const nombre = nombreDeReferencia(seccion.titulo, ocupados);
+    const ruta = `references/${nombre}.md`;
+    ocupados.add(nombre);
     const contenido = `${seccion.texto.replace(/\s+$/, '')}\n`;
     references.push({ path: ruta, content: contenido });
     restante = restante.replace(seccion.texto, `## ${seccion.titulo}\n\nEl detalle está en \`${ruta}\`: léelo antes de aplicar esta parte.\n`).replace(/\n{3,}/g, '\n\n');
@@ -401,10 +434,32 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
     const bytesAntes = Buffer.byteLength(cuerpoBase);
     const paso = Math.max(0, ...seccionesDe(cuerpo).map((s) => s.bytes));
     const topeBytes = topeDeMovimiento(bytesAntes, { umbral, paso });
-    const movimiento = moverMaterialPesado({ id, body: cuerpo, budget: umbral, objetivo, topeBytes });
+    // Los nombres que la skill YA usa en su `references/`: si el material nuevo se llamara igual que uno de
+    // ellos con otro contenido, la puerta rechazaría la propuesta entera por ruta repetida. (Medido: 11
+    // secciones de `design-taste-frontend` y 6 de `imagegen-frontend-web` chocaban con su propio material.)
+    const nombresOcupados = material
+      .filter((m) => m.path.startsWith('references/'))
+      .map((m) => m.path.replace(/^references\//, '').replace(/\.md$/, ''));
+    const movimiento = moverMaterialPesado({ id, body: cuerpo, budget: umbral, objetivo, topeBytes, nombresOcupados });
     // La garantía no es la fórmula: es que el cuerpo resultante quede por debajo del umbral. Si no queda,
     // la puerta rechazaría la propuesta —por alto— y aquí no se fabrica lo que la puerta va a rechazar.
     if (movimiento !== null && movimiento.bodyBytes <= umbral) {
+      // La guarda del material, antes de tocar nada: cada fichero movido tiene que ser NUEVO, o idéntico al
+      // que ya estaba. Si el nombre se repitiera con otro contenido, se para — no se pierde material.
+      const repetido = movimiento.references.find((r) => material.some((m) => m.path === r.path && m.content !== r.content));
+      if (repetido !== undefined) {
+        return {
+          status: 'blocked', id, nivel: nivelFinal, base: { state: vigente.state, hash: vigente.hash },
+          reparaciones: plan, sinReparacion,
+          bloqueos: [{
+            rule: 'reference-repetida',
+            observed: repetido.path,
+            fix: 'Repórtalo: el motor debe desambiguar el nombre antes de proponer',
+            motivo: `el material movido chocaría con «${repetido.path}», que ya existe con otro contenido`,
+          }],
+          reason: `la corrección reutilizaría «${repetido.path}» con otro contenido: se para antes de perder material`,
+        };
+      }
       cuerpo = movimiento.body;
       material.push(...movimiento.references);
       movidas.push(...movimiento.movidas);
@@ -422,6 +477,24 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
         motivo: 'el motor no parte secciones ni deja el cuerpo sin procedimiento: decidir ese corte es criterio',
       });
       plan.splice(plan.indexOf(entrada), 1);
+    }
+    // Si lo ÚNICO que se pedía era bajar el cuerpo y el movimiento no cabe, no se propone una corrección de
+    // forma y se llama «reparación»: no arregla el hallazgo. Se declara y se para, diciendo qué haría falta.
+    // (Medido: `brandkit`, cuerpo de 20.461 bytes con una sección de 5.646 — el corte deja 11.050 y no hay
+    // forma automática de bajarlo del umbral; proponer ahí sería ruido con apariencia de arreglo.)
+    const soloElCuerpo = hallazgosDeForma.filter((h) => h.severity !== 'info').every((h) => h.rule === 'body-max' || h.rule === 'body-budget');
+    if (movidas.length === 0 && soloElCuerpo) {
+      return {
+        status: 'blocked', id, nivel: nivelFinal, base: { state: vigente.state, hash: vigente.hash },
+        reparaciones: plan, sinReparacion,
+        bloqueos: [{
+          rule: 'body-sin-corte-posible',
+          observed: `cuerpo de ${Buffer.byteLength(cuerpoBase)} bytes · sección mayor de ${paso} bytes`,
+          fix: 'Divide el cuerpo a mano —o parte la sección mayor— y vuelve a intentarlo: el corte no cabe en una corrección automática',
+          motivo: 'el corte automático dejaría el cuerpo por encima del umbral, así que no hay corrección automática que resuelva el hallazgo',
+        }],
+        reason: `el cuerpo pasa del umbral (${Buffer.byteLength(cuerpoBase)} > ${umbral}) y no cabe en una corrección automática: ${sinReparacion.at(-1)?.motivo ?? 'decidir ese corte es criterio'}`,
+      };
     }
   }
 
@@ -493,7 +566,12 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
   // ficheros que la skill viva, se retira y no queda nada. Perder un fichero de una skill aprobada en
   // silencio sería el peor fallo posible de este motor.
   if (propuesta.status === 'proposed') {
-    const dirPropuesta = join(root, 'projects', projectKey(cwd ?? process.cwd()), 'proposed', id);
+    // La propuesta se busca por la **clave que recibió esta función**, no por la que se derive del `cwd`:
+    // son la misma casi siempre, y cuando no lo son —una skill cuyo `meta.project` apunta a otra ruta, o
+    // una llamada con `--project-key`— mirar en el sitio equivocado daba un árbol vacío, acusaba a la
+    // propuesta de perder material y la dejaba escrita mientras decía «failed». La clave se pasa explícita,
+    // como en el resto de la API de almacén.
+    const dirPropuesta = join(root, 'projects', key, 'proposed', id);
     const escritos = treeOfConErrores(dirPropuesta).files.filter((f) => f !== 'meta.json');
     const esperados = arbolVigente.files.filter((f) => f !== 'meta.json').concat(movidas.map((m) => m.ruta)).sort();
     if (escritos.length !== esperados.length || escritos.some((f, i) => f !== esperados[i])) {

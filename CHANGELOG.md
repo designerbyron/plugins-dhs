@@ -4,6 +4,79 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.2.0] — 2026-10-16
+
+**La propiedad se endurece, el inventario deja de confundir «no se pudo leer» con «no hay nada», y dos
+defectos reales del motor salen a la luz al medir el puesto.** El motor preparaba correcciones de skills
+cuyo `meta.project` apunta a otra ruta y las acusaba de perder material (`failed`) **dejando la propuesta
+escrita**: 11 de las 16 skills con `body-budget` caían en ese falso fallo. Y el único aviso
+`absolute-path` del almacén real era un falso positivo.
+
+### Añadido
+
+- **La declaración de propiedad tiene cuatro estados, no dos**: `ausente` (nadie ha respondido),
+  `declarada`, `invalida` (JSON roto, valor fuera de contrato o **campos desconocidos**) e `ilegible` (existe
+  y no se puede leer). `invalida` e `ilegible` **no se presumen**: se aplica la política segura y se declara
+  el motivo y cómo arreglarlo. Antes los tres se leían igual —como «sin declarar»— y un JSON roto parecía una
+  pregunta sin responder.
+- **Declarar es compare-and-swap**: `declararPropiedad(..., { esperadaHuella })` se niega si el fichero
+  cambió entre la lectura y la escritura, así que dos sesiones no se pisan la respuesta. La escritura sigue
+  siendo atómica (temporal + `rename`) y se relee para comprobar que quedó como se escribió.
+- **El inventario dice qué NO pudo leer**: `leerAlmacen` devuelve `accesible`, `parcial`, `inaccesible` o
+  `inexistente` con su motivo, y `inventario` marca `completo: false` cuando una fuente configurada y
+  existente no se pudo leer. **Sólo con el barrido completo se afirma que no hay choques**; si no, dice
+  «sin choques COMPROBADOS» y lista las fuentes sin leer. Un enlace roto es un almacén inaccesible, no uno
+  inexistente. La huella del inventario identifica lo leído.
+- **La identidad se clasifica con evidencia, y la huella informa pero no decide**: `distinto-contenido`
+  (choque real), `misma-copia` (**mismo contenido**: sigue siendo un choque declarado si nadie firma la
+  procedencia) y `no-determinable`. Una publicación **nuestra** —la copia de la curada que lleva nuestro
+  `origin`— se declara como tal y no es un choque. Dos nombres que sólo difieren en mayúsculas se declaran.
+- **Rutas**: `resolverRuta` canóniza **hasta el ancestro que existe** y devuelve la cola sin resolver aparte
+  (así un enlace que sale del ámbito se ve aunque el último tramo no exista), y `bajoRaiz` compara canónicas:
+  `..` y los enlaces que apuntan fuera no pasan.
+- **La escritura va bajo el cerrojo de la skill**, el **mismo** que usa la promoción (movido a
+  `lib/lock.mjs`: dos mecanismos de exclusión serían dos verdades), y dentro se repiten las dos
+  comprobaciones que sostienen la decisión: que la política no cambió y que el id no vive fuera. La propuesta
+  guarda su alcance (`scope`: política, huella, sitios, y si el barrido fue completo) para poder auditarla
+  después.
+- **`absolute-path`, por contexto**: la ruta que se **usa** (prosa) avisa; la de un **bloque de código** es
+  un ejemplo y la de **código en línea** una cita — las dos quedan como `info` en el informe y no engordan
+  los avisos. Una ruta con la barra duplicada (como aparece dentro de un JSON) se declara **ambigua** en vez
+  de callarse.
+
+### Corregido
+
+- **La guarda del material de `reparar` buscaba la propuesta con `projectKey(cwd)`** en vez de con la clave
+  que recibió la función: con una skill cuyo `meta.project` apunta a otra ruta, o con `--project-key`, miraba
+  un proyecto que no era, veía un árbol vacío, **acusaba a la propuesta de perder material** y devolvía
+  `failed`… dejando la propuesta escrita en su sitio. Medido: 11 de las 16 skills con `body-budget`. La clave
+  se pasa explícita, como en el resto de la API de almacén.
+- **Un cuerpo que no cabe en un corte automático ya no produce una propuesta que no lo arregla**: si lo
+  único pendiente es el tamaño y el movimiento se declara imposible, el motor **bloquea** con el motivo y
+  lo que hace falta (`body-sin-corte-posible`) en vez de proponer una corrección de forma que deja el
+  hallazgo donde estaba.
+- **El detector de rutas dejó de avisar por una barra escapada**: el único aviso del almacén real era el
+  literal de una expresión regular dentro de código en línea.
+- **Los nombres de las referencias son únicos, legibles y estables.** El motor creaba `references/<slug>.md`
+  mirando solo los ficheros de esa misma pasada, así que chocaba con el material que la skill **ya tenía**
+  —medido: 11 secciones de `design-taste-frontend` y 6 de `imagegen-frontend-web`— y la puerta rechazaba la
+  propuesta entera por «dos contenidos distintos en la misma ruta». Y cuando sí veía un choque, un `continue`
+  **dejaba la sección sin mover en silencio**. Ahora el nombre se desambigua con la huella corta del título
+  **completo** —estable entre ejecuciones, distinta para títulos distintos— y se comprueba contra todo lo
+  ocupado (lo de la skill y lo de la pasada). Los dos casos reales pasan de bloqueados a reparables:
+  `design-taste-frontend` 19.017 → 6.604 bytes y `imagegen-frontend-web` 19.067 → 6.917, con las nueve
+  pruebas de regresión en verde.
+
+### Pruebas
+
+- `tests/scope.test.mjs` reescrito (28) con los cuatro estados, el inventario incompleto, la identidad y
+  las rutas; `tests/scope-concurrencia.test.mjs` (8) con el cerrojo compartido, la idempotencia y la
+  coherencia CLI/comando ejecutando el CLI real; `tests/audit-rutas.test.mjs` (9) con el falso positivo y lo
+  que debe seguir bloqueándose; `tests/scope-procesos.test.mjs` (5) con **procesos independientes** y
+  sincronización por condiciones; y ocho regresiones en `tests/repair.test.mjs` (nombres de referencia y los
+  dos casos reales en arena). **Suite medida: 519/519** (506 antes de este cierre · 470 antes del acto),
+  hermética en verde.
+
 ## [3.1.0] — 2026-10-16
 
 **El plugin daba por hecho que el puesto era suyo.** Y no lo es: en esta máquina escriben skills también la

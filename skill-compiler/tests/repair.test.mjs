@@ -16,14 +16,14 @@
  *   node --test tests/repair.test.mjs
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
-import { approve, checkProposal, propose, projectKey, vigenteDe } from '../lib/compiler.mjs';
+import { approve, checkProposal, propose, projectKey, treeOfConErrores, vigenteDe } from '../lib/compiler.mjs';
 import {
-  aplicarMecanicas, canonico, inventario, inventarioPerdido, moverMaterialPesado, planDeReparacion,
-  reparar, seccionesDe, topeDeMovimiento, TRANSFORMACIONES,
+  aplicarMecanicas, canonico, inventario, inventarioPerdido, moverMaterialPesado, nombreDeReferencia,
+  planDeReparacion, reparar, seccionesDe, topeDeMovimiento, TRANSFORMACIONES,
 } from '../lib/repair.mjs';
 import { cleanupSandboxes, sandbox } from './helpers.mjs';
 
@@ -387,4 +387,197 @@ describe('el material de una skill no se pierde ni se confunde', () => {
     assert.ok((r.errors?.length ?? 0) + (r.conflicts?.length ?? 0) > 0, 'tiene que decir por qué');
     assert.match(r.reason, /no se pudo proponer/i);
   });
+});
+
+describe('la guarda del material busca la propuesta donde de verdad está', () => {
+  /**
+   * El defecto medido (2026-10-16): la guarda resolvía la carpeta de la propuesta con `projectKey(cwd)`
+   * en vez de con la clave que recibió `reparar`. Con una skill cuyo `meta.project` apunta a otra ruta
+   * —o con `--project-key`— miraba un proyecto que no era, veía un árbol vacío, **acusaba a la propuesta de
+   * perder material** y devolvía `failed`… dejando la propuesta escrita en su sitio.
+   *
+   * Medido sobre el almacén real: 11 de las 16 skills con `body-budget` caían en ese falso fallo.
+   */
+  it('con el cwd de otro proyecto, la reparación propone en la clave correcta y lo dice', () => {
+    const arena = sandbox();
+    const id = 'reparar-con-otra-clave';
+    const cuerpo = Array.from({ length: 8 }, (_, i) => `## Sección ${i}\n\n${'x'.repeat(1400)}\n`).join('\n');
+    viva(arena, { ...TEMA(id), id, body: cuerpo });
+
+    const otraRuta = 'C:\\xampp\\htdocs\\otro-proyecto';
+    assert.notEqual(projectKey(otraRuta), KEY, 'las dos claves tienen que ser distintas, o la prueba no prueba nada');
+
+    const dir = dirAprobado(arena, id);
+    const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
+    writeFileSync(join(dir, 'meta.json'), JSON.stringify({ ...meta, project: otraRuta }, null, 2));
+
+    const r = reparar(id, KEY, { root: arena.root, curated: arena.curated, cwd: otraRuta });
+    assert.equal(r.status, 'proposed', r.reason ?? 'la guarda no puede acusar a una propuesta correcta');
+    assert.equal(existsSync(join(arena.root, 'projects', KEY, 'proposed', id)), true, 'la propuesta está en SU proyecto');
+    assert.equal(existsSync(join(arena.root, 'projects', projectKey(otraRuta))), false, 'y no en el del cwd');
+  });
+
+  it('una reparación que sale adelante no pierde ni un fichero: el conjunto de la propuesta es el de la viva más lo movido', () => {
+    // El otro lado del contrato: la guarda no se relaja al apuntar al sitio correcto. Aquí se comprueba su
+    // invariante sobre datos reales — el conjunto de ficheros de la propuesta (sin `meta.json`) tiene que
+    // ser exactamente el de la skill viva más las referencias que el motor ha movido.
+    const arena = sandbox();
+    const id = 'no-pierde-ni-un-fichero';
+    const cuerpo = Array.from({ length: 8 }, (_, i) => `## Parte ${i}\n\n${'y'.repeat(1400)}\n`).join('\n');
+    viva(arena, { ...TEMA(id), id, body: cuerpo });
+
+    // Material que la skill viva ya tenía: tiene que viajar con la propuesta, no desaparecer.
+    const dir = dirAprobado(arena, id);
+    mkdirSync(join(dir, 'references'), { recursive: true });
+    writeFileSync(join(dir, 'references', 'material-propio.md'), 'Material de consulta que ya estaba en la viva.', 'utf8');
+    writeFileSync(join(dir, 'provenance.json'), JSON.stringify({ source: 'de-este-repositorio' }), 'utf8');
+
+    const r = reparar(id, KEY, { root: arena.root, curated: arena.curated, cwd: CWD });
+    assert.equal(r.status, 'proposed', r.reason ?? '');
+    const sinMeta = (carpeta) => treeOfConErrores(carpeta).files.filter((f) => f !== 'meta.json').sort();
+    const esperados = [...sinMeta(dir), ...r.movidas.map((m) => m.ruta)].sort();
+    assert.deepEqual(sinMeta(join(arena.root, 'projects', KEY, 'proposed', id)), esperados,
+      'ni un fichero menos: el material propio y lo movido, y nada inventado');
+    assert.ok(esperados.includes('references/material-propio.md'), 'el material que ya estaba sigue ahí');
+    assert.equal(esperados.includes('provenance.json'), true, 'y la procedencia también');
+  });
+});
+
+describe('un cuerpo que no cabe en un corte automático no se «repara» con una propuesta que no lo arregla', () => {
+  /**
+   * Medido (2026-10-16): `brandkit` tiene 20.461 bytes de cuerpo con una sección de 5.646. El motor mueve
+   * todo lo que puede y el cuerpo se queda en 11.050 — por encima del umbral —, así que el corte se
+   * declara imposible… y aun así se proponía una corrección de forma, que no resuelve el hallazgo. Una
+   * propuesta que no arregla lo que dice arreglar es peor que decir que hace falta una persona.
+   */
+  it('con el corte imposible se declara bloqueado, y no se crea propuesta', () => {
+    const arena = sandbox();
+    const id = 'cuerpo-que-no-cabe';
+    // El material que no cabe en ninguna sección es el que hace irreducible el corte: el motor mueve
+    // secciones enteras, y lo que está fuera de ellas se queda. (Es la forma real de `brandkit`: 20.461
+    // bytes de cuerpo, 22 secciones, y 11.050 bytes que no son de ninguna sección.)
+    const cuerpo = `${'introducción que no vive en ninguna sección. '.repeat(250)}\n\n## Uno\n\n${'v'.repeat(300)}\n\n## Dos\n\n${'w'.repeat(300)}\n`;
+    viva(arena, { ...TEMA(id), id, body: cuerpo });
+
+    const r = reparar(id, KEY, { root: arena.root, curated: arena.curated, cwd: CWD });
+    assert.equal(r.status, 'blocked', r.reason ?? '');
+    assert.equal(r.bloqueos[0].rule, 'body-sin-corte-posible');
+    assert.match(r.reason, /no cabe en una corrección automática/);
+    assert.match(r.bloqueos[0].fix, /Divide el cuerpo a mano/);
+    assert.equal(existsSync(join(arena.root, 'projects', KEY, 'proposed', id)), false, 'bloqueado no deja propuesta');
+  });
+});
+
+describe('los nombres de las referencias: únicos, legibles y estables', () => {
+  /**
+   * El defecto medido (2026-10-16): el motor creaba `references/<slug>.md` mirando solo los ficheros de esa
+   * misma pasada, así que chocaba con el material que la skill **ya tenía** —11 secciones de
+   * `design-taste-frontend`, 6 de `imagegen-frontend-web`— y la puerta rechazaba la propuesta entera por
+   * «dos contenidos distintos en la misma ruta». Y cuando sí veía un choque, un `continue` **dejaba la
+   * sección sin mover en silencio**.
+   */
+  const mover = (body, ocupados = []) => moverMaterialPesado({ id: 'x', body, budget: 1000, objetivo: 500, nombresOcupados: ocupados });
+  const dosSecciones = (tituloA, tituloB) => `## ${tituloA}\n\n${'a'.repeat(900)}\n\n## ${tituloB}\n\n${'b'.repeat(900)}\n`;
+
+  it('dos títulos IGUALES acaban en dos ficheros distintos, cada uno con su material', () => {
+    const r = mover(dosSecciones('Notas de campo', 'Notas de campo'));
+    assert.equal(r.movidas.length, 2, 'las dos secciones se mueven: ninguna se queda atrás en silencio');
+    const rutas = r.references.map((x) => x.path);
+    assert.equal(new Set(rutas).size, 2, `dos rutas distintas, y son ${JSON.stringify(rutas)}`);
+    assert.equal(rutas.includes('references/notas-de-campo.md'), true, 'la primera conserva el nombre legible');
+    assert.equal(rutas.some((x) => /^references\/notas-de-campo-[0-9a-f]{6}\.md$/.test(x)), true, 'la segunda se desambigua con la huella del título');
+    // El contenido de cada fichero es de SU sección: la asociación se conserva.
+    const porRuta = Object.fromEntries(r.references.map((x) => [x.path, x.content]));
+    assert.match(porRuta['references/notas-de-campo.md'], /^## Notas de campo\n\na{900}/);
+    const otra = rutas.find((x) => x !== 'references/notas-de-campo.md');
+    assert.match(porRuta[otra], /^## Notas de campo\n\nb{900}/);
+  });
+
+  it('dos títulos que solo coinciden AL TRUNCARSE (40 caracteres) también se separan', () => {
+    const comun = 'Palabras iniciales que ocupan bastante y se repiten';
+    const r = mover(dosSecciones(`${comun} primera`, `${comun} segunda`));
+    const rutas = r.references.map((x) => x.path);
+    assert.equal(rutas.length, 2);
+    assert.equal(new Set(rutas).size, 2, `el truncado no puede fusionar dos secciones: ${JSON.stringify(rutas)}`);
+    assert.equal(rutas.every((x) => x.endsWith('.md') && x.startsWith('references/')), true);
+    assert.equal(rutas.every((x) => !x.includes('undefined')), true);
+  });
+
+  it('acentos, mayúsculas y símbolos van a kebab-case ASCII, y el nombre sigue siendo único', () => {
+    const r = mover(dosSecciones('Configuración: ¿qué hace? — 3 casos', 'Configuracion ¿QUE HACE? 3 CASOS'));
+    const rutas = r.references.map((x) => x.path);
+    assert.equal(new Set(rutas).size, 2);
+    for (const ruta of rutas) assert.match(ruta, /^references\/[a-z0-9-]+\.md$/, `«${ruta}» tiene que ser un identificador limpio`);
+    assert.equal(rutas.some((x) => x.includes('configuracion-que-hace-3-casos')), true, 'el nombre legible se conserva');
+  });
+
+  it('el nombre no pisa el material que la skill YA tenía, y el que ya estaba no se toca', () => {
+    const ocupados = ['notas-de-campo'];
+    const r = mover(dosSecciones('Notas de campo', 'Otra cosa'), ocupados);
+    const rutas = r.references.map((x) => x.path);
+    assert.equal(rutas.includes('references/notas-de-campo.md'), false, 'no puede pisar el fichero que ya existe');
+    assert.equal(new Set(rutas).size, rutas.length);
+  });
+
+  it('seis secciones con nombres equivalentes producen seis rutas distintas', () => {
+    const equivalencias = ['Hero minimal', 'HERO MINIMAL', 'Hero  minimal', 'hero-minimal', 'Hero minimal ', ' Hero   Minimal'];
+    const r = mover(equivalencias.map((t) => `## ${t}\n\n${'x'.repeat(600)}\n`).join('\n'));
+    const rutas = r.references.map((x) => x.path);
+    assert.equal(rutas.length, 6, 'todas se mueven');
+    assert.equal(new Set(rutas).size, 6, `y todas con su propia ruta: ${JSON.stringify(rutas)}`);
+  });
+
+  it('el mismo título da SIEMPRE el mismo nombre: la corrección es reproducible', () => {
+    const ocupados = ['notas-de-campo'];
+    const uno = nombreDeReferencia('Notas de campo', new Set(ocupados));
+    const dos = nombreDeReferencia('Notas de campo', new Set(ocupados));
+    const tres = nombreDeReferencia('Notas de campo', new Set(ocupados));
+    assert.equal(uno, dos);
+    assert.equal(dos, tres);
+    assert.match(uno, /^notas-de-campo-[0-9a-f]{6}$/);
+  });
+});
+
+describe('los dos casos reales del defecto, en una arena aislada', () => {
+  const casos = ['design-taste-frontend', 'imagegen-frontend-web'];
+  const estados = ['approved', 'disabled', 'published', 'proposed'];
+
+  for (const id of casos) {
+    it(`${id}: repara sin chocar con su propio material y sin perder un fichero`, () => {
+      const raiz = process.env.HOME ? join(process.env.HOME, '.dsh') : null;
+      if (raiz === null) return;
+      const proyectos = join(raiz, 'skill-compiler', 'projects');
+      if (!existsSync(proyectos)) return;
+      const key = readdirSync(proyectos).find((k) => estados.some((e) => existsSync(join(proyectos, k, e, id))));
+      if (key === undefined) return; // el almacén de esta máquina no lo tiene: caso sin cubrir, declarado
+
+      // Una copia de arena con la skill tal cual (nunca se toca la real).
+      const arena = sandbox();
+      for (const estado of estados) {
+        const origen = join(proyectos, key, estado, id);
+        if (existsSync(origen)) cpSync(origen, join(arena.root, 'projects', key, estado, id), { recursive: true });
+      }
+      const viva = join(arena.root, 'projects', key, 'approved', id);
+      const referenciasAntes = existsSync(join(viva, 'references'))
+        ? readdirSync(join(viva, 'references')).sort().map((f) => [f, readFileSync(join(viva, 'references', f), 'utf8')])
+        : [];
+
+      const r = reparar(id, key, { root: arena.root, curated: arena.curated, cwd: join(arena.root, 'projects', key, 'approved', id) });
+      assert.equal(r.status, 'proposed', r.reason ?? '');
+
+      const propuesta = join(arena.root, 'projects', key, 'proposed', id);
+      const refsPropuesta = readdirSync(join(propuesta, 'references')).sort();
+      assert.equal(new Set(refsPropuesta).size, refsPropuesta.length, 'sin rutas repetidas: la puerta lo rechazaría');
+      for (const [nombre, contenido] of referenciasAntes) {
+        const destino = join(propuesta, 'references', nombre);
+        assert.equal(existsSync(destino), true, `el material que la skill ya tenía sigue ahí: ${nombre}`);
+        assert.equal(readFileSync(destino, 'utf8'), contenido, `y sin cambiar: ${nombre}`);
+      }
+      // El conocimiento del cuerpo, entero: cada sección movida tiene su fichero con su texto.
+      for (const movida of r.movidas) {
+        assert.equal(existsSync(join(propuesta, movida.ruta)), true, `falta el material de «${movida.titulo}»`);
+      }
+      assert.equal(existsSync(join(viva, 'references', 'reglas-locales-que-anulan-el-original-le.md')) , referenciasAntes.some(([n]) => n === 'reglas-locales-que-anulan-el-original-le.md'), 'el fichero del choque se conserva tal cual si existía');
+    });
+  }
 });

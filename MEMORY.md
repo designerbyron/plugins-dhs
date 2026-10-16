@@ -5,7 +5,11 @@ Memoria durable del repositorio. No es el historial de una sesión: es lo que ha
 
 ## Versión publicada
 
-**v3.1.0** en `main` local: la **propiedad del proceso de creación de skills** en el puesto (sólo DSH o todo el
+**v3.2.0** en `main` local, **sin commitear** (el acto no autoriza commit ni push): la propiedad con
+**cuatro estados** (`ausente` · `declarada` · `invalida` · `ilegible`), el inventario que distingue
+**inaccesible de inexistente** y declara el barrido incompleto, la identidad clasificada con procedencia
+—la huella informa, no decide—, las rutas resueltas hasta el ancestro que existe, la escritura bajo el
+**cerrojo compartido** (`lib/lock.mjs`), y `absolute-path` por contexto. **v3.1.0** en `origin/main`: la **propiedad del proceso de creación de skills** en el puesto (sólo DSH o todo el
 PC) y la política frente a los demás sistemas —`/skill-propiedad`, `/skill-sistemas`, la puerta que mira fuera
 al proponer, y las tres invariantes (nunca se escribe fuera, nunca se sobrescribe lo ajeno, una publicación no
 es un choque)—. **v3.0.1** en `main` local: cierra los defectos que aparecieron al reparar el almacén real —
@@ -18,7 +22,7 @@ medias, y el aviso del turno **cuenta por tipo y se retira**. **v2.0.0** publica
 calidad vigente, `audit`, `repair`/`promote` con los tres niveles de riesgo y la promoción automática
 **apagada** por defecto.
 
-470 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
+519 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
 verde.
 
 ## Almacén: el objetivo del `DIAGNOSTICO-2026-10-15`, alcanzado
@@ -43,6 +47,30 @@ Copia previa de los ocho ficheros editados a mano: `$DSH_HOME/backups/skills-edi
 Queda **declarado, no escondido**: 16 `body-budget` (aviso, no error: cuerpos entre 8.000 y 24.000) y 1
 `absolute-path` (aviso; el patrón casa con el `project:` del propio frontmatter y con escapes de código).
 
+## Los dos defectos que salieron al medir el puesto (2026-10-16)
+
+| Defecto | Cómo se midió | Estado |
+|---|---|---|
+| La guarda de material de `reparar` buscaba la propuesta con `projectKey(cwd)` en vez de con la clave recibida: con una skill cuyo `meta.project` apunta a otra ruta (o con `--project-key`) miraba otro proyecto, veía un árbol vacío, **acusaba a la propuesta de perder material** y devolvía `failed`… dejando la propuesta escrita | 11 de las 16 skills con `body-budget` daban `failed` **con la propuesta en su sitio**; con la clave correcta, 13 proponían | **Corregido** (la clave se pasa explícita) + 2 regresiones en `tests/repair.test.mjs` |
+| El motor proponía una corrección de **forma** cuando lo único pendiente era el tamaño y el corte se había declarado imposible: la propuesta no arreglaba el hallazgo | `brandkit`: 20.461 bytes de cuerpo, la mayor sección de 5.646, el corte deja 11.050 — por encima del umbral | **Corregido**: se declara `blocked` con `body-sin-corte-posible` y lo que hace falta (partirlo a mano) |
+
+**Trampa obsoleta corregida:** el `absolute-path` del almacén real **NO** lo disparaba el `project:` del
+frontmatter (ese campo está en el frontmatter y la regla mide `description + whenToUse + body`), sino el
+literal de una expresión regular **dentro de código en línea**, donde `\/` es una barra escapada. El aviso
+era un falso positivo, y la regla ahora mide por contexto (prosa avisa; ejemplo y cita quedan como `info`;
+barra duplicada es ambigua).
+
+## Los 16 avisos `body-budget`, medidos en una copia de arena
+
+Sin escribir ni una vez en el almacén real (se copia cada skill a una caja de arena y ahí se repara). Tras
+corregir los dos defectos del motor, el reparto es **14 proponen · 2 bloqueadas** por el corte:
+
+| Resultado | Cuántas | Detalle |
+|---|---:|---|
+| **Proponen y bajan del umbral** | **12** | cuerpos de 9.6k–21.8k → 5.2k–6.4k; `alcanzoObjetivo` y las nueve pruebas de regresión **en verde** |
+| **Bloqueadas: el corte no cabe** | **2** | `brandkit` (20.287) e `image-to-code` (19.723): el material que no vive en ninguna sección no se puede mover, y el motor **no parte secciones**. Requieren criterio: dividir el cuerpo a mano |
+| **Resueltas tras corregir el motor** | **2** | `design-taste-frontend` (19.017 → 6.604) e `imagegen-frontend-web` (19.067 → 6.917): creaban rutas que **ya existían** en su propio `references/` —11 y 6 secciones— y la puerta rechazaba la propuesta por ruta repetida. **Corregido**: el nombre se desambigua con la huella del título completo y se comprueba contra todo lo ocupado |
+
 ## Qué está verificado (con la evidencia)
 
 | Afirmación | Cómo se comprobó |
@@ -59,6 +87,8 @@ Queda **declarado, no escondido**: 16 `body-budget` (aviso, no error: cuerpos en
 | **El motor no prepara correcciones que su puerta rechace** | `tests/repair.test.mjs` + `tests/promote.test.mjs`: el tope se mide en bytes con la misma función en las dos partes; lo que el motor prepara cabe en su tope y deja el cuerpo bajo el umbral; `sin-ciclos` mide progreso; y el H1 de una skill editada a mano no impide promover |
 | **El almacén queda sin errores vivos** | `audit --estado approved,disabled,proposed,published` → 30 skills · ERROR 0 (antes 11) |
 | **El plugin ya no da por hecho que el puesto es suyo** | `tests/scope.test.mjs` (14): sin declarar avisa y no compite; `dsh-only` **rechaza** el id que ya vive fuera; `machine` avisa con el sitio; un id libre no genera ruido; una publicación no es un choque; un almacén declarado dos veces se cuenta una |
+| **El plugin ya no da por hecho que el puesto es suyo, y no confunde lo que no pudo leer** | `tests/scope.test.mjs` (28), `tests/scope-concurrencia.test.mjs` (8): cuatro estados de la declaración, CAS al declarar, fuente inaccesible ⇒ barrido incompleto, identidad clasificada, rutas que no se salen, cerrojo compartido, idempotencia y el CLI real comparado con el comando |
+| **El `absolute-path` del almacén real era un falso positivo** | `tests/audit-rutas.test.mjs` (9): el literal de la expresión regular ya no avisa; la ruta en prosa sí; ejemplo y cita son `info` |
 | **El inventario no se inventa choques ni los esconde** | `systems` sobre el almacén real: 7 sistemas, 4 existentes, **0 choques**, 50 ids únicos |
 
 ## La propiedad del puesto: declarada, y sin declarar por nadie todavía

@@ -23,7 +23,7 @@
  * El registro de todo esto vive en el diario del proyecto (`journal.jsonl`), que es lo que permite auditar
  * por qué se activó algo, con qué evidencia y qué se probó.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 
 import {
@@ -71,36 +71,11 @@ export function leerDiario(key, { root = defaultRoot() } = {}) {
   });
 }
 
-/**
- * Un cerrojo por skill, con `O_EXCL`: si existe, hay otra operación en curso.
- *
- * No se rompe un cerrojo ajeno por viejo que sea: se informa de quién lo dejó y desde cuándo, y se para. Un
- * cerrojo roto a la fuerza es exactamente cómo se pierden dos versiones de trabajo.
- */
-export function conCerrojo(root, key, id, fn) {
-  const carpeta = join(root, 'locks');
-  const fichero = join(carpeta, `${key}--${id.replace(/[^\w.-]/g, '_')}.lock`);
-  let fd = null;
-  try {
-    mkdirSync(carpeta, { recursive: true });
-    fd = openSync(fichero, 'wx');
-  } catch (error) {
-    let dueno = '(sin datos)';
-    try { dueno = readFileSync(fichero, 'utf8').trim(); } catch { /* el cerrojo existe pero no se puede leer */ }
-    return {
-      ok: false,
-      reason: `ya hay una operación en curso sobre ${id}: cerrojo ${fichero} (${dueno}). Si es de un proceso que murió, bórralo tú — el motor no rompe cerrojos.`,
-      lock: fichero,
-    };
-  }
-  try {
-    writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString(), id, key }), 'utf8');
-    return fn();
-  } finally {
-    try { closeSync(fd); } catch { /* ya cerrado */ }
-    try { rmSync(fichero, { force: true }); } catch { /* si no se puede borrar, queda declarado en el informe */ }
-  }
-}
+// El cerrojo vive en `lib/lock.mjs` porque lo comparten proponer, promocionar y publicar: dos mecanismos
+// de exclusión serían dos verdades sobre lo mismo. Se importa y se re-exporta para no cambiar la API.
+import { conCerrojo, rutaDelCerrojo } from './lock.mjs';
+
+export { conCerrojo, rutaDelCerrojo };
 
 /**
  * Las pruebas que tienen que pasar **antes** de activar nada. No las propone el modelo: las ejecuta el mismo

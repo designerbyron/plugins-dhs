@@ -18,6 +18,7 @@ Cómo está organizado, cómo se amplía sin romperlo, y qué reglas hacen que e
 | `lib/repair.mjs` | El motor de reparación: el catálogo cerrado de reparaciones por regla (con su nivel), las transformaciones mecánicas y la preparación de la propuesta | **Sí**, es Node puro |
 | `lib/review.mjs` | La página local de revisión: sirve las pendientes con su validación y sus botones de aprobar y rechazar, sólo en `127.0.0.1` y con token de un solo uso | **Sí**, levantándola en una prueba |
 | `lib/promote.mjs` | La promoción: las pruebas de regresión, el cerrojo por skill, la verificación por huella después de escribir, la reversión y el diario | **Sí**, sobre una caja de arena |
+| `lib/lock.mjs` | El cerrojo por skill, **uno solo** en el puesto: lo comparten proponer, promocionar y publicar, porque dos mecanismos de exclusión serían dos verdades sobre lo mismo. `O_EXCL`, y no se rompe un cerrojo ajeno: se informa de quién lo dejó | **Sí**, abriendo el cerrojo dos veces |
 | `lib/scope.mjs` | La propiedad del proceso de creación de skills (sólo DSH o todo el PC), los sistemas del puesto y los choques de id entre ellos: mide, declara y **nunca escribe fuera** | **Sí**, con un puesto de mentira (`home` y almacenes declarados) |
 | `lib/definitions.mjs` | El protocolo y las definiciones de las cuatro herramientas y del proveedor, como objetos planos | **Sí**, con un `exec` falso |
 | `index.js` | El adaptador Cordis: elige los puntos de extensión y registra. **~120 líneas** | No: importa `@deepseek-ai/dsh-tools` |

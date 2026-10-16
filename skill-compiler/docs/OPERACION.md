@@ -262,9 +262,19 @@ Se declara **una vez**, con dos respuestas posibles y **ninguna por defecto**:
 En el menú `/` están las filas `skill-propiedad-dsh-only` y `skill-propiedad-machine`: seleccionarlas **es**
 declararlo, sin teclear nada. Y desde el terminal: `node bin/skill-compiler.mjs ownership [dsh-only|machine]`.
 
-Sin declarar, el plugin **lo dice** —al proponer, en `/skill-propiedad` y en `doctor`/`ownership`— y sigue
-sin competir fuera. Con `dsh-only`, un id que ya viva en otro sistema **se rechaza** al proponerlo, con el
-sitio de la otra copia. Con `machine`, se propone con un aviso que dice dónde más vive.
+La declaración tiene **cuatro estados**, y no se leen igual: `ausente` (nadie ha respondido), `declarada`,
+`invalida` (JSON roto, valor fuera de contrato o campos desconocidos) e `ilegible` (existe y no se puede leer).
+Con `invalida` o `ilegible` **no se presume política**: se aplica la segura y se dice el motivo y cómo
+arreglarlo — no es lo mismo que una pregunta sin responder, y no se disfraza de eso.
+
+Sin respuesta útil, el plugin **lo dice** —al proponer, en `/skill-propiedad` y en `doctor`/`ownership`— y
+sigue sin competir fuera. Con `dsh-only`, un id que ya viva en otro sistema **se rechaza** al proponerlo, con
+el sitio de la otra copia. Con `machine`, se propone con un aviso que dice dónde más vive.
+
+El inventario (`/skill-sistemas`, `systems`) dice además **qué no pudo leer**: una fuente inaccesible no es
+«cero skills». Si alguna fuente configurada y existente no se pudo leer, el barrido se declara **incompleto**
+y **no se afirma que no haya choques**. Y la escritura de una propuesta va bajo el **mismo cerrojo por skill**
+que usa la promoción (`<almacén>/locks`): dos operaciones sobre el mismo id no se pisan.
 
 **Nunca se escribe en el almacén de otro sistema**, ni importando: lo ajeno se lee y, como mucho, se copia
 **hacia dentro** como propuesta con procedencia. La política entera, con lo medido y las tres invariantes, en
@@ -318,6 +328,7 @@ repositorio. En otra máquina, expórtala tras clonar.
 
 ```
 $DSH_HOME/skill-compiler/ownership.json    la propiedad declarada del puesto (o no existe: sin declarar)
+$DSH_HOME/skill-compiler/locks/            el cerrojo por skill (proponer, promocionar, publicar)
 $DSH_HOME/skill-compiler/projects/<clave>/
   proposed/<id>/   SKILL.md · meta.json · provenance.json · upstream/
   approved/<id>/   lo que el proveedor sirve

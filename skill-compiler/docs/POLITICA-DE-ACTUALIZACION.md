@@ -224,7 +224,9 @@ que un hallazgo se pueda leer sin abrir el código.
 | `body-max` | El techo: por encima, el material va a `references/` | error desde 24.000 | error |
 | `body-no-sections` · `body-sections-min` · `body-sections-soft` | Que el cuerpo se pueda leer por partes | 0 · 2 (a partir de 1.500 caracteres) · 1 con aviso si el cuerpo es corto | error · error · aviso |
 | `secret` · `personal-path` | Que no viaje una credencial ni una ruta de la máquina de nadie | patrón de credencial · ruta de perfil | error |
-| `absolute-path` | Rutas absolutas que atan la skill a un puesto | — | aviso |
+| `absolute-path` | Rutas absolutas que atan la skill a un puesto | una ruta de unidad o POSIX **en prosa** | aviso |
+| `absolute-path-ejemplo` · `absolute-path-cita` | La misma ruta, pero dentro de un bloque de código (ejemplo) o de código en línea (cita) | — | **info** (se ve en el informe, no pide nada) |
+| `absolute-path-ambigua` | Ruta con la barra duplicada tras los dos puntos —como aparece dentro de un JSON—: puede ser real | — | aviso |
 | `reference-path` · `reference-escape` · `reference-not-a-file` · `reference-duplicate` · `reference-empty` | La forma del material que se aporta | bajo `references/`, sin `..`, fichero, una vez, con contenido | error |
 | `link-missing` · `link-escape` · `link-is-directory` | Que el vínculo del cuerpo se resuelva de verdad | el fichero tiene que existir | error |
 | `link-unverifiable` | Un vínculo dentro de una carpeta que **no se pudo leer** | — | info |

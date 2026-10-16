@@ -24,7 +24,10 @@ import { existsSync, mkdirSync, cpSync, readdirSync, readFileSync, renameSync, r
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-import { MAQUINA, SOLO_DSH, dondeMasViveEseId, leerPropiedad, proyectosConocidos } from './scope.mjs';
+import { conCerrojo } from './lock.mjs';
+import {
+  MAQUINA, SOLO_DSH, dondeMasViveEseId, leerPropiedad, politicaAplicable, proyectosConocidos, propiedadSinCambios,
+} from './scope.mjs';
 
 /** Raíz de datos por defecto: hermana de `skills/`, para no mezclarse con la biblioteca curada. */
 export function defaultRoot() {
@@ -133,7 +136,58 @@ const PERSONAL_PATH_SHAPES = [
   [/\/(?:home|Users)\/[^/\s"']+\//, 'ruta de perfil POSIX'],
 ];
 /** Rutas absolutas en general: se avisa, no se veta (documentar una herramienta del puesto es legítimo). */
-const ABSOLUTE_PATH_SHAPES = [/[A-Za-z]:\\[^\s"']+/, /(?:^|\s)\/(?:usr|opt|etc|var|srv|mnt)\/[^\s"']+/];
+/**
+ * Dónde aparece una ruta absoluta, y en qué contexto.
+ *
+ * La regla medía `description + whenToUse + body` con un patrón de «letra, dos puntos, barra invertida», y
+ * el único aviso del almacén real (medido el 2026-10-16) resultó ser un **falso positivo**: el literal de
+ * una expresión regular escrito dentro de código en línea, donde la barra va escapada. Casa con aquel
+ * patrón porque dos barras invertidas seguidas de una barra parecen una ruta, y no lo son. Lo que se mide
+ * ahora:
+ *
+ *   · una ruta de unidad —la letra, los dos puntos y **un** separador, y después el camino—: tras los dos
+ *     puntos hace falta un carácter que no sea otro separador, así que una barra escapada no casa;
+ *   · una ruta POSIX de sistema (`/usr`, `/opt`, `/etc`, `/var`, `/srv`, `/mnt`) al principio de palabra;
+ *   · una ruta con la barra invertida duplicada tras los dos puntos —que es como aparece una ruta dentro de
+ *     un JSON o de una cadena—: es **ambigua** (puede ser una ruta real escrita para un fichero) y se
+ *     avisa como tal, en vez de callarse.
+ *
+ * Y se distingue el contexto, que es lo que separa un aviso accionable de uno que se ignora: en **prosa**
+ * (donde la ruta se usa) avisa; dentro de un bloque de código es un **ejemplo**; dentro de código en línea
+ * es una **cita**. Ejemplo y cita quedan como `info` en el informe: se ven al auditar, no engordan la lista
+ * de avisos que piden algo.
+ *
+ * @returns `[{ clase: 'prosa'|'ejemplo'|'cita'|'ambigua', muestra, linea }]`
+ */
+export function rutasAbsolutasEn(texto) {
+  const hallazgos = [];
+  const lineas = String(texto ?? '').split('\n');
+  let dentroDeCerca = false;
+  for (const [indice, linea] of lineas.entries()) {
+    if (/^\s*(?:```|~~~)/.test(linea)) {
+      dentroDeCerca = !dentroDeCerca;
+      continue; // la línea de la cerca no es contenido
+    }
+    const patrones = [
+      { re: /[A-Za-z]:[\\/](?![\\/])[^\s"'`]*/g, clase: 'ruta' },
+      { re: /[A-Za-z]:\\\\[^\s"'`]*/g, clase: 'ambigua' },
+      { re: /(?<![\w./-])\/(?:usr|opt|etc|var|srv|mnt)\/[^\s"')`]*/g, clase: 'ruta' },
+    ];
+    for (const { re, clase } of patrones) {
+      for (const match of linea.matchAll(re)) {
+        if (match[0].replace(/[A-Za-z]:[\\/]+/, '').length === 0) continue; // la letra y los dos puntos, sin camino, no dicen nada
+        const antes = linea.slice(0, match.index);
+        const enLinea = (antes.match(/`/g) ?? []).length % 2 === 1;
+        hallazgos.push({
+          clase: clase === 'ambigua' ? 'ambigua' : (dentroDeCerca ? 'ejemplo' : (enLinea ? 'cita' : 'prosa')),
+          muestra: match[0].length > 60 ? `${match[0].slice(0, 57)}…` : match[0],
+          linea: indice + 1,
+        });
+      }
+    }
+  }
+  return hallazgos;
+}
 
 /**
  * Una ruta de referencia dentro de un texto: `references/algo`, sin espacios. El lookbehind impide que
@@ -369,7 +423,30 @@ export function validateInput(input, { references = [], cwd = null, present = []
   }
   for (const [re, label] of SECRET_SHAPES) if (re.test(haystack)) add('error', { rule: 'secret', observed: label, message: `parece contener una credencial (${label}): una skill no lleva secretos nunca`, fix: 'Quita la credencial y sustitúyela por una referencia al almacén de secretos' });
   for (const [re, label] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) add('error', { rule: 'personal-path', observed: label, message: `contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`, fix: 'Sustituye la ruta personal por $DSH_HOME o una ruta relativa' });
-  for (const re of ABSOLUTE_PATH_SHAPES) if (re.test(haystack)) { add('warn', { rule: 'absolute-path', observed: 'ruta absoluta', message: 'contiene rutas absolutas: si la skill debe viajar, parametrízalas', fix: 'Parametriza la ruta absoluta o documéntala como del puesto' }); break; }
+  // Las rutas absolutas, por **contexto**: una ruta que se usa (prosa) avisa; un ejemplo o una cita se
+  // ven en el informe como `info` sin pedir nada. Así el aviso sigue significando algo —y una ruta
+  // escapada ( «letra:» + separador + camino`, típica de un JSON) se declara ambigua en vez de callarse—.
+  let rutaAvisada = false;
+  for (const hallazgo of rutasAbsolutasEn(haystack)) {
+    if (hallazgo.clase === 'prosa' && !rutaAvisada) {
+      rutaAvisada = true;
+      add('warn', { rule: 'absolute-path', observed: hallazgo.muestra, message: `contiene una ruta absoluta en la línea ${hallazgo.linea} («${hallazgo.muestra}»): si la skill debe viajar, parametrízala`, fix: 'Parametriza la ruta absoluta o documéntala como del puesto' });
+      continue;
+    }
+    if (hallazgo.clase === 'ambigua' && !rutaAvisada) {
+      rutaAvisada = true;
+      add('warn', { rule: 'absolute-path-ambigua', observed: hallazgo.muestra, message: `«${hallazgo.muestra}» (línea ${hallazgo.linea}) parece una ruta absoluta con la barra escapada: si es una ruta real, parametrízala; si es un ejemplo dentro de una cadena, ignóralo`, fix: 'Parametriza la ruta real, o escribe el ejemplo de forma que se lea como tal' });
+      continue;
+    }
+    add('info', {
+      rule: hallazgo.clase === 'ejemplo' ? 'absolute-path-ejemplo' : 'absolute-path-cita',
+      observed: hallazgo.muestra,
+      message: hallazgo.clase === 'ejemplo'
+        ? `ruta absoluta dentro de un bloque de código (línea ${hallazgo.linea}): es un ejemplo, no un destino — no pide nada`
+        : `ruta absoluta dentro de código en línea (línea ${hallazgo.linea}): es una cita, no un destino — no pide nada`,
+      fix: 'Nada: si algún día se usa como destino, la regla volverá a avisar',
+    });
+  }
 
   // Las referencias: forma de las que se aportan, y que el vínculo del cuerpo se resuelva de verdad.
   // `present` y `dirs` llegan cuando la puerta mira el disco (`checkProposal`), no cuando se propone.
@@ -1217,32 +1294,57 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
   //
   // Un id que ya vive en otro sistema —otro agente, otro editor, la biblioteca de DSH— no es un detalle:
   // es donde nacen dos verdades sobre lo mismo. Se mira **sólo** cuando la propuesta es nueva (actualizar
-  // lo nuestro no puede ser una colisión) y lo que se hace depende de lo declarado:
+  // lo nuestro no puede ser una colisión) y lo que se hace depende de la política que se aplica:
   //
-  //   · `dsh-only`  → se rechaza: fuera de DSH este plugin no compite.
-  //   · `machine`   → se avisa y se sigue: lo ajeno se lee y se cita, jamás se sobrescribe.
-  //   · sin declarar → se avisa de que nadie ha respondido, y se sigue: bloquear trabajo por una respuesta
-  //     que no se ha pedido sería peor que decir que falta.
+  //   · `dsh-only` —declarada, o porque no hay respuesta utilizable— → se rechaza: fuera de DSH este
+  //     plugin no compite.
+  //   · `machine` → se avisa y se sigue: lo ajeno se lee y se cita, jamás se sobrescribe.
+  //
+  // Con la declaración ausente, inválida o ilegible se aplica la política segura y el motivo va en el
+  // aviso: no se presume una elección que nadie ha hecho, ni se esconde por qué.
+  const propiedad = leerPropiedad({ root });
+  const politica = politicaAplicable(propiedad);
+  let alcanceDeLaPropuesta = null;
   if (base === null) {
-    const sitios = dondeMasViveEseId(candidate.id, { root, curada: curated, proyectos: proyectosConocidos({ root }) });
-    if (sitios.length > 0) {
-      const donde = sitios.map((sitio) => `${sitio.sistema} (${sitio.ruta})`).join(', ');
-      const propiedad = leerPropiedad({ root });
-      if (propiedad.ownership === SOLO_DSH) {
+    const barrido = dondeMasViveEseId(candidate.id, { root, curada: curated, proyectos: proyectosConocidos({ root }) });
+    const donde = barrido.sitios.map((sitio) => `${sitio.sistema} (${sitio.ruta})`).join(', ');
+    const sinLeer = barrido.sinLeer.map((fuente) => `${fuente.sistema} (${fuente.estado})`).join(', ');
+    alcanceDeLaPropuesta = {
+      politica,
+      politicaEstado: propiedad.estado,
+      politicaHuella: propiedad.huella,
+      sitios: barrido.sitios.map((sitio) => ({ sistema: sitio.sistema, ruta: sitio.ruta, huella: sitio.huella })),
+      barridoCompleto: barrido.completo,
+      fuentesSinLeer: barrido.sinLeer,
+    };
+    if (barrido.sitios.length > 0) {
+      if (politica === SOLO_DSH) {
+        const porQue = propiedad.estado === 'declarada'
+          ? `la propiedad declarada «${SOLO_DSH}»`
+          : `la propiedad del puesto está ${propiedad.estado} (${propiedad.motivo}), así que se aplica la política segura`;
         return {
           status: 'conflict',
           conflicts: [{
             id: candidate.id,
             score: 1,
-            reason: `«${candidate.id}» ya vive en otro sistema: ${donde}. Con la propiedad declarada «${SOLO_DSH}» este plugin no compite fuera de DSH: elige otro id, o cambia la propiedad con /skill-propiedad`,
+            reason: `«${candidate.id}» ya vive en otro sistema: ${donde}. Con ${porQue} este plugin no compite fuera de DSH: elige otro id, o declara la propiedad con /skill-propiedad`,
           }],
           warnings: validation.warnings,
         };
       }
-      validation.warnings.push(propiedad.ownership === MAQUINA
-        ? `aviso de propiedad («${MAQUINA}»): «${candidate.id}» ya vive en ${donde}. Se propone una copia NUESTRA con procedencia; lo de otro sistema no se sobrescribe`
-        : `«${candidate.id}» ya vive en ${donde}, y la propiedad del proceso de creación de skills no está declarada en este puesto: /skill-propiedad ${SOLO_DSH} o /skill-propiedad ${MAQUINA}`);
+      validation.warnings.push(`aviso de propiedad («${MAQUINA}»): «${candidate.id}» ya vive en ${donde}. Se propone una copia NUESTRA con procedencia; lo de otro sistema no se sobrescribe`);
     }
+    // Un barrido incompleto no prueba nada: ni que el id esté fuera, ni que no esté. Se dice tal cual.
+    if (!barrido.completo) {
+      validation.warnings.push(barrido.sitios.length > 0
+        ? `el barrido del puesto NO está completo (${sinLeer}): puede haber más copias de «${candidate.id}» sin ver`
+        : `no se encontró «${candidate.id}» fuera de este almacén, pero el barrido NO está completo (${sinLeer}): no se puede afirmar que no exista`);
+    }
+  }
+  // Una declaración que existe y no se puede usar es un trabajo pendiente, no un estado normal: se dice
+  // siempre, porque callarlo dejaría la política en un limbo silencioso.
+  if (propiedad.estado === 'invalida' || propiedad.estado === 'ilegible') {
+    validation.warnings.push(`la declaración de propiedad del puesto está ${propiedad.estado} (${propiedad.motivo}): se aplica la política segura mientras siga así — /skill-propiedad ${SOLO_DSH} o /skill-propiedad ${MAQUINA}`);
   }
   let diff = null;
   let revisionValidada = null;
@@ -1295,65 +1397,109 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
   // registro es su huella, que es lo que permite detectar después una edición a mano.
   const referencias = validation.references.map(({ path, bytes, sha256 }) => ({ path, bytes, sha256 }));
   const archivosReferencia = Object.fromEntries(validation.references.map((r) => [r.path, r.content]));
-  const meta = {
-    id: candidate.id,
-    project,
-    projectKey: clave,
-    state: 'proposed',
-    createdAt: now,
-    description: candidate.description,
-    whenToUse: candidate.whenToUse,
-    evidence: input.evidence ?? [],
-    warnings: validation.warnings,
-    ...(referencias.length ? { references: referencias, links: validation.links } : {}),
-    // La identidad de la versión sobre la que se construyó y lo que cambia respecto de ella. Se guardan
-    // aquí porque son la prueba que se volverá a comprobar al aprobar: si la vigente se movió, esta
-    // propuesta ya no describe un cambio sobre nada real.
-    ...(base !== null
-      ? {
-        base: { state: base.state, hash: base.hash },
-        revision: revisionValidada,
-        diff: {
-          lineas: { anadidas: diff.lineas.anadidas.length, eliminadas: diff.lineas.eliminadas.length },
-          references: diff.references,
-        },
+  // ── La escritura, bajo cerrojo y con la decisión re-verificada ─────────────────────────────────
+  //
+  // El barrido de arriba decide **qué se dice**; el de aquí decide **qué se escribe**. Entre los dos hay
+  // una ventana —otra sesión, otra propuesta, un almacén que aparece— y cubrirla es la diferencia entre
+  // comprobar y creer que se comprobó. Así que la escritura va bajo el **mismo** cerrojo por skill que usa
+  // la promoción (uno solo en el puesto: dos mecanismos serían dos verdades), y dentro se repiten las dos
+  // comprobaciones que sostienen la decisión: que la política no cambió, y que el id no vive fuera con la
+  // política que se aplica ahora. Si algo cambió, no se escribe y se dice por qué.
+  const dentroDelCerrojo = conCerrojo(root, clave, candidate.id, () => {
+    const propiedadAhora = propiedadSinCambios(propiedad, { root });
+    if (!propiedadAhora.ok) return { status: 'invalid', errors: [propiedadAhora.reason], warnings: validation.warnings };
+    const politicaAhora = politicaAplicable(propiedadAhora.estado);
+    const barridoAhora = dondeMasViveEseId(candidate.id, { root, curada: curated, proyectos: proyectosConocidos({ root }) });
+    if (base === null && barridoAhora.sitios.length > 0) {
+      const sitios = barridoAhora.sitios.map((sitio) => `${sitio.sistema} (${sitio.ruta})`).join(', ');
+      if (politicaAhora === SOLO_DSH) {
+        return {
+          status: 'conflict',
+          conflicts: [{ id: candidate.id, score: 1, reason: `«${candidate.id}» vive fuera de este almacén (${sitios}) y la política que se aplica es «${SOLO_DSH}»: no se compite fuera de DSH — elige otro id, o declara la propiedad` }],
+          warnings: validation.warnings,
+        };
       }
-      : {}),
-    ...(grupo.valor ? { group: grupo.valor } : {}),
-    ...metaExtra,
-  };
-  const escrito = writeAtomic(dir, { 'SKILL.md': skill, 'meta.json': `${JSON.stringify(meta, null, 2)}\n`, ...archivosReferencia, ...extraFiles });
-  // Nada a medias: si la verificación de la escritura falla, la propuesta no existe y no queda basura.
-  if (!escrito.ok) return { status: 'invalid', errors: [escrito.reason], warnings: validation.warnings };
-  return {
-    status: 'proposed',
-    id: candidate.id,
-    project,
-    projectKey: clave,
-    path: join(dir, 'SKILL.md'),
-    warnings: validation.warnings,
-    sha256: createHash('sha256').update(skill).digest('hex'),
-    ...(grupo.valor ? { group: grupo.valor, siblings: overlap.siblings } : {}),
-    references: referencias,
-    links: validation.links,
-    files: escrito.files,
-    ...(base !== null
-      ? {
-        base: { state: base.state, hash: base.hash },
-        revision: revisionValidada,
-        evidenciaObservada,
-        diff: {
-          lineas: { anadidas: diff.lineas.anadidas, eliminadas: diff.lineas.eliminadas },
-          references: diff.references,
-        },
+      // Apareció entre la comprobación y la escritura: se declara en la propuesta, no se esconde.
+      const yaEstaba = alcanceDeLaPropuesta?.sitios?.some((sitio) => barridoAhora.sitios.some((nuevo) => nuevo.ruta === sitio.ruta));
+      if (!yaEstaba) {
+        validation.warnings.push(`durante la escritura apareció otra copia de «${candidate.id}» en ${sitios}: se declara en la propuesta — lo ajeno no se toca`);
+        if (alcanceDeLaPropuesta !== null) {
+          alcanceDeLaPropuesta.sitios = barridoAhora.sitios.map((sitio) => ({ sistema: sitio.sistema, ruta: sitio.ruta, huella: sitio.huella }));
+          alcanceDeLaPropuesta.aparecioDuranteLaEscritura = true;
+        }
       }
-      : {}),
-    updatesApproved,
-    updatesProposal,
-    updatesDisabled,
-    updatesPublished,
-    relatedElsewhere: overlap.relatedElsewhere,
-  };
+    }
+
+    const meta = {
+      id: candidate.id,
+      project,
+      projectKey: clave,
+      state: 'proposed',
+      createdAt: now,
+      description: candidate.description,
+      whenToUse: candidate.whenToUse,
+      evidence: input.evidence ?? [],
+      warnings: validation.warnings,
+      ...(referencias.length ? { references: referencias, links: validation.links } : {}),
+      // La identidad de la versión sobre la que se construyó y lo que cambia respecto de ella. Se guardan
+      // aquí porque son la prueba que se volverá a comprobar al aprobar: si la vigente se movió, esta
+      // propuesta ya no describe un cambio sobre nada real.
+      ...(base !== null
+        ? {
+          base: { state: base.state, hash: base.hash },
+          revision: revisionValidada,
+          diff: {
+            lineas: { anadidas: diff.lineas.anadidas.length, eliminadas: diff.lineas.eliminadas.length },
+            references: diff.references,
+          },
+        }
+        : {}),
+      ...(grupo.valor ? { group: grupo.valor } : {}),
+      // El alcance con el que se decidió esta propuesta: la política aplicada, su huella, los sitios donde
+      // el id vive fuera y si el barrido del puesto quedó completo. Se guarda porque es lo que permitirá
+      // volver a comprobarlo al aprobarla — una decisión sin su evidencia no se puede auditar después.
+      ...(alcanceDeLaPropuesta !== null ? { scope: alcanceDeLaPropuesta } : {}),
+      ...metaExtra,
+    };
+    const escrito = writeAtomic(dir, { 'SKILL.md': skill, 'meta.json': `${JSON.stringify(meta, null, 2)}\n`, ...archivosReferencia, ...extraFiles });
+    // Nada a medias: si la verificación de la escritura falla, la propuesta no existe y no queda basura.
+    if (!escrito.ok) return { status: 'invalid', errors: [escrito.reason], warnings: validation.warnings };
+    return {
+      status: 'proposed',
+      id: candidate.id,
+      project,
+      projectKey: clave,
+      path: join(dir, 'SKILL.md'),
+      warnings: validation.warnings,
+      sha256: createHash('sha256').update(skill).digest('hex'),
+      ...(grupo.valor ? { group: grupo.valor, siblings: overlap.siblings } : {}),
+      references: referencias,
+      links: validation.links,
+      files: escrito.files,
+      ...(base !== null
+        ? {
+          base: { state: base.state, hash: base.hash },
+          revision: revisionValidada,
+          evidenciaObservada,
+          diff: {
+            lineas: { anadidas: diff.lineas.anadidas, eliminadas: diff.lineas.eliminadas },
+            references: diff.references,
+          },
+        }
+        : {}),
+      updatesApproved,
+      updatesProposal,
+      updatesDisabled,
+      updatesPublished,
+      relatedElsewhere: overlap.relatedElsewhere,
+    };
+  });
+  // El cerrojo tomado no deja una propuesta a medias ni una decisión a ciegas: se declara y se para.
+  if (dentroDelCerrojo === null || typeof dentroDelCerrojo !== 'object' || dentroDelCerrojo.status === undefined) {
+    return { status: 'invalid', errors: [dentroDelCerrojo?.reason ?? 'no se pudo tomar el cerrojo de esta skill'], warnings: validation.warnings };
+  }
+  return dentroDelCerrojo;
+
 }
 
 function move(root, key, id, from, to) {

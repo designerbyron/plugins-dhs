@@ -60,7 +60,8 @@ import {
 } from '../lib/compiler.mjs';
 import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
 import {
-  MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeLaPregunta,
+  MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeSistemas,
+  textoDelEstado,
 } from '../lib/scope.mjs';
 
 /**
@@ -428,50 +429,28 @@ switch (command) {
 
   case 'ownership': {
     const respuesta = String(positional[0] ?? '').trim();
+    const antes = leerPropiedad({ root });
     if (respuesta === '') {
-      const { ownership, declaredAt, declaredBy, motivo } = leerPropiedad({ root });
-      if (ownership === null) {
-        console.log(textoDeLaPregunta());
-        console.log('');
-        console.log(`Estado: sin declarar (${motivo}).`);
-        process.exit(0);
-      }
-      console.log(`Propiedad del proceso de creación de skills: «${ownership}»`);
-      console.log(`  ${PROPIEDADES[ownership]}`);
-      console.log(`  declarada por ${declaredBy ?? '(sin autor)'} el ${declaredAt ?? '(sin fecha)'}`);
+      console.log(textoDelEstado(antes));
       process.exit(0);
     }
-    const r = declararPropiedad(respuesta, { root, por: 'humano' });
+    // Compare-and-swap: si la declaración cambió desde que se leyó, esta escritura se niega en vez de
+    // pisar una respuesta que este proceso no vio.
+    const r = declararPropiedad(respuesta, { root, por: 'humano', esperadaHuella: antes.huella ?? undefined });
     if (!r.ok) {
       console.error(r.reason);
       process.exit(2);
     }
-    console.log(`Declarada la propiedad: «${respuesta}»`);
+    console.log(`Declarada la propiedad: «${respuesta}» (huella ${String(r.huella).slice(0, 12)})`);
     console.log(`  ${PROPIEDADES[respuesta]}`);
     process.exit(0);
   }
 
   case 'systems': {
-    const { ownership } = leerPropiedad({ root });
-    const datos = inventario({ root, curada: curatedLibraryRoot(), proyectos: proyectosConocidos({ root }) });
-    console.log(`Sistemas de skills del puesto (existen ${datos.totales.existentes} de ${datos.totales.sistemas}):`);
-    for (const sistema of datos.sistemas) {
-      console.log(`  ${sistema.existe ? '·' : '·(no existe)'} ${sistema.nombre} — ${sistema.ids.length} skill(s)${sistema.nuestro ? ' [nuestro]' : ''}`);
-      console.log(`      ${sistema.ruta}`);
-    }
-    console.log('');
-    if (ownership === null) console.log(`Propiedad declarada: SIN DECLARAR — responde con: ownership ${SOLO_DSH} | ownership ${MAQUINA}`);
-    else console.log(`Propiedad declarada: «${ownership}»`);
-    if (datos.totales.colisiones === 0) {
-      console.log('Sin choques de id entre sistemas.');
-      process.exit(0);
-    }
-    console.log('');
-    console.log(`Choques de id (${datos.totales.colisiones}) — el mismo identificador en más de un sistema:`);
-    for (const [id, sitios] of Object.entries(datos.colisiones)) {
-      console.log(`  · ${id}`);
-      for (const sitio of sitios) console.log(`      ${sitio.sistema}${sitio.nuestro ? ' [nuestro]' : ''}`);
-    }
+    console.log(textoDeSistemas({
+      datos: inventario({ root, curada: curatedLibraryRoot(), proyectos: proyectosConocidos({ root }) }),
+      estado: leerPropiedad({ root }),
+    }));
     process.exit(0);
   }
 
@@ -632,15 +611,19 @@ switch (command) {
     //
     // Sin declarar, el plugin trabaja igual —no compite fuera de DSH—, así que esto **no** es un fallo:
     // es el recordatorio donde el humano lo va a ver. Un diagnóstico que se pone rojo por una decisión
-    // que nadie ha tomado enseña a ignorar el rojo.
+    // que nadie ha tomado enseña a ignorar el rojo. Lo que sí importa decir: el estado real (no sólo
+    // «sin declarar»: también una declaración rota) y si el barrido del puesto pudo ser completo.
     try {
-      const { inventario, leerPropiedad, proyectosConocidos, SOLO_DSH, MAQUINA } = await import(pathToFileURL(join(packageRoot, 'lib', 'scope.mjs')).href);
-      const { ownership, motivo } = leerPropiedad({ root });
-      const datos = inventario({ root, curada: curatedLibraryRoot(), proyectos: proyectosConocidos({ root }) });
-      line(true, ownership === null
-        ? `propiedad del puesto: SIN DECLARAR (${motivo}) — ${datos.totales.existentes} sistemas de skills existen aquí; declárala con «ownership ${SOLO_DSH}» o «ownership ${MAQUINA}»`
-        : `propiedad del puesto: «${ownership}» — ${datos.totales.colisiones} choque(s) de id entre ${datos.totales.existentes} sistemas`,
-        '');
+      const { inventario: inventariar, leerPropiedad: leer, proyectosConocidos: proyectos, SOLO_DSH: soloDsh, MAQUINA: maquina } = await import(pathToFileURL(join(packageRoot, 'lib', 'scope.mjs')).href);
+      const declaracion = leer({ root });
+      const datos = inventariar({ root, curada: curatedLibraryRoot(), proyectos: proyectos({ root }) });
+      const cobertura = datos.completo
+        ? `barrido completo (${datos.totales.ids} identificadores, ${datos.totales.colisiones} choque(s))`
+        : `barrido INCOMPLETO: ${datos.sinLeer.map((fuente) => `${fuente.nombre} (${fuente.estado})`).join(', ')}`;
+      line(declaracion.estado !== 'invalida' && declaracion.estado !== 'ilegible', declaracion.estado === 'declarada'
+        ? `propiedad del puesto: «${declaracion.ownership}» — ${cobertura}`
+        : `propiedad del puesto: ${declaracion.estado.toUpperCase()} (${declaracion.motivo}) — declárala con «ownership ${soloDsh}» o «ownership ${maquina}»; ${cobertura}`,
+        'la declaración existe y no se puede usar: mientras siga así se aplica la política segura y se dice en cada propuesta');
     } catch (error) {
       line(false, `no se pudo leer la propiedad del puesto: ${error.message}`, 'revisa lib/scope.mjs');
     }

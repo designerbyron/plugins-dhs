@@ -38,7 +38,8 @@ import {
 import { scopeOf } from './definitions.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
 import {
-  MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeLaPregunta,
+  MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeSistemas,
+  textoDelEstado,
 } from './scope.mjs';
 
 const ok = (text) => ({ kind: 'success', text });
@@ -288,24 +289,16 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         ].join('\n'));
   };
 
-  /** El texto del estado de propiedad, con la pregunta cuando nadie ha respondido. */
-  const textoDePropiedad = () => {
-    const { ownership, declaredAt, declaredBy, motivo } = leerPropiedad({ root });
-    if (ownership === null) return [textoDeLaPregunta(), '', `Estado: sin declarar (${motivo}).`].join('\n');
-    return [
-      `Propiedad del proceso de creación de skills: «${ownership}»`,
-      `  ${PROPIEDADES[ownership]}`,
-      `  declarada por ${declaredBy ?? '(sin autor)'} el ${declaredAt ?? '(sin fecha)'}`,
-      '',
-      ownership === MAQUINA
-        ? 'Los choques de id con otros sistemas se avisan al proponer, y /skill-sistemas los lista.'
-        : `Este plugin escribe sólo en su almacén y rechaza ids que ya vivan fuera de DSH. Para que además los avise y los mire: /skill-propiedad ${MAQUINA}`,
-    ].join('\n');
-  };
+  /**
+   * El estado de la propiedad. El texto lo compone `lib/scope.mjs` para las tres superficies —comando,
+   * CLI y `doctor`—: una sola redacción, y los cuatro estados se leen distinto porque son distintos.
+   */
+  const textoDePropiedad = () => textoDelEstado(leerPropiedad({ root }));
 
   /** Declara la propiedad y devuelve el resultado en la forma que espera un comando. */
   const declararLaPropiedad = (ownership) => {
-    const r = declararPropiedad(ownership, { root, por: 'humano' });
+    const antes = leerPropiedad({ root });
+    const r = declararPropiedad(ownership, { root, por: 'humano', esperadaHuella: antes.huella ?? undefined });
     if (!r.ok) return bad(r.reason);
     return ok([
       `Declarada la propiedad: «${ownership}».`,
@@ -317,32 +310,11 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
     ].join('\n'));
   };
 
-  /** El inventario del puesto: qué sistemas hay, qué tiene cada uno y dónde choca un id. */
-  const textoDeSistemas = () => {
-    const { ownership } = leerPropiedad({ root });
-    const datos = inventario({ root, curada: curatedLibraryRoot(), proyectos: proyectosConocidos({ root }) });
-    const lineas = [`Sistemas de skills del puesto (existen ${datos.totales.existentes} de ${datos.totales.sistemas}):`];
-    for (const sistema of datos.sistemas) {
-      lineas.push(`  ${sistema.existe ? '·' : '·(no existe)'} ${sistema.nombre} — ${sistema.ids.length} skill(s)${sistema.nuestro ? ' [nuestro]' : ''}`);
-      lineas.push(`      ${sistema.ruta}`);
-    }
-    lineas.push('', `Propiedad declarada: ${ownership === null ? 'SIN DECLARAR' : `«${ownership}»`}`);
-    if (datos.totales.colisiones > 0) {
-      lineas.push('', `Choques de id (${datos.totales.colisiones}) — el mismo identificador en más de un sistema:`);
-      for (const [id, sitios] of Object.entries(datos.colisiones)) {
-        lineas.push(`  · ${id}`);
-        for (const sitio of sitios) lineas.push(`      ${sitio.sistema}${sitio.nuestro ? ' [nuestro]' : ''}`);
-      }
-    } else {
-      lineas.push('', 'Sin choques de id entre sistemas.');
-    }
-    if (ownership !== MAQUINA) {
-      lineas.push('', `Con la propiedad en «${ownership ?? 'sin declarar'}» el plugin no compite fuera de DSH:`,
-        'los ids que ya vivan en otro sistema se rechazan al proponer.',
-        `Para que además los avise y los cite: /skill-propiedad ${MAQUINA}`);
-    }
-    return lineas.join('\n');
-  };
+  /** El inventario del puesto, con el mismo texto que imprime el CLI (`systems`). */
+  const textoDelInventario = () => textoDeSistemas({
+    datos: inventario({ root, curada: curatedLibraryRoot(), proyectos: proyectosConocidos({ root }) }),
+    estado: leerPropiedad({ root }),
+  });
 
   const definiciones = [
     {
@@ -584,8 +556,8 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
     {
       name: 'skill-sistemas',
-      description: 'Los sistemas de skills de este puesto, sus almacenes y los identificadores que viven en más de uno.',
-      handler: guarded(() => ok(textoDeSistemas())),
+      description: 'Los sistemas de skills de este puesto, sus almacenes, su estado real y los identificadores que viven en más de uno.',
+      handler: guarded(() => ok(textoDelInventario())),
     },
 
     {
