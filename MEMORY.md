@@ -220,3 +220,14 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
 - `pending()` marca `updatesActive`: una propuesta sobre algo ya activo es una **actualización**, y se dice en
   el listado y en la fila. Caso medido: `fault-injection-by-category`, propuesta 15:48 sobre la versión
   aprobada a las 15:08 — el mismo id en «pendientes» y «activas» se leía como una aprobación que no sirvió.
+
+## v3.5.0 — el medidor de la actualización automática (2026-10-17)
+
+- `medirAutoActualizacion` compone las nueve pruebas de `promover` + nivel ≤2 + evidencia comprobable +
+  disparador intacto + seguridad 0/0 + diff presente. Devuelve medidas con números y `promover` las obedece
+  (`espera-medidor` en el diario). `auto [<id>]` las pinta; `/skill-propuestas` etiqueta cada actualización.
+- Defecto real destapado al medir: `propose` guarda `diff.lineas` como **cuenta**, y dos lectores pedían
+  `.length` → la puerta de tamaño y la justificación de lo eliminado leían **0** en toda propuesta guardada.
+  Corregido con `cuentaDiff`. Y `diff-medido`: sin diff no se pasa, porque «no medible» ≠ «pasa».
+- Veredicto real de la actualización pendiente del usuario (`fault-injection-by-category`): **exige humano** —
+  nivel sin declarar (3) y **cambia el disparador**; el resto de medidas en verde.

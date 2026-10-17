@@ -11,6 +11,8 @@ import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { autoApproveFor } from './auto-approve.mjs';
+import { medirAutoActualizacion } from './auto-update.mjs';
+import { promover } from './promote.mjs';
 import { approve, checkProposal, defaultRoot, listForProject, overview, projectKey, propose, readSkill } from './compiler.mjs';
 import { markerLine } from './presentation.mjs';
 import { upstreamStatus, vendor } from './vendor.mjs';
@@ -82,17 +84,43 @@ const approveHint = (id) =>
  *
  * @returns `{ asked, approved, reason?, superseded? }` — lo justo para que el resumen lo cuente tal cual.
  */
-export function autoApproveIfAsked({ exec, root, catalog, id, key, curated, esCorreccion = false }) {
+export function autoApproveIfAsked({ exec, root, catalog, id, key, curated, cwd = null, esCorreccion = false }) {
   if (!autoApproveFor(exec)) return { asked: false };
   // Una **corrección** de una skill viva no se delega, ni con el modo activo. El modo auto existe para
   // no repetir la confirmación de una skill nueva; una corrección cambia una herramienta que alguien ya
   // usa, y su promoción automática queda reservada a una fase posterior con su política de riesgo.
   // Es el mismo principio que ya rige el ámbito: se delega la confirmación, nunca la puerta ni el juicio.
   if (esCorreccion) {
+    // La fase posterior llegó: una corrección de algo vivo se activa sola **sólo si el medidor lo dice**, y el
+    // medidor no adivina — mide nivel, evidencia comprobable, disparador, seguridad y las nueve pruebas de la
+    // promoción. Si algo falla, la propuesta espera y el motivo que se devuelve es lo que midió.
+    const veredicto = medirAutoActualizacion(id, key, { root, ...(curated === undefined ? {} : { curated }), cwd });
+    if (!veredicto.apto) {
+      return {
+        asked: true,
+        approved: false,
+        reason: `es una corrección de una skill viva, y el medidor dice que la decida una persona — ${veredicto.resumen}`,
+        medidas: veredicto,
+      };
+    }
+    const promocion = promover(id, key, {
+      root, cwd, ...(curated === undefined ? {} : { curated }), niveles: [1, 2], veredicto, por: 'motor',
+    });
+    if (promocion.status !== 'promoted') {
+      return {
+        asked: true,
+        approved: false,
+        reason: `es una corrección de una skill viva: el medidor la aprobó, pero la promoción no la activó (${promocion.status}) — ${promocion.reason ?? ''}`.trim(),
+        medidas: veredicto,
+      };
+    }
+    catalog?.notify();
     return {
       asked: true,
-      approved: false,
-      reason: 'es una corrección de una skill viva: el modo automático no la activa — eso queda para una fase posterior, con su política de riesgo',
+      approved: true,
+      superseded: promocion.superseded ?? null,
+      reason: `corrección de una skill viva, medida y activada — ${veredicto.resumen}`,
+      medidas: veredicto,
     };
   }
   const check = checkProposal(id, key, { root, ...(curated === undefined ? {} : { curated }) });
@@ -285,6 +313,7 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
           const auto = autoApproveIfAsked({
             exec, root, catalog, id: result.id, key: result.projectKey,
             ...(curated === undefined ? {} : { curated }),
+            cwd,
             esCorreccion: comoParche.base !== undefined,
           });
           return {

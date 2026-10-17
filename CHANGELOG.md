@@ -4,6 +4,39 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.5.0] — 2026-10-17
+
+**El medidor de la actualización automática: cuándo una corrección puede activarse sola, y cuándo no.** Era la
+mitad que faltaba de la política: una skill **nueva** podía activarse sola con `/skill-auto`, y una **corrección**
+de algo vivo nunca — «queda para una fase posterior, con su política de riesgo». Esta es esa fase, con números.
+
+### Añadido
+
+- **`lib/auto-update.mjs`** — `medirAutoActualizacion(id, key, { root, curated, cwd })` devuelve un veredicto
+  con **una medida por condición** y su número: `es-actualizacion`, `nivel` ≤ 2, `evidencia-observada` (una
+  ruta que exista en el proyecto, no una afirmación), `disparador` sin cambios, `seguridad` 0/0, `diff-medido`
+  y las **nueve pruebas** de `promover`. **No medible no es pasar.**
+- **`promover` obedece el veredicto**: si alguna medida falla, la propuesta espera y el diario anota
+  `espera-medidor` con las medidas; si pasa, el nivel efectivo es el suyo, nunca por encima de 2.
+- **`autoApproveIfAsked` usa el medidor para las correcciones**: con el modo encendido, una corrección medida y
+  apta se activa sola; si no, el motivo que se devuelve es lo que midió. Las skills nuevas no cambian.
+- **`auto [<id>]`** en la CLI (solo lectura) y **`/skill-propuestas`** etiqueta cada actualización
+  («auto-actualizable» o «exige humano: …»), medidas con el mismo medidor que decide.
+
+### Corregido
+
+- **El tamaño del diff se medía en cero.** `propose` guarda `diff.lineas` como **número** y dos lectores pedían
+  `.length`: la puerta de tamaño y la exigencia de justificar lo eliminado leían **cero líneas en toda
+  propuesta guardada**. `cuentaDiff` acepta cuenta y lista. Caso real medido: 3 añadidas y 1 eliminada leídas
+  como 0.
+- **Una propuesta sin diff pasaba el tamaño por omisión**: ahora `diff-medido` lo exige.
+
+### Pruebas
+
+- `tests/auto-update.test.mjs`: **8 casos** — una corrección limpia es apta y se activa; y cada uno de los
+  cinco motivos de rechazo (evidencia que es una afirmación, disparador cambiado, ruta sensible, nivel 3, base
+  movida, diff enorme) deja la propuesta esperando con `espera-medidor`. **553/553** en verde.
+
 ## [3.4.0] — 2026-10-17
 
 **Decidir desde el panel ya incluye el ámbito, y una pendiente que actualiza algo activo lo dice.** Dos cosas

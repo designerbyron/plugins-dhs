@@ -348,6 +348,7 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 |---|---|---|
 | El plugin no aparece y la fila dice `failed` | Casi siempre, una dependencia: o no está declarada, o no está instalada, o no se puede cargar | **`node bin/skill-compiler.mjs doctor`** desde la carpeta del plugin. Dice qué falta y con qué comando se arregla. Casi siempre es `npm install` |
 node bin/skill-compiler.mjs security   # capa de seguridad: ids, contenido, árboles y cadena del diario (solo lectura; exit 1 si hay algo)
+node bin/skill-compiler.mjs auto [<id>]  # ¿puede actualizarse sola? cada medida con su número (solo lectura; exit 1 si alguna exige humano)
 | El diálogo de instalación dice `Installed` pero al encender dice `failed to import` | El bundle se instaló **enlazando** la carpeta del repositorio, y las dependencias del plugin no están ahí | `npm install` en la carpeta del plugin y vuelve a encenderlo. El motivo completo, en [`DEPENDENCIAS.md`](DEPENDENCIAS.md) |
 | Cambié el código y el comportamiento no cambia | El perfil puede tener **su propia copia** del paquete, o conservar el módulo cargado | Si se instaló por ruta, el perfil enlaza el repositorio y el cambio es inmediato tras un ciclo de encendido; si no, reinstala el bundle y reinicia cuando el resultado diga `restart-required` |
 | Cambié el código del **navegador** (`client.js`) y no se ve | El artefacto de interfaz lo carga la página | Recarga la página (F5) después de cambiar el fichero |
@@ -397,3 +398,11 @@ Un **bloqueo** —credencial, orden dirigida al agente, destrucción de una unid
 ni con `--force`. Un **aviso** —ruta sensible, operación privilegiada— lo decide un humano con `--force`, y la
 promoción automática nunca lo toca: el nivel sube a humano por encima del nivel que declare el parche. El
 contrato completo, con lo que la capa **no** hace, está en `docs/SEGURIDAD.md`.
+
+## Qué se actualiza solo
+
+Una **skill nueva** no: la confirma un humano (el modo `/skill-auto` delega la confirmación, nunca la puerta).
+Una **corrección** de algo vivo se activa sola sólo si el medidor lo dice: nivel ≤ 2, evidencia comprobable,
+disparador intacto, seguridad en 0/0, diff presente y las nueve pruebas de `promover` en verde. El listado de
+`/skill-propuestas` lo enseña por cada actualización («auto-actualizable» o «exige humano: …»), y `auto <id>`
+da la tabla completa. Contrato en `docs/POLITICA-DE-ACTUALIZACION.md`.

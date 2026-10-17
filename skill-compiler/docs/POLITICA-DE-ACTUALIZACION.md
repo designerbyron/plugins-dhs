@@ -302,3 +302,35 @@ persona (`repair`), y la autorización de nivel es una decisión por escrito en 
 | La reparación hereda el lote de la skill viva | Reparar un miembro no parte el lote |
 | `metadata.dsh.groupId`/`groupWhy` en el frontmatter | Aditivo: quien no los conozca los ignora |
 | Entradas del diario con `group` | Aditivo |
+
+## El medidor: cuándo se actualiza sola, y cuándo no
+
+Una corrección de una skill **viva** sólo se activa sola si **cada** una de estas medidas pasa. El veredicto
+lleva el número que lo sostiene, y se ve con `node bin/skill-compiler.mjs auto [<id>]` (solo lectura).
+`promover` obedece ese veredicto: si algo falla, la propuesta espera y el diario anota `espera-medidor` con
+las medidas delante. **No medible no es pasar**: un dato que falta (sin diff, sin evidencia, sin nivel) cuenta
+como «no».
+
+| Medida | Qué exige | Por qué |
+|---|---|---|
+| `es-actualizacion` | que exista una versión vigente (aprobada, apagada o publicada) | una skill **nueva** es conocimiento nuevo: la confirma un humano |
+| `nivel` | nivel declarado ≤ 2 | el 3 —seguridad, permisos, secretos, aislamiento, facturación— es de una persona; sin nivel declarado, se trata como 3 |
+| `evidencia-observada` | que la evidencia de la corrección sea una **ruta que exista** en el proyecto | una afirmación del modelo no demuestra nada |
+| `disparador` | `description`, `whenToUse` y `tags` **sin cambios** | cambiarlos cambia a quién sirve la skill: es enrutado, no forma |
+| `seguridad` | 0 bloqueos **y 0 avisos** de la capa | un aviso es una decisión, y aquí no hay humano |
+| `diff-medido` | que la propuesta traiga su diff | sin diff, el tamaño no se puede acotar (y medir cero no es lo mismo que no cambiar) |
+| las nueve de `promover` | puerta, base vigente, conservación, alcance, tamaño, reversibilidad, ciclos, pérdida de ficheros, material retirado | la misma vara que la promoción manual: una regla, una implementación |
+
+Y lo que el medidor **no** hace: no decide (devuelve veredicto), no adivina (sin datos, no pasa) y no se
+contradice con la puerta (con avisos, no hay automático). El humano siempre puede aprobar a mano lo que el
+medidor rechaza.
+
+### Dos defectos que el medidor destapó al medir de verdad
+
+- **El tamaño del diff se medía en cero.** `propose` guarda `diff.lineas.anadidas` como **número** (para no
+  meter el diff entero en el meta) y dos lectores pedían `.length`: la puerta de tamaño y la exigencia de
+  justificar lo eliminado leían **cero líneas en toda propuesta guardada**. Corregido con `cuentaDiff`, que
+  acepta la cuenta y la lista. Caso real: `fault-injection-by-category` traía 3 líneas añadidas y 1 eliminada
+  y el medidor decía «diff de 0 línea(s)».
+- **Una propuesta sin diff pasaba el tamaño por omisión.** Ahora `diff-medido` lo exige, porque «no hay
+  cambio» y «no se pudo medir» no son lo mismo.

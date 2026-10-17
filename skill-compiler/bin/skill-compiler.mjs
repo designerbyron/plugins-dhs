@@ -31,6 +31,7 @@
  *   node bin/skill-compiler.mjs ownership dsh-only|machine  # declararlo (sin respuesta, se pregunta)
  *   node bin/skill-compiler.mjs systems                   # los sistemas del puesto y los ids que chocan
  *   node bin/skill-compiler.mjs security                # la capa: ids, contenido, árboles y cadena del diario
+ *   node bin/skill-compiler.mjs auto [<id>]              # ¿puede actualizarse sola? cada medida con su número
  *   node bin/skill-compiler.mjs doctor                    # ¿están las dependencias en su sitio?
  *   node bin/skill-compiler.mjs audit [--json] [--estado X] [--todo]
  *                                                       # audita TODO el almacén (solo lectura)
@@ -498,6 +499,27 @@ switch (command) {
     if (bloqueos > 0 || rotos.length > 0) { process.stdout.write('\nHAY BLOQUEOS O CADENAS ROTAS: no se publica nada hasta resolverlos.\n'); process.exit(1); }
     process.stdout.write('\nsin bloqueos y con el diario íntegro.\n');
     process.exit(0);
+  }
+
+  case 'auto': {
+    // El medidor, con su tabla: qué se midió, qué se exige y qué falla. Sin id, mide las actualizaciones
+    // pendientes del proyecto del directorio actual. Solo lectura: no activa nada.
+    const { medirAutoActualizacion, textoDeMedidas } = await import('../lib/auto-update.mjs');
+    const { pending } = await import('../lib/compiler.mjs');
+    const clave = scope();
+    const id = String(positional[0] ?? '').trim();
+    const objetivos = id === '' ? pending({ root, key: clave }).filter((p) => p.updatesActive).map((p) => p.id) : [id];
+    if (objetivos.length === 0) {
+      process.stdout.write(`No hay actualizaciones pendientes en ${clave}.\n`);
+      process.exit(0);
+    }
+    let noAptas = 0;
+    for (const cada of objetivos) {
+      const v = medirAutoActualizacion(cada, clave, { root, curated: curatedLibraryRoot(), cwd: process.cwd() });
+      if (!v.apto) noAptas += 1;
+      process.stdout.write(`\n${cada} [${clave}]\n${textoDeMedidas(v)}\n`);
+    }
+    process.exit(noAptas === 0 ? 0 : 1);
   }
 
   case 'doctor': {

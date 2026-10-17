@@ -776,7 +776,7 @@ export function checkRevision(revision, { diff = null, cwd = null } = {}) {
   const observada = existe;
 
   // Lo que se elimina tiene que estar justificado, y el material no puede evaporarse en silencio.
-  const lineasEliminadas = diff?.lineas?.eliminadas?.length ?? 0;
+  const lineasEliminadas = cuentaDiff(diff?.lineas?.eliminadas);
   const refsEliminadas = diff?.references?.eliminadas ?? [];
   if (lineasEliminadas > 0 || refsEliminadas.length > 0) {
     const removed = campo('removed');
@@ -952,6 +952,20 @@ export function auditarCarpeta(dir, { cwd = null, id = null } = {}) {
   for (const h of seguridadGuardada.avisos) anota('warn', h);
 
   return { findings, errors, warnings, meta, unreadable: false, references: result.references, links: result.links, medidas };
+}
+
+/**
+ * Cuántas líneas dice un campo del diff.
+ *
+ * Existe por un defecto medido: `propose` escribe `diff.lineas.anadidas` como **número** (para no guardar
+ * el diff entero en el meta), mientras dos lectores pedían `.length` — así que la puerta de tamaño y la
+ * exigencia de justificar lo que se elimina leían **cero** en toda propuesta guardada. El número se acepta
+ * tal cual, y la lista también: quien escribe decide la forma, quien lee no la supone.
+ */
+export function cuentaDiff(valor) {
+  if (Array.isArray(valor)) return valor.length;
+  if (typeof valor === 'number' && Number.isFinite(valor)) return valor;
+  return 0;
 }
 
 /** El diff completo de una propuesta contra la versión vigente: cuerpo y material. */

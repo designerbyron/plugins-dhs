@@ -27,7 +27,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFile
 import { dirname, join, relative, sep } from 'node:path';
 
 import {
-  approve, checkProposal, cuerpoSinTitulo, defaultRoot, folderHash, materialPreservado, parseFrontmatter,
+  approve, checkProposal, cuerpoSinTitulo, cuentaDiff, defaultRoot, folderHash, materialPreservado, parseFrontmatter,
   projectKey, treeOf, treeOfConErrores, vigenteDe,
 } from './compiler.mjs';
 import { inventario, inventarioPerdido, seccionesDe, topeDeMovimiento } from './repair.mjs';
@@ -165,7 +165,7 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
   //    seco: cinco piezas nuevas por corrección). Lo que sale del cuerpo se mide **en bytes** —el trabajo
   //    delegado al automático es el exceso, no su troceado— y con la MISMA función que usó el motor al
   //    prepararlo: con dos varas distintas, el motor preparaba parches que esta puerta rechazaba.
-  const lineas = (meta?.diff?.lineas?.anadidas?.length ?? 0) + (meta?.diff?.lineas?.eliminadas?.length ?? 0);
+  const lineas = cuentaDiff(meta?.diff?.lineas?.anadidas) + cuentaDiff(meta?.diff?.lineas?.eliminadas);
   const movidas = meta?.repair?.movidas ?? [];
   const bytesAntes = Number(meta?.repair?.bytesAntes ?? Buffer.byteLength(contenidoBase));
   const umbralMov = Number(meta?.repair?.umbral ?? 24000);
@@ -237,7 +237,7 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
 export function promover(id, key, {
   root = defaultRoot(), curated = null, cwd = null, niveles = NIVELES_POR_DEFECTO,
   maxLineas = 200, maxFicheros = 5, alcance = null, por = 'motor', now = new Date().toISOString(),
-  verificador = null,
+  verificador = null, veredicto = null,
 } = {}) {
   const opts = { root, ...(curated ? { curated } : {}) };
   const dirPropuesta = join(root, 'projects', key, 'proposed', id);
@@ -255,7 +255,15 @@ export function promover(id, key, {
   // exige humano, y aquí eso se cumple sin depender de que quien declaró el nivel se acordara de subirlo.
   const seguridadDeLaPropuesta = escanear({ id, body: readFileSync(fichero, 'utf8') });
   const avisosDeSeguridad = seguridadDeLaPropuesta.bloqueos.length + seguridadDeLaPropuesta.avisos.length;
-  const nivel = avisosDeSeguridad > 0 ? NIVEL_QUE_EXIGE_HUMANO : nivelDeclarado;
+  // El medidor (`lib/auto-update.mjs`) manda sobre el nivel declarado: si ya midió las dieciséis condiciones y
+  // alguna falla, la propuesta espera —y el motivo es lo que midió—; si pasa, el nivel efectivo es el suyo,
+  // nunca por encima de 2. Sin veredicto, se comporta como siempre.
+  const nivelMedido = veredicto !== null && veredicto?.apto === true ? Math.min(nivelDeclarado, 2) : nivelDeclarado;
+  const nivel = avisosDeSeguridad > 0 ? NIVEL_QUE_EXIGE_HUMANO : nivelMedido;
+  if (veredicto !== null && veredicto?.apto !== true) {
+    anotarEnDiario(key, { id, key, group: meta?.group?.id ?? null, nivel, reglas: meta?.repair?.reglas ?? [], base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: veredicto?.medidas ?? [], decision: 'espera-medidor', por, hashResultante: null, hashAnterior: null, why: String(veredicto?.resumen ?? 'el medidor no dio veredicto') }, { root, now });
+    return { status: 'pending', id, nivel, regresion: { ok: false, pruebas: veredicto?.medidas ?? [] }, razonMedida: veredicto?.resumen ?? '', reason: String(veredicto?.resumen ?? 'el medidor no dio veredicto: la propuesta espera') };
+  }
   const reglas = meta?.repair?.reglas ?? [];
 
   const cerrado = conCerrojo(root, key, id, () => {

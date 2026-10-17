@@ -57,7 +57,7 @@ const guarded = (run) => (invocation, ...rest) => {
 
 // Una pendiente que actualiza algo activo se anuncia como tal: el mismo id en dos listas, sin decirlo,
 // se lee como que la aprobación anterior no sirvió de nada.
-const bullet = (rows) => rows.map((row) => `  · ${row.id} — ${row.description ?? '(sin descripción)'}${row.updatesActive ? ' · actualización de la versión activa' : ''}`).join('\n');
+const bullet = (rows) => rows.map((row) => `  · ${row.id} — ${row.description ?? '(sin descripción)'}${row.updatesActive ? ' · actualización de la versión activa' : ''}${row.auto ? ` · ${row.auto}` : ''}`).join('\n');
 
 const NO_SCOPE = 'Sin ámbito: esta sesión no tiene un directorio de trabajo utilizable.';
 
@@ -302,6 +302,20 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         onListed?.();
 
         const waiting = pending({ root, key });
+        // Una actualización se puede medir aquí mismo: el humano quiere saber, antes de marcar, si esa
+        // corrección es de las que puede activar una máquina. Se mide con el MISMO medidor que decide
+        // (no una etiqueta aparte), y sólo para las que son actualizaciones: una skill nueva nunca lo es.
+        const MAX_MEDIDAS = 6;
+        for (const fila of waiting) {
+          if (!fila.updatesActive) continue;
+          if (waiting.indexOf(fila) >= MAX_MEDIDAS) { fila.auto = 'no medido en esta lista (hay más de ' + MAX_MEDIDAS + ' actualizaciones)'; continue; }
+          try {
+            const v = medirAutoActualizacion(fila.id, key, { root, curated: curatedLibraryRoot(), cwd });
+            fila.auto = v.apto ? `auto-actualizable (${v.medidas.length} medidas en verde)` : `exige humano: ${v.fallan.slice(0, 2).join(', ')}`;
+          } catch (error) {
+            fila.auto = `no se pudo medir: ${error.message}`;
+          }
+        }
         const active = listForProject(cwd, { root });
         // Lo apagado no se sirve, pero el humano tiene que verlo: sin esto, la única prueba de que apagó
         // algo es el resultado de aquel comando, y no hay forma de saber qué queda por devolver.
