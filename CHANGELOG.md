@@ -4,6 +4,14 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.5.1] — 2026-10-17
+
+**La etiqueta del medidor en `/skill-propuestas` no se pintaba: faltaba el import.** El módulo existía y el
+medidor funcionaba, pero `lib/commands.mjs` llamaba a `medirAutoActualizacion` sin importarlo; el `try` lo
+capturaba y la fila decía «no se pudo medir». Lo destapó el listado real, no la suite — porque la prueba
+comprobaba la marca de actualización y no la etiqueta. Ahora la prueba exige «auto-actualizable | exige
+humano» y prohíbe «no se pudo medir», que es el síntoma que se había escapado. **553/553** en verde.
+
 ## [3.5.0] — 2026-10-17
 
 **El medidor de la actualización automática: cuándo una corrección puede activarse sola, y cuándo no.** Era la

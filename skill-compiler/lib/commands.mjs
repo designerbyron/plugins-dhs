@@ -36,6 +36,7 @@ import {
   projectKey, reject, retire, retired,
 } from './compiler.mjs';
 import { huellaDeArbol, motivoDeIdInseguro } from './security.mjs';
+import { medirAutoActualizacion } from './auto-update.mjs';
 import { scopeOf } from './definitions.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
 import {

@@ -531,6 +531,9 @@ describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
     const { byName } = commands(s.root);
     const listado = byName['skill-propuestas'].handler({ agent, rawInput: '' });
     assert.match(listado.text, /actualización de la versión activa/);
+    // Y la etiqueta del medidor: si el import falta, esto era «no se pudo medir» y la suite no se enteraba.
+    assert.match(listado.text, /auto-actualizable|exige humano/, listado.text.split('\n').slice(0, 5).join(' | '));
+    assert.doesNotMatch(listado.text, /no se pudo medir/);
 
     const filas = pendingRowsFor({ root: s.root, cwd: CWD });
     const aprobar = filas.find((f) => f.verb === 'aprobar' && f.id === 'measured-decision-check');
