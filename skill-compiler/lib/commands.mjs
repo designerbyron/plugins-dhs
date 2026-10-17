@@ -55,7 +55,9 @@ const guarded = (run) => (invocation, ...rest) => {
   }
 };
 
-const bullet = (rows) => rows.map((row) => `  · ${row.id} — ${row.description ?? '(sin descripción)'}`).join('\n');
+// Una pendiente que actualiza algo activo se anuncia como tal: el mismo id en dos listas, sin decirlo,
+// se lee como que la aprobación anterior no sirvió de nada.
+const bullet = (rows) => rows.map((row) => `  · ${row.id} — ${row.description ?? '(sin descripción)'}${row.updatesActive ? ' · actualización de la versión activa' : ''}`).join('\n');
 
 const NO_SCOPE = 'Sin ámbito: esta sesión no tiene un directorio de trabajo utilizable.';
 

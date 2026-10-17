@@ -4,6 +4,32 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.4.0] — 2026-10-17
+
+**Decidir desde el panel ya incluye el ámbito, y una pendiente que actualiza algo activo lo dice.** Dos cosas
+medidas en uso real: el panel ofrecía «aprobar» y «apartar» pero no el ámbito —así que aprobar «para todos»
+obligaba a teclear la sintaxis a mano—, y una **actualización** de una skill ya activa se listaba igual que
+una skill nueva, con lo que el mismo id aparecía en «pendientes» y en «activas» y parecía que la aprobación
+anterior no había servido (`fault-injection-by-category`: propuesta de las 15:48 sobre la versión aprobada de
+las 15:08).
+
+### Añadido
+
+- **Tercera acción en el panel**: «Publicar para todos los proyectos», junto a «Aprobar las marcadas» y
+  «Apartar las marcadas». Funciona con **varias marcadas** (una ejecución por id, como el resto), la
+  confirmación dice el alcance y, para las que lo tienen, avisa de que se publican en la biblioteca de usuario
+  y que la copia del proyecto queda archivada en `published/`. Textos en español e inglés.
+- **`pending()` marca `updatesActive`**: una propuesta sobre algo que ya está aprobado, apagado o publicado es
+  una **actualización**. Se dice en el listado de `/skill-propuestas` («· actualización de la versión activa»)
+  y en la descripción de sus filas del menú («Actualiza una skill que ya está activa: si pasa la puerta, la
+  sustituye y la anterior queda apartada»).
+
+### Pruebas
+
+- Dos nuevas de servidor (la actualización se anuncia; una propuesta nueva no se anuncia como actualización) y
+  la puerta del artefacto de interfaz comprueba las tres acciones, los seis textos en los dos idiomas y que la
+  confirmación lleve el alcance. **545/545** en verde y hermética verde.
+
 ## [3.3.0] — 2026-10-16
 
 **Una capa de seguridad con contrato escrito, porque el plugin escribe texto que el modelo obedece.** Medido

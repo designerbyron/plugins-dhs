@@ -2015,8 +2015,20 @@ export function sugerenciaDeId(wanted, key, { root = defaultRoot(), tope = 2 } =
 
 /** Propuestas pendientes de un proyecto. Solo lectura: no decide nada. */
 export function pending({ root = defaultRoot(), key }) {
-  return scanTree(join(root, 'projects', key, 'proposed'), 'propuesto')
-    .map((s) => ({ id: s.id, description: s.description, path: s.path, group: s.group ?? null }));
+  const base = join(root, 'projects', key);
+  return scanTree(join(base, 'proposed'), 'propuesto')
+    .map((s) => ({
+      id: s.id,
+      description: s.description,
+      path: s.path,
+      group: s.group ?? null,
+      // Una propuesta sobre algo que **ya está activo** es una ACTUALIZACIÓN, no una skill nueva. Sin decirlo,
+      // el humano ve el mismo id en «pendientes» y en «activas» y lee que la aprobación no surtió efecto.
+      // Medido: pasó con `fault-injection-by-category`, cuya propuesta de las 15:48 actualiza la de las 15:08.
+      updatesActive: existsSync(join(base, 'approved', s.id))
+        || existsSync(join(base, 'disabled', s.id))
+        || existsSync(join(base, 'published', s.id)),
+    }));
 }
 
 // ── lo que el proveedor sirve al modelo ──────────────────────────────────────────────────────────

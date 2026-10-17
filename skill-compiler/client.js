@@ -144,6 +144,12 @@ window.__ModuleLoader__.load({
         bulk_approve: 'Aprobar las marcadas',
         bulk_reject: 'Apartar las marcadas',
         bulk_approve_one: 'Aprobar esta',
+        bulk_global: 'Publicar para todos los proyectos',
+        bulk_global_one: 'Publicar esta para todos',
+        bulk_confirm_global: 'Sí, publicar para todos',
+        bulk_ask_global: 'Vas a publicar para TODOS tus proyectos',
+        bulk_global_note: 'Se publican en la biblioteca de usuario: las sirve el harness en cualquier proyecto. La copia del proyecto queda archivada en published/.',
+        bulk_ok_global: 'publicadas',
         bulk_reject_one: 'Apartar esta',
         bulk_confirm_approve: 'Sí, aprobar',
         bulk_confirm_reject: 'Sí, apartar',
@@ -211,6 +217,12 @@ window.__ModuleLoader__.load({
         bulk_approve: 'Approve the selected',
         bulk_reject: 'Set aside the selected',
         bulk_approve_one: 'Approve this one',
+        bulk_global: 'Publish for all my projects',
+        bulk_global_one: 'Publish this one for all',
+        bulk_confirm_global: 'Yes, publish for all',
+        bulk_ask_global: 'About to publish for ALL your projects',
+        bulk_global_note: 'They go to your user library: the harness serves them in any project. The project copy is archived under published/.',
+        bulk_ok_global: 'published',
         bulk_reject_one: 'Set this one aside',
         bulk_confirm_approve: 'Yes, approve',
         bulk_confirm_reject: 'Yes, set aside',
@@ -510,6 +522,9 @@ window.__ModuleLoader__.load({
     /** Los verbos de cada lista, y sus textos: es lo único que cambia entre decidir propuestas y apagadas. */
     const VERB_TEXTS = {
       aprobar: { go: 'bulk_approve', confirm: 'bulk_confirm_approve', ask: 'bulk_ask_approve', ok: 'bulk_ok_approve' },
+      // El ámbito es una decisión, no un detalle: «aprobar» deja la skill en este proyecto y «publicar»
+      // la sirve el harness en todos. Ofrecer sólo una de las dos obligaba a teclear la otra a mano.
+      globalizar: { go: 'bulk_global', confirm: 'bulk_confirm_global', ask: 'bulk_ask_global', ok: 'bulk_ok_global', note: 'bulk_global_note' },
       rechazar: { go: 'bulk_reject', confirm: 'bulk_confirm_reject', ask: 'bulk_ask_reject', ok: 'bulk_ok_reject' },
       habilitar: { go: 'bulk_habilitar', confirm: 'bulk_confirm_habilitar', ask: 'bulk_ask_habilitar', ok: 'bulk_ok_habilitar' },
       eliminar: { go: 'bulk_eliminar', confirm: 'bulk_confirm_eliminar', ask: 'bulk_ask_eliminar', ok: 'bulk_ok_eliminar' },
@@ -521,7 +536,10 @@ window.__ModuleLoader__.load({
      * único gesto irreversible, y siempre deja respaldo fechado.
      */
     function actionsFor(nodeName) {
-      return String(nodeName ?? '') === 'skill-retiradas' ? ['habilitar', 'eliminar'] : ['aprobar', 'rechazar'];
+      // Orden = orden de los botones; el primero es además el verbo por defecto. Aprobar (este proyecto),
+      // publicar (todos) y apartar: las tres decisiones que existen, sin sintaxis que recordar. Lo apagado
+      // no publica —ya estuvo activo— así que allí sólo se reenciende o se retira.
+      return String(nodeName ?? '') === 'skill-retiradas' ? ['habilitar', 'eliminar'] : ['aprobar', 'globalizar', 'rechazar'];
     }
     const listVerbFor = (nodeName) => (String(nodeName ?? '') === 'skill-retiradas' ? 'eliminar' : 'aprobar');
 
@@ -673,7 +691,10 @@ window.__ModuleLoader__.load({
         stage === 'confirm'
           ? h('div', null,
             h('div', { className: 'skc-bulk-note' }, `${say(texts.ask)} ${picked.length}: ${picked.join(', ')}`),
-            h('div', { className: 'skc-bulk-note' }, say('bulk_ask_footer')))
+            h('div', { className: 'skc-bulk-note' }, say('bulk_ask_footer')),
+            // El alcance se dice **en la confirmación** de las que lo tienen: es la última pantalla antes de
+            // publicar, y «para todos» no es lo mismo que «en este proyecto».
+            texts.note ? h('div', { className: 'skc-bulk-note' }, say(texts.note)) : null)
           : null,
         stage === 'running' ? h('div', { className: 'skc-bulk-note' }, say('bulk_running')) : null,
         stage === 'done' && report !== null

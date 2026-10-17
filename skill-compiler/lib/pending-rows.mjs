@@ -121,6 +121,9 @@ export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
   for (const proposal of propuestas) {
     const slug = commandSlug(proposal.id);
     if (slug === null) continue;
+    // Si actualiza algo activo, la fila lo dice: es la diferencia entre «aprueba esto nuevo» y «sustituye
+    // lo que ya estás usando», y el humano decide distinto en cada caso.
+    const actualiza = proposal.updatesActive === true;
     // El lote se dice **en la descripción de la fila**: es lo que hace que en el menú se vea que estas
     // propuestas van juntas, sin añadir un clic nuevo que escriba en varias skills a la vez.
     const lote = proposal.group
@@ -134,7 +137,7 @@ export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
       taken.add(name);
       rows.push({
         name,
-        description: `${describe(proposal.id, project)}${lote}`,
+        description: `${describe(proposal.id, project)}${actualiza ? ' Actualiza una skill que ya está activa: si pasa la puerta, la sustituye y la anterior queda apartada.' : ''}${lote}`,
         verb,
         id: proposal.id,
         key,

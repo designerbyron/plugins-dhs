@@ -289,3 +289,22 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.match(client, /say\('bulk_unreadable_hint'\)/);
   });
 });
+
+describe('artefacto de interfaz · decidir incluye el ámbito', () => {
+  it('las pendientes ofrecen aprobar, publicar para todos y apartar', () => {
+    assert.match(client, /\['aprobar', 'globalizar', 'rechazar'\]/);
+  });
+
+  it('todo el texto de «publicar para todos» está en los dos idiomas', () => {
+    for (const clave of ['bulk_global', 'bulk_global_one', 'bulk_confirm_global', 'bulk_ask_global', 'bulk_ok_global', 'bulk_global_note']) {
+      const veces = (client.match(new RegExp(`${clave}:`, 'g')) ?? []).length;
+      assert.equal(veces, 2, `«${clave}» debe estar en español y en inglés`);
+    }
+  });
+
+  it('el verbo manda a la fila que existe, y la confirmación dice el alcance', () => {
+    assert.match(client, /globalizar: \{ go: 'bulk_global'/);
+    assert.match(client, /skill-\$\{verb\}/, 'el comando se compone del verbo: globalizar → skill-globalizar');
+    assert.match(client, /texts\.note/, 'la pantalla de confirmación dice el alcance');
+  });
+});

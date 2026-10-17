@@ -20,9 +20,9 @@ import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
 import { skillCommands, targetCommands } from '../lib/commands.mjs';
-import { approve, disable, projectKey, propose } from '../lib/compiler.mjs';
+import { approve, disable, pending, projectKey, propose } from '../lib/compiler.mjs';
 import { pendingRowsFor } from '../lib/pending-rows.mjs';
-import { cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
+import { cleanupSandboxes, fakeExec, goodInput, patchInput, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
 
@@ -514,4 +514,37 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     }
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'dsh-nexus-protocol')), false);
   });
+});
+
+describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
+  it('el listado y la fila la llaman actualización, no skill nueva', () => {
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    approve('measured-decision-check', KEY, { root: s.root });
+    // Ahora llega un parche sobre lo aprobado: mismo id, otra versión.
+    const parche = propose(patchInput({ body: `${goodInput().body}\n\nUn paso más, medido.\n` }), { root: s.root, curated: s.curated, cwd: CWD });
+    assert.equal(parche.status, 'proposed', parche.errors?.join(' | '));
+
+    const fila = pending({ root: s.root, key: KEY }).find((p) => p.id === 'measured-decision-check');
+    assert.equal(fila.updatesActive, true, 'la propuesta sustituye una versión activa y hay que decirlo');
+
+    const { byName } = commands(s.root);
+    const listado = byName['skill-propuestas'].handler({ agent, rawInput: '' });
+    assert.match(listado.text, /actualización de la versión activa/);
+
+    const filas = pendingRowsFor({ root: s.root, cwd: CWD });
+    const aprobar = filas.find((f) => f.verb === 'aprobar' && f.id === 'measured-decision-check');
+    assert.match(aprobar.description, /Actualiza una skill que ya está activa/);
+    assert.match(aprobar.description, /la anterior queda apartada/);
+  });
+
+  it('una pendiente nueva no se anuncia como actualización', () => {
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
+    const fila = pending({ root: s.root, key: KEY }).find((p) => p.id === 'measured-decision-check');
+    assert.equal(fila.updatesActive, false);
+    assert.doesNotMatch(filasTexto(s), /actualización de la versión activa/);
+  });
+
+  const filasTexto = (s) => commands(s.root).byName['skill-propuestas'].handler({ agent, rawInput: '' }).text;
 });

@@ -211,3 +211,12 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   hay firma, así que detecta la edición y no al atacante que recalcula la cadena.
 - **540/540** (17 nuevos adversarios), hermética verde, almacén real 31 skills con 0 bloqueos y 0 avisos.
 - `security` en la CLI (solo lectura, exit 1 si hay algo) y una línea en `doctor`.
+
+## v3.4.0 — el ámbito se decide en el panel, y la actualización se anuncia (2026-10-17)
+
+- El panel «Decide right here» ofrecía aprobar y apartar; el ámbito (`--global`) sólo se podía teclear. Ahora
+  hay tres acciones y funcionan **con varias marcadas**: aprobar (este proyecto), publicar para todos, apartar.
+  La confirmación dice el alcance.
+- `pending()` marca `updatesActive`: una propuesta sobre algo ya activo es una **actualización**, y se dice en
+  el listado y en la fila. Caso medido: `fault-injection-by-category`, propuesta 15:48 sobre la versión
+  aprobada a las 15:08 — el mismo id en «pendientes» y «activas» se leía como una aprobación que no sirvió.
