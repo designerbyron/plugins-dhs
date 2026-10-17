@@ -347,6 +347,7 @@ La `<clave>` de proyecto se deriva del `cwd`: `<último-tramo>-<hash8>`. Para sa
 | Síntoma | Causa probable | Qué hacer |
 |---|---|---|
 | El plugin no aparece y la fila dice `failed` | Casi siempre, una dependencia: o no está declarada, o no está instalada, o no se puede cargar | **`node bin/skill-compiler.mjs doctor`** desde la carpeta del plugin. Dice qué falta y con qué comando se arregla. Casi siempre es `npm install` |
+node bin/skill-compiler.mjs security   # capa de seguridad: ids, contenido, árboles y cadena del diario (solo lectura; exit 1 si hay algo)
 | El diálogo de instalación dice `Installed` pero al encender dice `failed to import` | El bundle se instaló **enlazando** la carpeta del repositorio, y las dependencias del plugin no están ahí | `npm install` en la carpeta del plugin y vuelve a encenderlo. El motivo completo, en [`DEPENDENCIAS.md`](DEPENDENCIAS.md) |
 | Cambié el código y el comportamiento no cambia | El perfil puede tener **su propia copia** del paquete, o conservar el módulo cargado | Si se instaló por ruta, el perfil enlaza el repositorio y el cambio es inmediato tras un ciclo de encendido; si no, reinstala el bundle y reinicia cuando el resultado diga `restart-required` |
 | Cambié el código del **navegador** (`client.js`) y no se ve | El artefacto de interfaz lo carga la página | Recarga la página (F5) después de cambiar el fichero |
@@ -389,3 +390,10 @@ node tests/vendor-real.e2e.mjs   # la cadena completa contra la red real (necesi
 ```
 
 Las dos primeras no necesitan red ni tocan tus datos.
+
+## La capa de seguridad, en dos frases
+
+Un **bloqueo** —credencial, orden dirigida al agente, destrucción de una unidad— no se escribe y no se aprueba
+ni con `--force`. Un **aviso** —ruta sensible, operación privilegiada— lo decide un humano con `--force`, y la
+promoción automática nunca lo toca: el nivel sube a humano por encima del nivel que declare el parche. El
+contrato completo, con lo que la capa **no** hace, está en `docs/SEGURIDAD.md`.

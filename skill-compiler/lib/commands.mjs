@@ -35,6 +35,7 @@ import {
   approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, pending, sugerenciaDeId,
   projectKey, reject, retire, retired,
 } from './compiler.mjs';
+import { huellaDeArbol, motivoDeIdInseguro } from './security.mjs';
 import { scopeOf } from './definitions.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
 import {
@@ -124,6 +125,19 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
  * tiene que volver a mirar la lista y teclear otra vez. Medido con `dhs-nexus-protocol` (quería
  * `dsh-nexus-protocol`): el fallo era real —no había nada con ese id— pero la respuesta no ayudaba.
  */
+/**
+ * El id que llega de la línea de comandos, antes de mirar el disco.
+ *
+ * Un id es una carpeta: con `..` o una barra no es un id raro, es una ruta a otra parte. Se dice con esas
+ * palabras —y no «no hay ninguna propuesta», que sería verdad y no enseñaría nada—.
+ */
+function idNoUtilizable(wanted) {
+  const motivo = motivoDeIdInseguro(wanted);
+  return motivo === null
+    ? null
+    : bad([`«${wanted}» no es un id utilizable: ${motivo}.`, 'Los ids son kebab-case ASCII, sin puntos ni separadores.'].join('\n'));
+}
+
 function noEstáElId(wanted, key, root, { que = 'propuesta' } = {}) {
   const cerca = sugerenciaDeId(wanted, key, { root });
   return bad([
@@ -138,6 +152,8 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
   if (wanted === '') return bad('Falta el id. Uso: /skill-aprobar <id> [--force]');
+  const noEsId = idNoUtilizable(wanted);
+  if (noEsId !== null) return noEsId;
 
   // Aprobar algo que ya está aprobado no es un fallo: es un acto que ya ocurrió. Decirlo con esas
   // palabras evita el «failed» que hacía pensar que la primera aprobación no había servido.
@@ -182,14 +198,23 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     ].join('\n'));
   }
 
+  // Lo que se validó es lo que se mueve. La ventana entre la puerta y el `rename` se mide con la huella del
+  // árbol: si alguien cambió la propuesta en medio —o la sustituyó por un enlace—, se para antes de mover.
+  const huellaAntes = huellaDeArbol(check.dir);
   const moved = approve(wanted, key, { root, scope });
   if (!moved.ok) return bad(`No se pudo aprobar ${wanted}: ${moved.reason}`);
 
   // El catálogo acaba de cambiar: sin este aviso, la skill no llega al agente hasta reiniciar.
   catalog?.notify();
 
+  const huellaDespues = huellaDeArbol(join(moved.path, '..'));
+  const avisoHuella = huellaAntes === huellaDespues
+    ? []
+    : ['', `AVISO: el árbol que se movió no es el que se validó (huella ${huellaAntes.slice(0, 12)} → ${huellaDespues.slice(0, 12)}): revísalo antes de usarlo`];
+
   return ok([
     `Activa: ${wanted} [${key}]`,
+    ...avisoHuella,
     `  ${moved.path}`,
     ...(moved.superseded ? [`  versión anterior apartada en ${moved.superseded}`] : []),
     ...(check.warnings.length > 0 ? ['', 'Aprobada con avisos:', ...check.warnings.map((w) => `  · ${w}`)] : []),
@@ -205,6 +230,8 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
   if (wanted === '') return bad('Falta el id. Uso: /skill-rechazar <id>');
+  const noEsId = idNoUtilizable(wanted);
+  if (noEsId !== null) return noEsId;
 
   const where = locate(wanted, key, { root });
   if (where === 'rejected') {

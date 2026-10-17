@@ -53,7 +53,14 @@ export function anotarEnDiario(key, entrada, { root = defaultRoot(), now = new D
   const fichero = diarioDe(key, { root });
   try {
     mkdirSync(dirname(fichero), { recursive: true });
-    writeFileSync(fichero, `${JSON.stringify({ at: now, ...entrada })}\n`, { flag: 'a' });
+    // Encadenado: cada entrada lleva la huella de la anterior y la suya propia. Borrar, añadir o editar una
+    // entrada rompe la cadena y `skill-compiler security` lo dice. Límite declarado: sin secreto local no hay
+    // firma, así que un atacante con escritura podría recalcular la cadena entera; lo que sí detecta es la
+    // edición accidental, la de una herramienta torpe y la de quien no sabía que esto estaba encadenado.
+    const cuerpo = { at: now, ...entrada };
+    const huellaAnterior = huellaDeLaCola(leerDiario(key, { root }).filter((e) => typeof e?.huella === 'string'));
+    const conEslabon = { ...cuerpo, huellaAnterior };
+    writeFileSync(fichero, `${JSON.stringify({ ...conEslabon, huella: huellaDeEntrada(conEslabon) })}\n`, { flag: 'a' });
     return true;
   } catch {
     // Un diario que no se puede escribir no puede tumbar la operación, pero tampoco se calla: el resultado
@@ -73,6 +80,7 @@ export function leerDiario(key, { root = defaultRoot() } = {}) {
 
 // El cerrojo vive en `lib/lock.mjs` porque lo comparten proponer, promocionar y publicar: dos mecanismos
 // de exclusión serían dos verdades sobre lo mismo. Se importa y se re-exporta para no cambiar la API.
+import { escanear, huellaDeEntrada, huellaDeLaCola } from './security.mjs';
 import { conCerrojo, rutaDelCerrojo } from './lock.mjs';
 
 export { conCerrojo, rutaDelCerrojo };
@@ -241,7 +249,13 @@ export function promover(id, key, {
   try { meta = JSON.parse(readFileSync(join(dirPropuesta, 'meta.json'), 'utf8')); } catch { meta = null; }
   // Sin `repair` declarado no hay nivel: se trata como lo más delicado. Un parche sin nivel no puede colarse
   // por la puerta de atrás de la automatización.
-  const nivel = typeof meta?.repair?.nivel === 'number' ? meta.repair.nivel : NIVEL_QUE_EXIGE_HUMANO;
+  const nivelDeclarado = typeof meta?.repair?.nivel === 'number' ? meta.repair.nivel : NIVEL_QUE_EXIGE_HUMANO;
+  // La capa de seguridad manda por encima del nivel declarado: si el contenido levanta un aviso de seguridad
+  // —credencial, orden al agente, operación destructiva, ruta sensible— no lo activa una máquina. El nivel 3
+  // exige humano, y aquí eso se cumple sin depender de que quien declaró el nivel se acordara de subirlo.
+  const seguridadDeLaPropuesta = escanear({ id, body: readFileSync(fichero, 'utf8') });
+  const avisosDeSeguridad = seguridadDeLaPropuesta.bloqueos.length + seguridadDeLaPropuesta.avisos.length;
+  const nivel = avisosDeSeguridad > 0 ? NIVEL_QUE_EXIGE_HUMANO : nivelDeclarado;
   const reglas = meta?.repair?.reglas ?? [];
 
   const cerrado = conCerrojo(root, key, id, () => {

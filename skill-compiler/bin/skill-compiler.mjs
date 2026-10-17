@@ -30,6 +30,7 @@
  *   node bin/skill-compiler.mjs ownership                 # quién manda en la creación de skills de este puesto
  *   node bin/skill-compiler.mjs ownership dsh-only|machine  # declararlo (sin respuesta, se pregunta)
  *   node bin/skill-compiler.mjs systems                   # los sistemas del puesto y los ids que chocan
+ *   node bin/skill-compiler.mjs security                # la capa: ids, contenido, árboles y cadena del diario
  *   node bin/skill-compiler.mjs doctor                    # ¿están las dependencias en su sitio?
  *   node bin/skill-compiler.mjs audit [--json] [--estado X] [--todo]
  *                                                       # audita TODO el almacén (solo lectura)
@@ -63,6 +64,7 @@ import {
   MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeSistemas,
   textoDelEstado,
 } from '../lib/scope.mjs';
+import { leerDiario, verificarCadena } from '../lib/security.mjs';
 
 /**
  * La ruta de este propio CLI. Se deriva en tiempo de ejecución en vez de escribirse: el mensaje que la
@@ -454,6 +456,50 @@ switch (command) {
     process.exit(0);
   }
 
+  case 'security': {
+    // Solo lectura, y por el mismo camino que la puerta: `auditarCarpeta` es la regla, una implementación.
+    // Recorre el almacén entero (todos los estados) y verifica además la cadena de cada diario.
+    const fs = await import('node:fs');
+    const { auditarCarpeta } = await import('../lib/compiler.mjs');
+    let skills = 0;
+    let bloqueos = 0;
+    let avisos = 0;
+    const rotos = [];
+    let proyectos = [];
+    try { proyectos = fs.readdirSync(join(root, 'projects'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { proyectos = []; }
+    for (const proyecto of proyectos.sort()) {
+      for (const estado of ['proposed', 'approved', 'disabled', 'published', 'rejected']) {
+        let ids = [];
+        try { ids = fs.readdirSync(join(root, 'projects', proyecto, estado), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { continue; }
+        for (const id of ids.sort()) {
+          const dir = join(root, 'projects', proyecto, estado, id);
+          if (!fs.existsSync(join(dir, 'SKILL.md'))) continue;
+          skills += 1;
+          const { findings } = auditarCarpeta(dir, { id });
+          for (const h of findings) {
+            if (!/^(security|secret)/.test(String(h.rule ?? ''))) continue;
+            if (h.severity === 'error') { bloqueos += 1; process.stdout.write(`  BLOQUEO ${estado}/${id} · ${h.rule}: ${h.message}\n`); }
+            else { avisos += 1; process.stdout.write(`  aviso   ${estado}/${id} · ${h.rule}: ${h.message}\n`); }
+          }
+        }
+      }
+      const diario = leerDiario(join(root, 'projects', proyecto, 'journal.jsonl'));
+      if (!diario.existe) continue;
+      const cadena = verificarCadena(diario.entradas);
+      for (const r of cadena.roturas) rotos.push(`${proyecto}: ${r.message}`);
+      if (cadena.sinHuella > 0) process.stdout.write(`  nota    ${proyecto}: ${cadena.sinHuella} entrada(s) anteriores al encadenado (sin huella, no rompen nada)\n`);
+      if (diario.ilegibles > 0) rotos.push(`${proyecto}: ${diario.ilegibles} línea(s) ilegible(s) en el diario`);
+    }
+    process.stdout.write(`\nSeguridad del almacén · ${skills} skills revisadas en ${proyectos.length} proyecto(s)\n`);
+    process.stdout.write(`  bloqueos: ${bloqueos} · avisos: ${avisos}\n`);
+    process.stdout.write(rotos.length === 0
+      ? '  diarios: cadena válida\n'
+      : `  diarios: ${rotos.length} problema(s)\n${rotos.map((r) => `    · ${r}`).join('\n')}\n`);
+    if (bloqueos > 0 || rotos.length > 0) { process.stdout.write('\nHAY BLOQUEOS O CADENAS ROTAS: no se publica nada hasta resolverlos.\n'); process.exit(1); }
+    process.stdout.write('\nsin bloqueos y con el diario íntegro.\n');
+    process.exit(0);
+  }
+
   case 'doctor': {
     // Existe por un fallo real: el plugin importaba un paquete del harness sin declararlo, funcionaba
     // en la máquina donde estaba suelto y fallaba al instalarse en un perfil con «failed to import».
@@ -470,6 +516,35 @@ switch (command) {
       process.stdout.write(`${ok ? 'ok    ' : 'FALLA '} ${text}\n`);
       if (!ok && remedy) process.stdout.write(`        remedio: ${remedy}\n`);
     };
+
+    // La capa de seguridad, en una línea: cuántas skills del almacén levantan algo. Informativo a propósito:
+    // `doctor` dice si el plugin puede activarse; `security` dice si el contenido está limpio, con su código.
+    try {
+      const { auditarCarpeta } = await import('../lib/compiler.mjs');
+      let bloqueos = 0;
+      let avisos = 0;
+      let revisadas = 0;
+      for (const proyecto of fs.readdirSync(join(root, 'projects'), { withFileTypes: true }).filter((d) => d.isDirectory())) {
+        for (const estado of ['proposed', 'approved', 'disabled', 'published', 'rejected']) {
+          let ids = [];
+          try { ids = fs.readdirSync(join(root, 'projects', proyecto.name, estado), { withFileTypes: true }).filter((d) => d.isDirectory()); } catch { continue; }
+          for (const id of ids) {
+            const dir = join(root, 'projects', proyecto.name, estado, id.name);
+            if (!fs.existsSync(join(dir, 'SKILL.md'))) continue;
+            revisadas += 1;
+            const { findings } = auditarCarpeta(dir, { id: id.name });
+            for (const h of findings) {
+              if (!/^(security|secret)/.test(String(h.rule ?? ''))) continue;
+              if (h.severity === 'error') bloqueos += 1; else avisos += 1;
+            }
+          }
+        }
+      }
+      line(bloqueos === 0, `capa de seguridad: ${revisadas} skills revisadas · ${bloqueos} bloqueo(s) · ${avisos} aviso(s)`,
+        'hay contenido que la capa no deja publicar: `security` dice cuál y por qué');
+    } catch (error) {
+      line(false, `capa de seguridad: no se pudo revisar (${error.message})`, 'comprueba que el almacén existe y se puede leer');
+    }
 
     process.stdout.write(`\ndependencias declaradas: ${declaredNames.length}\n`);
     line(declaredNames.length > 0, 'el manifiesto declara sus dependencias',

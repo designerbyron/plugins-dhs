@@ -195,3 +195,19 @@ hay ninguna propuesta «dhs-nexus-protocol»» —verdad, y sin salida—. Ahora
 (`/skill-ver`, `/skill-aprobar`, `/skill-rechazar`) ofrecen el más cercano con `sugerenciaDeId` (≤2 ediciones,
 candidatos ordenados ⇒ empate determinista). **Sugiere, no aprueba**: nada se mueve por parecido. Sin tag ni
 release: la autorización cubría el commit y el push, no una release adicional.
+
+## v3.3.0 — la capa de seguridad (2026-10-16)
+
+El día de uso real cerró sin fallos, y lo que faltaba no era el motor: era que **un id podía ser una ruta**, que
+una skill podía llevar una credencial o una orden dirigida al agente, que un enlace dentro de una skill podía
+sacarla de su carpeta y que el diario se podía editar sin que se notara. Ahora `lib/security.mjs` es el único
+juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y auditar no pueden divergir).
+
+- **Bloqueo** (no se escribe, no se aprueba ni con `--force`): credenciales, órdenes al agente, destrucción de
+  una unidad. **Aviso** (humano con `--force`, automático nunca): rutas sensibles y operaciones privilegiadas.
+- `move`/`locate` juzgan el id; `revisarArbol` rechaza enlaces; la huella del árbol se compara antes y después
+  del movimiento; la promoción automática sube a humano con cualquier aviso de seguridad.
+- El diario encadena (`huellaAnterior` + `huella`, cubriendo el eslabón). Límite declarado: sin secreto local no
+  hay firma, así que detecta la edición y no al atacante que recalcula la cadena.
+- **540/540** (17 nuevos adversarios), hermética verde, almacén real 31 skills con 0 bloqueos y 0 avisos.
+- `security` en la CLI (solo lectura, exit 1 si hay algo) y una línea en `doctor`.

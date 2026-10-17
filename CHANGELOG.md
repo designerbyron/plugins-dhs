@@ -4,6 +4,50 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.3.0] — 2026-10-16
+
+**Una capa de seguridad con contrato escrito, porque el plugin escribe texto que el modelo obedece.** Medido
+sobre un día de uso real sin fallos, el punto débil no era el motor: era que un id podía ser una ruta, una
+skill podía llevar una credencial o una orden dirigida al agente, un enlace dentro de una skill podía sacarla
+de su carpeta, y el diario se podía editar sin que se notara. Nada de eso se presume ahora: se comprueba, se
+declara y se prueba con casos adversarios.
+
+### Añadido
+
+- **`lib/security.mjs`** — la capa: contrato de id (`motivoDeIdInseguro`, con nombres reservados de Windows y
+  el motivo concreto), escaneo del contenido en dos niveles (bloqueo / aviso), revisión del árbol (enlaces,
+  dispositivos, tope de ficheros), huella de árbol y cadena del diario.
+- **El escaneo vive en la puerta**, no en cada comando: `validateInput` y `auditarCarpeta` son las dos únicas
+  entradas, así que proponer, aprobar y auditar leen el **mismo** juicio. Mira cuerpo, frontmatter y cada
+  fichero de `references/`, con fichero y línea.
+- **Credenciales y órdenes al agente son bloqueo**: no se escriben y no se aprueban ni con `--force`.
+  Rutas sensibles y operaciones privilegiadas son **aviso**: las decide un humano, y la promoción automática
+  no las toca.
+- **El id se juzga donde se mueve**: `move` y `locate` rechazan un id que no es un id, así que la CLI, los
+  comandos del harness y las filas del menú no tienen una segunda implementación donde colarse.
+- **El árbol no lleva enlaces**: `revisarArbol` en `move`, y la huella del árbol se compara antes y después
+  del movimiento para que «lo validado es lo movido» sea un dato y no una promesa.
+- **La promoción automática sube a nivel humano** si el contenido levanta cualquier aviso de seguridad, por
+  encima del nivel que declare el parche.
+- **El diario encadena**: `huellaAnterior` y `huella` por entrada; editar, borrar o insertar se detecta, y las
+  entradas anteriores al encadenado se declaran en vez de contarse como rotura.
+- **`security`** en la CLI: recorre el almacén entero, verifica cada cadena y sale con 1 si hay algo. Y una
+  línea en `doctor`.
+
+### Documentación
+
+- `docs/SEGURIDAD.md`: modelo de amenaza, contrato de id, los dos niveles, el árbol, la cadena, cómo se
+  comprueba y **lo que la capa no hace** (no ejecuta, no es antivirus, no protege de un `--force` humano, no
+  autentica el diario, no cifra).
+
+### Pruebas
+
+- `tests/security.test.mjs`: **17 casos adversarios** — ids que son rutas, credenciales en todas sus formas,
+  órdenes al agente, destrucción, árbol con enlace, huella, cadena editada/borrada/antigua y la integración en
+  la puerta y en la promoción automática.
+- **540/540** en verde (523 + 17) y suite hermética verde. El almacén real: 31 skills, **0 bloqueos, 0
+  avisos**, tres diarios con cadena válida (8 entradas anteriores al encadenado, declaradas).
+
 ## [3.2.1] — 2026-10-16
 
 **Un id mal tecleado deja de ser un callejón sin salida.** Medido en uso real: `/skill-aprobar

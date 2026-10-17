@@ -25,6 +25,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { conCerrojo } from './lock.mjs';
+import { esIdSeguro, motivoDeIdInseguro, escanear, huellaDeArbol, revisarArbol } from './security.mjs';
 import {
   MAQUINA, SOLO_DSH, dondeMasViveEseId, leerPropiedad, politicaAplicable, proyectosConocidos, propiedadSinCambios,
 } from './scope.mjs';
@@ -122,14 +123,6 @@ const MIN_BODY = 200;
 const REFERENCE_DIR = 'references/';
 
 /** Formas de credencial y de ruta de usuario que una skill NUNCA debe llevar consigo. */
-const SECRET_SHAPES = [
-  [/sk-[A-Za-z0-9]{16,}/, 'clave con forma sk-'],
-  [/ghp_[A-Za-z0-9]{20,}/, 'token de GitHub'],
-  [/eyJ[A-Za-z0-9_-]{10,}/, 'JWT'],
-  [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'clave privada PEM'],
-  [/\b(password|passwd|secret|api[_-]?key|token)\b\s*[:=]\s*\S{6,}/i, 'asignación de credencial'],
-  [/\bBearer\s+\S{12,}/, 'cabecera Bearer'],
-];
 /** Rutas personales de la máquina del autor: acoplan la skill a un puesto, no a un proyecto. */
 const PERSONAL_PATH_SHAPES = [
   [/[A-Za-z]:\\Users\\[^\\\s"']+/i, 'ruta de perfil de Windows'],
@@ -421,7 +414,22 @@ export function validateInput(input, { references = [], cwd = null, present = []
       });
     }
   }
-  for (const [re, label] of SECRET_SHAPES) if (re.test(haystack)) add('error', { rule: 'secret', observed: label, message: `parece contener una credencial (${label}): una skill no lleva secretos nunca`, fix: 'Quita la credencial y sustitúyela por una referencia al almacén de secretos' });
+  // ── La capa de seguridad ────────────────────────────────────────────────────────────────────────
+  //
+  // Aquí, y no en cada comando: la propuesta, la puerta de aprobación y la auditoría leen el MISMO juicio
+  // (una regla, una implementación). Un bloqueo no se escribe ni se aprueba con --force; un aviso lo decide
+  // un humano y la aprobación automática no lo toca. El material pesado entra al escaneo con el resto: una
+  // credencial en `references/` viaja igual de lejos que una en el cuerpo.
+  const seguridad = escanear({
+    id: String(input?.id ?? ''),
+    description: String(input?.description ?? ''),
+    whenToUse: String(input?.whenToUse ?? ''),
+    tags: Array.isArray(input?.tags) ? input.tags : [],
+    body: String(input?.body ?? ''),
+    ficheros: Object.fromEntries((Array.isArray(references) ? references : []).map((r) => [String(r?.path ?? ''), String(r?.content ?? '')])),
+  });
+  for (const h of seguridad.bloqueos) add('error', { rule: h.rule, observed: h.observed, threshold: null, message: h.message, fix: h.fix });
+  for (const h of seguridad.avisos) add('warn', { rule: h.rule, observed: h.observed, threshold: null, message: h.message, fix: h.fix });
   for (const [re, label] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) add('error', { rule: 'personal-path', observed: label, message: `contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`, fix: 'Sustituye la ruta personal por $DSH_HOME o una ruta relativa' });
   // Las rutas absolutas, por **contexto**: una ruta que se usa (prosa) avisa; un ejemplo o una cita se
   // ven en el informe como `info` sin pedir nada. Así el aviso sigue significando algo —y una ruta
@@ -932,6 +940,17 @@ export function auditarCarpeta(dir, { cwd = null, id = null } = {}) {
       });
     }
   }
+  // Y el contenido que se va a servir pasa por la capa de seguridad mirando el DISCO: así caza una edición
+  // a mano posterior a la propuesta, que es justo la que no pasó por la puerta.
+  const ficherosGuardados = {};
+  for (const ref of meta?.references ?? []) {
+    const ruta = normalizeRel(ref.path);
+    try { ficherosGuardados[ruta] = readFileSync(join(dir, ruta), 'utf8'); } catch { /* ya se reportó arriba */ }
+  }
+  const seguridadGuardada = escanear({ id: meta?.name ?? id ?? '', body: texto, ficheros: ficherosGuardados });
+  for (const h of seguridadGuardada.bloqueos) anota('error', h);
+  for (const h of seguridadGuardada.avisos) anota('warn', h);
+
   return { findings, errors, warnings, meta, unreadable: false, references: result.references, links: result.links, medidas };
 }
 
@@ -1503,9 +1522,18 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
 }
 
 function move(root, key, id, from, to) {
+  // Un id llega de la línea de comandos y se convierte en ruta: si no es un id, no es una ruta que tocar.
+  // Y el árbol que se mueve tiene que ser un árbol normal —un enlace dentro de una skill es una puerta a
+  // otro sitio, y aprobarla sería publicar contenido de fuera como si fuera suyo—.
+  const inseguro = motivoDeIdInseguro(id);
+  if (inseguro) return { ok: false, reason: `id no utilizable: ${inseguro}` };
   const source = join(root, 'projects', key, from, id);
   const target = join(root, 'projects', key, to, id);
   if (!existsSync(source)) return { ok: false, reason: `no existe ${from}/${id} en ${key}` };
+  const arbol = revisarArbol(source);
+  if (!arbol.ok) {
+    return { ok: false, reason: `la skill no es un árbol seguro y no se mueve: ${arbol.problemas.map((p) => `${p.observed} — ${p.message}`).join('; ')}` };
+  }
   let superseded = null;
   // Aprobar una actualización NO destruye la versión vigente: la aparta con su fecha y deja rastro,
   // porque en esta biblioteca una skill aprobada es una herramienta de trabajo, no un borrador.
@@ -1912,6 +1940,7 @@ export function checkProposal(id, key, { root = defaultRoot(), curated = curated
  * dice la verdad, sin que el estado deje de ser el mismo.
  */
 export function locate(id, key, { root = defaultRoot() } = {}) {
+  if (!esIdSeguro(id)) return null;
   // `disabled` entra aquí: sin él, apagar algo ya apagado no se reconocía como «ya estaba», y la
   // respuesta era un error de movimiento en vez de decir la verdad (que es lo que el humano espera).
   for (const where of ['proposed', 'approved', 'disabled', 'rejected', 'published']) {
