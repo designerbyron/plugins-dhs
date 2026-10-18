@@ -217,10 +217,13 @@ switch (command) {
         process.stderr.write(`Aprobación del lote RECHAZADA: ${fallos.join(', ')} no pasa(n) la puerta o tiene(n) avisos.\n  No se ha aprobado ninguna: un lote se aprueba entero o no se aprueba.\n`);
         process.exit(1);
       }
+      const { approveProposal } = await import('../lib/commands.mjs');
       const hechas = [];
       for (const cada of ids) {
-        const movida = approve(cada, key, { root, scope: flags.global === true ? 'global' : 'project' });
-        if (!movida.ok) { process.stderr.write(`No se pudo aprobar ${cada}: ${movida.reason}\n  Ya aprobadas: ${hechas.join(', ') || '(ninguna)'}\n`); process.exit(1); }
+        // La misma función que el comando y el panel: puerta, seguridad, huella del contenido y entrada del
+        // diario. La CLI no reimplementa nada — si lo hiciera, sería el camino que olvida el rastro.
+        const movida = approveProposal({ root, key: key, id: cada, force: flags.force === true, scope: flags.global === true ? 'global' : 'project' });
+        if (movida.kind !== 'success') { process.stderr.write(`No se pudo aprobar ${cada}: ${movida.text.split('\n')[0]}\n  Ya aprobadas: ${hechas.join(', ') || '(ninguna)'}\n`); process.exit(1); }
         hechas.push(cada);
       }
       const donde = flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`;
@@ -239,31 +242,14 @@ switch (command) {
       process.stdout.write(`Ya estaba activa: ${id} en ${key}\n  No se ha cambiado nada.\n`);
       break;
     }
-    const result = checkSkill(id, key);
-    if (!result.ok) {
-      process.stderr.write(`Aprobación RECHAZADA: la propuesta no pasa la puerta.\n`);
-      printCheck(id, key, result);
-      process.exit(1);
-    }
-    if (result.warnings.length && flags.force !== true) {
-      process.stderr.write('La propuesta tiene avisos. Revísalos y repite con --force si los aceptas.\n');
-      printCheck(id, key, result);
-      process.exit(1);
-    }
-    const moved = approve(id, key, { root, scope: ambitoPedido });
-    if (!moved.ok) { process.stderr.write(`No se pudo aprobar: ${moved.reason}\n`); process.exit(1); }
-    if (ambitoPedido === 'global') {
-      process.stdout.write(`Aprobada ${id} para TODOS tus proyectos\n  ${moved.path}\n`);
-      if (moved.superseded) process.stdout.write(`  versión anterior apartada en ${moved.superseded}\n`);
-      process.stdout.write('Se sirve en toda sesión de esta máquina, y el modelo la verá sin reiniciar si el catálogo se refresca.\n');
-      process.stdout.write(`Para dejarla sólo en este proyecto: scope ${id} --local\n`);
-    } else {
-      process.stdout.write(`Aprobada ${id} en ${key}\n  ${moved.path}\n`);
-      if (moved.superseded) process.stdout.write(`  versión anterior apartada en ${moved.superseded}\n`);
-      process.stdout.write('Se sirve al modelo solo en este proyecto.\n');
-      process.stdout.write(`Para que la vean todos tus proyectos: approve ${id} --global\n`);
-    }
-    break;
+    // Igual que el comando y el panel: el mismo juicio, la misma huella, el mismo rastro. La CLI ya no
+    // reimplementa la aprobación (tenía su propia copia de las comprobaciones, y olvidaba el diario y la
+    // comprobación de contenido).
+    const { approveProposal } = await import('../lib/commands.mjs');
+    const r = approveProposal({ root, key, id, force: flags.force === true, scope: ambitoPedido });
+    process.stdout.write(`${r.text}\n`);
+    if (ambitoPedido === 'project') process.stdout.write(`Para que la vean todos tus proyectos: approve ${id} --global\n`);
+    process.exit(r.kind === 'success' ? 0 : 1);
   }
 
   // ── el ámbito, en las dos direcciones ────────────────────────────────────────────────────────────

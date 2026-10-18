@@ -30,6 +30,11 @@ necesita (la herramienta que aprueba sola, con el modo encendido) era el único 
   aprobación local, y queda registrado en la entrada.
 - **La herramienta automática aprueba el contenido que validó**: pasa la huella del contenido a `approve`, así
   que la garantía de integridad cubre también ese camino (antes aprobaba sin comprobarla).
+- **La CLI dejó de reimplementar la aprobación.** Tenía su propia copia de las comprobaciones y por eso era el
+  único camino humano que no dejaba entrada en el diario ni verificaba el contenido. `approve <id>` y
+  `approve --grupo` llaman ahora a la **misma** función que el comando y el panel: una regla, una
+  implementación, un rastro. Comprobado de punta a punta desde la CLI en una caja de arena: propuesta → aprobada
+  → entrada `aprobada/project/humano/comando` con las dos huellas iguales.
 
 ### Pruebas
 
