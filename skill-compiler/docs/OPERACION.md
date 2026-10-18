@@ -457,3 +457,10 @@ huella de la anterior) y con lo necesario para auditarla:
 `node bin/skill-compiler.mjs security` recorre los diarios y verifica la cadena: una entrada editada, borrada o
 insertada se detecta (`journal-tamper` / `journal-chain`). Las entradas anteriores a la cadena se declaran
 (`sinHuella`) y no cuentan como rotura.
+
+### Los colores del panel
+
+El informe del panel usa **un tono por significado** —verde (todo salió), ámbar (mezcla o nada ejecutado), rojo
+(fallos), apagado (informativo)—, siempre mezclado con `currentColor` para no bajar del contraste del tema. La
+información **no** depende del color: el texto dice lo mismo. Las líneas entran con una animación de dos píxeles
+que desaparece con `prefers-reduced-motion: reduce`.

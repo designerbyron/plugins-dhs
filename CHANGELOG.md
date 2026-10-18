@@ -4,6 +4,29 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.8.0] — 2026-10-18 · release
+
+**El panel de decisiones se lee de un vistazo y se mueve lo justo.** Aprobado en vivo: el anfitrión ejecuta
+`runCommand` con **texto con barra**, así que el panel aprobó de verdad —3 y luego las 7 restantes, 0 fallos,
+pendientes a 0— y el lote va en una sola orden.
+
+### Añadido
+
+- **Un tono por significado** en el informe del panel, todos derivados de `currentColor` (el texto no baja del
+  contraste que el anfitrión ya aprobó): **verde** cuando todo salió, **ámbar** cuando hubo mezcla o nada llegó a
+  ejecutarse, **rojo** en los fallos, apagado en lo informativo. La fila que quedó hecha se atenúa y su marca se
+  tiñe; la que falló, en rojo.
+- **Microanimación de entrada** (170–200 ms, dos píxeles) en las líneas del informe y en las marcas de estado.
+  Con `prefers-reduced-motion: reduce` no hay animación: sólo el estado final. El color no es el único aviso —el
+  texto sigue diciendo qué pasó—, así que la información no depende de distinguir tonos.
+
+### Documentado
+
+- `docs/OPERACION.md`: qué significa cada tono y por qué el movimiento se apaga.
+- La forma del anfitrión queda registrada en el propio informe («Host call shape that worked: texto con barra»),
+  para que una actualización que la cambie no vuelva a fallar en silencio: el sondeo prueba y **verifica el
+  efecto** antes de dar nada por hecho.
+
 ## [3.7.0] — 2026-10-18
 
 **Toda aprobación deja rastro: el ciclo del aprendizaje se puede auditar de punta a punta.** El diario anotaba

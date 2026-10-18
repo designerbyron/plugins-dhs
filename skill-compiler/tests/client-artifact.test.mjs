@@ -400,3 +400,32 @@ describe('artefacto de interfaz · el lote va en UNA orden', () => {
     assert.match(client, /for \(const id of pendientes\)/);
   });
 });
+
+describe('artefacto de interfaz · el estado se lee por color, y se mueve poco', () => {
+  it('cada tipo de mensaje tiene su tono, y todos derivan de currentColor', () => {
+    for (const tono of ['error', 'ok', 'warn', 'muted']) {
+      assert.match(client, new RegExp(`\[data-tone="${tono}"\]`), `falta el tono «${tono}»`);
+    }
+    // El color se mezcla con currentColor: el texto no baja del contraste del anfitrión.
+    const reglas = client.match(/data-tone="(ok|warn|error)"\] \{ color: ([^;]+);/g) ?? [];
+    assert.ok(reglas.length >= 3, 'los tres tonos con color propio');
+    for (const regla of reglas) assert.match(regla, /color-mix\(in oklab, currentColor/, regla);
+  });
+
+  it('el resumen del lote se tiñe por resultado: verde si todo bien, ámbar si hay mezcla, rojo si nada', () => {
+    assert.match(client, /'data-tone': report\.failed\.length === 0 \? 'ok' : \(report\.done\.length === 0 \? 'error' : 'warn'\)/);
+  });
+
+  it('cada fila dice si quedó hecha, y su marca lleva tono', () => {
+    assert.match(client, /'data-hecha': 'si'/);
+    assert.match(client, /\[data-hecha="si"\] label \{ opacity/);
+    assert.match(client, /\.\.\.\(hecha \? \{ 'data-tone': 'ok' \}/, 'la fila hecha marca verde');
+    assert.match(client, /\.\.\.\(fallada \? \{ 'data-tone': 'error' \}/, 'la que falló, roja');
+  });
+
+  it('microanimación de entrada, y con movimiento reducido no hay animación', () => {
+    assert.match(client, /@keyframes skc-llega/);
+    assert.match(client, /animation: skc-llega 170ms ease-out both/);
+    assert.match(client, /@media \(prefers-reduced-motion: reduce\) \{\s*\.skc-bulk-note, \.skc-bulk-done, \.skc-bulk-body \{ animation: none; \}/);
+  });
+});

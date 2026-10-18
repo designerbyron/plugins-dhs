@@ -440,7 +440,25 @@ window.__ModuleLoader__.load({
 .skc-bulk-body { margin: 4px 0 0; padding: 8px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
   background: color-mix(in oklab, currentColor 5%, transparent); border-radius: 6px; }
-.skc-bulk-note[data-tone="error"] { color: color-mix(in oklab, currentColor 70%, #dc2626); }
+.skc-bulk-note[data-tone="error"] { color: color-mix(in oklab, currentColor 68%, #dc2626); }
+/* Un tono por significado, y todos derivados de currentColor: el texto nunca baja del contraste que el
+   anfitrión ya aprobó, y en cualquier tema el matiz es el mismo. */
+.skc-bulk-note[data-tone="ok"] { color: color-mix(in oklab, currentColor 68%, #16a34a); }
+.skc-bulk-note[data-tone="warn"] { color: color-mix(in oklab, currentColor 68%, #d97706); }
+.skc-bulk-note[data-tone="muted"] { opacity: 0.72; }
+.skc-bulk-done[data-tone="ok"] { color: color-mix(in oklab, currentColor 68%, #16a34a); opacity: 1; }
+.skc-bulk-done[data-tone="error"] { color: color-mix(in oklab, currentColor 68%, #dc2626); opacity: 1; }
+.skc-bulk-row[data-hecha="si"] label { opacity: 0.55; }
+.skc-bulk-row[data-hecha="si"] { background: color-mix(in oklab, currentColor 4%, transparent); }
+
+/* Microanimación: la línea aparece subiendo dos píxeles. Es información que llega, no fuegos artificiales —
+   y con movimiento reducido no hay animación, sólo el estado final. */
+@keyframes skc-llega { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+.skc-bulk-note, .skc-bulk-done { animation: skc-llega 170ms ease-out both; }
+.skc-bulk-body { animation: skc-llega 200ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .skc-bulk-note, .skc-bulk-done, .skc-bulk-body { animation: none; }
+}
 @media (forced-colors: active) {
   .skc-bulk, .skc-bulk-button { border-color: CanvasText; }
 }
@@ -798,7 +816,13 @@ window.__ModuleLoader__.load({
           : h('ul', { className: 'skc-bulk-list' },
             rows.map((id) => {
               const state = report === null ? '' : (report.done.includes(id) ? say('card_done') : (report.failed.some((entry) => entry.id === id) ? say('card_error') : ''));
-              return h('li', { key: id, className: 'skc-bulk-row' },
+              const hecha = report !== null && report.done.includes(id);
+              const fallada = report !== null && report.failed.some((entry) => entry.id === id);
+              return h('li', {
+                key: id,
+                className: 'skc-bulk-row',
+                ...(hecha ? { 'data-hecha': 'si' } : {}),
+              },
                 h('input', {
                   id: `skc-pick-${id}`,
                   type: 'checkbox',
@@ -808,7 +832,11 @@ window.__ModuleLoader__.load({
                   onChange: () => toggle(id),
                 }),
                 h('label', { htmlFor: `skc-pick-${id}`, title: id }, id),
-                state === '' ? null : h('span', { className: 'skc-bulk-done' }, state));
+                state === '' ? null : h('span', {
+                  className: 'skc-bulk-done',
+                  ...(hecha ? { 'data-tone': 'ok' } : {}),
+                  ...(fallada ? { 'data-tone': 'error' } : {}),
+                }, state));
             })),
         stage === 'confirm'
           ? h('div', null,
@@ -821,12 +849,14 @@ window.__ModuleLoader__.load({
         stage === 'running' ? h('div', { className: 'skc-bulk-note' }, say('bulk_running')) : null,
         stage === 'done' && report !== null
           ? h('div', null,
-            h('div', { className: 'skc-bulk-note' },
-              `${report.done.length} ${say(texts.ok)} · ${report.failed.length} ${say('bulk_failed')}`),
-            h('div', { className: 'skc-bulk-note' }, `${say('bulk_remaining')}: ${report.restantes === null ? (ids === null ? '' : ids.length) : report.restantes.length}${report.restantes === null ? '' : ''}`),
+            h('div', {
+              className: 'skc-bulk-note',
+              'data-tone': report.failed.length === 0 ? 'ok' : (report.done.length === 0 ? 'error' : 'warn'),
+            }, `${report.done.length} ${say(texts.ok)} · ${report.failed.length} ${say('bulk_failed')}`),
+            h('div', { className: 'skc-bulk-note', 'data-tone': 'muted' }, `${say('bulk_remaining')}: ${report.restantes === null ? (ids === null ? '' : ids.length) : report.restantes.length}`),
             // Si no se ejecutó nada, el panel da la salida: las líneas exactas que el humano puede pegar.
             report.done.length > 0 && report.forma
-              ? h('div', { className: 'skc-bulk-note' }, `${say('bulk_host_form')}: ${report.forma}`)
+              ? h('div', { className: 'skc-bulk-note', 'data-tone': 'ok' }, `${say('bulk_host_form')}: ${report.forma}`)
               : null,
             report.done.length === 0 && report.failed.length > 0
               ? h('div', { className: 'skc-bulk-note', 'data-tone': 'error' }, diagnóstico)
@@ -837,7 +867,7 @@ window.__ModuleLoader__.load({
               : null,
             report.done.length === 0 && report.failed.length > 0 && Array.isArray(report.lineas) && report.lineas.length > 0
               ? h('div', null,
-                h('div', { className: 'skc-bulk-note' }, say('bulk_nothing_ran')),
+                h('div', { className: 'skc-bulk-note', 'data-tone': 'warn' }, say('bulk_nothing_ran')),
                 h('pre', { className: 'skc-bulk-body' }, report.lineas.join('\n')))
               : null,
             report.failed.length === 0

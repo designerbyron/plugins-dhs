@@ -278,3 +278,12 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
 - `skill-globalizar` **forzaba** los avisos (`force: true`); ahora pide `--force`. Y la herramienta automática
   pasa la huella del contenido a `approve` (antes aprobaba sin comprobarla).
 - 7 pruebas nuevas (local, global, lote, apartar, auto, cadena manipulada, --force). 586/586 y hermética verde.
+
+## v3.8.0 · release — el panel aprobó en vivo (2026-10-18)
+
+- **Forma del anfitrión confirmada por el usuario**: `runCommand` con **texto con barra** (`/skill-aprobar …`).
+  El panel aprobó 3 y luego 7, 0 fallos, pendientes 0. El lote va en una sola orden.
+- Añadidos tonos por significado (ok/warn/error/muted, derivados de currentColor) y una entrada de 170–200 ms
+  que se apaga con movimiento reducido; 4 pruebas de artefacto nuevas (47 en ese fichero).
+- Trampa repetida: backtick dentro del template literal del CSS (`currentColor`) rompió `client.js`; `node
+  --check` lo cazó antes de seguir. Ya estaba anotada y aun así cayó — comprobar SIEMPRE tras editar `client.js`.
