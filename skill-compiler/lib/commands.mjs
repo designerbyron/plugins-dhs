@@ -122,6 +122,38 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
 
 /** Activa una propuesta, y sólo si pasa la puerta. `force` acepta los avisos; nunca salta los fallos. */
 /**
+ * Aprobar **varias** de una vez: la misma puerta, una a una, con resultado por elemento.
+ *
+ * No es una transacción y no lo finge: cada id se aprueba o falla por su cuenta, y el informe dice cuál fue
+ * cuál. Existe porque el panel ejecutaba N órdenes del host y el host no las ejecutaba: con una sola orden —y
+ * una sola entrada— el lote no depende de que el host entienda diez llamadas.
+ *
+ * @returns `ok` si se aprobaron todas; `bad` si alguna falló, con el detalle de todas (un lote con un fallo
+ *   necesita que alguien lo mire, y un `success` lo escondería).
+ */
+export function aprobarLote({ root, key, ids = [], scope = 'project', force = false, catalog } = {}) {
+  if (key === null) return bad(NO_SCOPE);
+  const limpios = [...new Set(ids.map((x) => String(x ?? '').trim()).filter(Boolean))];
+  if (limpios.length === 0) return bad('No hay ids que aprobar.');
+  const resultados = [];
+  for (const id of limpios) {
+    const r = approveProposal({ root, key, id, force, scope, catalog: null });
+    resultados.push({ id, ok: r.kind === 'success', primera: String(r.text ?? '').split('\n')[0] });
+  }
+  const bien = resultados.filter((r) => r.ok).length;
+  const mal = resultados.length - bien;
+  if (bien > 0) catalog?.notify();
+  const texto = [
+    `Lote de ${resultados.length}: ${bien} aprobada(s) · ${mal} con fallo`,
+    `Ámbito: ${scope === 'global' ? 'biblioteca de usuario (todos los proyectos)' : `este proyecto (${key})`}`,
+    '',
+    ...resultados.map((r) => `${r.ok ? 'ok   ' : 'FALLO'} ${r.id} — ${r.primera}`),
+    ...(mal > 0 ? ['', 'Los que fallaron no se movieron; su motivo está en su línea.'] : []),
+  ].join('\n');
+  return bien === resultados.length ? ok(texto) : bad(texto);
+}
+
+/**
  * El id no está: se dice la verdad y, si huele a letra cambiada, se ofrece el que sí está.
  *
  * Un «no hay ninguna propuesta» que calla cuando el id correcto está a una letra es un callejón: el humano
@@ -417,6 +449,21 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const global = /(?:^|\s)--global(?:\s|$)/.test(input);
         const local = /(?:^|\s)--local(?:\s|$)/.test(input);
         const id = input.replace(/(?:\s+--(?:force|global|local))+$/, '').trim();
+        // Varios ids —«a,b,c» o «a b c»— son un LOTE: misma puerta, una a una, resultado por elemento.
+        const ids = id.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+        if (ids.length > 1) {
+          if (!global && !local) {
+            return ok([
+              `¿Dónde quieres que vivan estas ${ids.length}?`,
+              '',
+              `  · En ESTE proyecto (${key}): /skill-aprobar ${ids.join(',')} --local`,
+              `  · Para TODOS tus proyectos: /skill-aprobar ${ids.join(',')} --global`,
+              '',
+              'Es un lote: cada una pasa por la misma puerta y el informe dice cuál falló.',
+            ].join('\n'));
+          }
+          return aprobarLote({ root, key, ids, scope: global ? 'global' : 'project', force, catalog });
+        }
 
         // Sin ámbito dicho, se pregunta —con las dos opciones y su nombre de fila— en vez de decidir por el
         // humano. «Local» no es un defecto que se esconde: es una de las dos respuestas.

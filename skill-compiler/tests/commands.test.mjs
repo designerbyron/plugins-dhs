@@ -551,3 +551,105 @@ describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
 
   const filasTexto = (s) => commands(s.root).byName['skill-propuestas'].handler({ agent, rawInput: '' }).text;
 });
+
+describe('comandos · aprobar en lote (plural), local y global', () => {
+  /** Tres propuestas de un mismo acto: en lote no se vetán entre sí (se avisa del parecido). */
+  const lote = (s, ids) => {
+    for (const [i, id] of ids.entries()) {
+      const r = propose({
+        id,
+        description: `Procedimiento ${i + 1} del acto de prueba: ${id}, con su detalle suficiente.`,
+        whenToUse: `Cuando haya que ocuparse de ${id} y falte criterio medido.`,
+        body: [
+          '## Antes de empezar', '',
+          `${id}: se lee el estado del día y se anota la cifra que hay en el sistema.`,
+          `${id}: si la lectura falla, se para y se avisa; no se inventa ninguna cifra.`, '',
+          '## Pasos', '',
+          `1. Abrir el registro de ${id} y leer la última anotación del turno anterior.`,
+          `2. Contar y anotar la cifra ${40 + i} del día, con la hora al lado.`,
+          '3. Contrastar con el sistema y apuntar la diferencia si la hubiera.',
+          '4. Si la diferencia importa, repetir la cuenta antes de escribir nada.',
+          '5. Cerrar con la firma de quien lo hizo y la hora exacta del cierre.', '',
+          '## Cuándo no aplica', '',
+          `Si el registro de ${id} no se puede leer, no se decide nada ese día: se avisa y se espera.`, '',
+        ].join('\n'),
+        group: { id: 'lote-de-prueba', motivo: 'Propuestas del mismo acto de prueba, para medir la aprobación en lote.' },
+      }, { root: s.root, curated: s.curated, cwd: CWD });
+      assert.equal(r.status, 'proposed', `${id}: ${JSON.stringify(r.errors ?? r.conflicts)}`);
+    }
+  };
+  const ids = ['cierre-de-caja', 'cuadre-del-inventario', 'turno-de-limpieza'];
+
+  it('local: una orden, tres aprobadas, un resultado por elemento', () => {
+    const s = sandbox();
+    lote(s, ids);
+    const { byName } = commands(s.root);
+    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids.join(',')} --local` });
+    assert.equal(r.kind, 'success', r.text);
+    assert.match(r.text, /Lote de 3: 3 aprobada\(s\) · 0 con fallo/);
+    for (const id of ids) {
+      assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', id, 'SKILL.md')), true, id);
+      assert.match(r.text, new RegExp(`ok +${id}`));
+    }
+  });
+
+  it('global: una orden, tres publicadas, y la biblioteca sirve lo validado', () => {
+    const s = sandbox();
+    lote(s, ids);
+    const { byName } = commands(s.root);
+    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids.join(' ')} --global` });
+    assert.equal(r.kind, 'success', r.text);
+    assert.match(r.text, /biblioteca de usuario/);
+    for (const id of ids) {
+      assert.equal(existsSync(join(s.curated, id, 'SKILL.md')), true, id);
+      assert.equal(existsSync(join(s.root, 'projects', KEY, 'published', id, 'SKILL.md')), true, id);
+      assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', id)), false, `${id} no se sirve dos veces`);
+    }
+  });
+
+  it('un fallo dentro del lote no arrastra al resto, y el comando lo declara', () => {
+    const s = sandbox();
+    lote(s, ids.slice(0, 2));
+    const { byName } = commands(s.root);
+    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]},${ids[1]},no-existe --local` });
+    assert.equal(r.kind, 'error', 'un lote con un fallo necesita que alguien lo mire');
+    assert.match(r.text, /Lote de 3: 2 aprobada\(s\) · 1 con fallo/);
+    assert.match(r.text, new RegExp(`ok +${ids[0]}`));
+    assert.match(r.text, /FALLO no-existe — No hay ninguna propuesta/);
+    assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', ids[0], 'SKILL.md')), true);
+  });
+
+  it('aprobar en lote algo que ya estaba activo no es un fallo: es un acto ya hecho', () => {
+    const s = sandbox();
+    lote(s, ids.slice(0, 2));
+    const { byName } = commands(s.root);
+    byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]} --local` });
+    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]},${ids[1]} --local` });
+    assert.equal(r.kind, 'success', r.text);
+    assert.match(r.text, /Lote de 2: 2 aprobada\(s\) · 0 con fallo/);
+    assert.match(r.text, /Ya estaba activa/);
+  });
+
+  it('sin ámbito, el lote pregunta UNA vez y no mueve nada', () => {
+    const s = sandbox();
+    lote(s, ids);
+    const { byName } = commands(s.root);
+    const r = byName['skill-aprobar'].handler({ agent, rawInput: ids.join(',') });
+    assert.equal(r.kind, 'success', 'es la pregunta, no un fallo');
+    assert.match(r.text, /¿Dónde quieres que vivan estas 3\?/);
+    assert.match(r.text, /--local/);
+    assert.match(r.text, /--global/);
+    for (const id of ids) {
+      assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', id)), false);
+      assert.equal(existsSync(join(s.root, 'projects', KEY, 'published', id)), false);
+    }
+  });
+
+  it('los ids repetidos no se aprueban dos veces', () => {
+    const s = sandbox();
+    lote(s, ids.slice(0, 1));
+    const { byName } = commands(s.root);
+    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]},${ids[0]} --local` });
+    assert.match(r.text, /Lote de 1: 1 aprobada\(s\)/);
+  });
+});

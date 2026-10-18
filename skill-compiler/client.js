@@ -172,6 +172,7 @@ window.__ModuleLoader__.load({
         bulk_remaining: 'Pendientes ahora',
         bulk_again: 'Volver a marcar',
         bulk_nothing_ran: 'No se ejecutó ningún comando: pégalos en el compositor, uno por línea, y son la misma puerta.',
+        bulk_host_form: 'Forma del host que funcionó',
       },
       en: {
         analyzing: 'Analysing the work…',
@@ -246,6 +247,7 @@ window.__ModuleLoader__.load({
         bulk_remaining: 'Pending now',
         bulk_again: 'Select again',
         bulk_nothing_ran: 'No command was executed: paste them in the composer, one per line — same gate.',
+        bulk_host_form: 'Host call shape that worked',
       },
     };
 
@@ -632,26 +634,110 @@ window.__ModuleLoader__.load({
       // panel se contaron como hechas y diez siguieron pendientes. Aquí el botón ya dice el ámbito.
       const linea = (id) => `${target} ${id}${verb === 'aprobar' ? ' --local' : ''}${verb === 'eliminar' ? ' --yes' : ''}`;
 
+      /**
+       * Las formas conocidas de pedirle una ejecución al host, en orden.
+       *
+       * El contrato de `runCommand` no está documentado y el binario está minificado: se probó con
+       * `(sessionId, "skill-aprobar X")` y el host no devolvió nada — ni ejecutó—, así que la forma importa.
+       * Cada forma es la MISMA orden con distinta firma; la barra delante es la del compositor, que sí
+       * funciona. Se probarán en orden hasta que el EFECTO diga que una sirvió, y la que sirva se usa para
+       * el resto (una sola vez por lote).
+       */
+      const FORMAS = [
+        { nombre: 'texto con barra', args: (texto, nom, resto) => [sessionId, texto] },
+        { nombre: 'nombre + args', args: (texto, nom, resto) => [sessionId, nom, resto] },
+        { nombre: 'objeto {name,args}', args: (texto, nom, resto) => [sessionId, { name: nom, args: resto }] },
+        { nombre: 'texto solo', args: (texto, nom, resto) => [texto] },
+      ];
+      const FORMA_DE = Object.fromEntries(FORMAS.map((f) => [f.nombre, f]));
+      const [formaUsada, setFormaUsada] = React.useState(null);
+
+      /** La lista de pendientes **del host**, ahora mismo. Es la única prueba de que algo cambió. */
+      const pendientesAhora = async () => rowIds(await listCommands(sessionId), listVerbFor(node?.name));
+
+      /** Espera a que una condición se cumpla (el efecto tarda lo que tarde el host). */
+      const esperarA = async (condicion, intentos = 6, espera = 250) => {
+        for (let i = 0; i < intentos; i += 1) {
+          if (await condicion()) return true;
+          await new Promise((listo) => setTimeout(listo, espera));
+        }
+        return false;
+      };
+
+      /**
+       * Ejecuta una orden y **comprueba que ocurrió**. Devuelve `{ ok, forma, motivo }`:
+       *   · el resultado del host no se cree (puede ser `undefined`, o un éxito sin efecto);
+       *   · si el id deja de estar pendiente, la orden ocurrió, aunque el host no devolviera nada;
+       *   · si ninguna forma cambia nada, no se aprueba nada: es un fallo con motivo.
+       */
+      /**
+       * Ejecuta UNA orden y comprueba que ocurrió, probando las formas conocidas.
+       *
+       * @param texto - la orden como la escribiría el humano (`/skill-aprobar …`).
+       * @param nombre - el comando.
+       * @param resto - sus argumentos.
+       * @param efecto - `() => Promise<boolean>`: ¿ocurrió? Se le pregunta al almacén, no a la llamada.
+       */
+      const ejecutarOrden = async (texto, nombre, resto, efecto, conocida) => {
+        const orden = conocida === null ? FORMAS : [conocida];
+        const motivos = [];
+        for (const forma of orden) {
+          try {
+            const resultado = await runCommand(...forma.args(texto, nombre, resto));
+            const salida = String(resultado?.text ?? '');
+            if (resultado?.kind === 'error') motivos.push(`${forma.nombre}: ${salida.split('\n')[0]}`);
+            if (salida.startsWith(SCOPE_ASK)) motivos.push(`${forma.nombre}: el comando preguntó el ámbito`);
+          } catch (error) {
+            motivos.push(`${forma.nombre}: ${String(error?.message ?? error)}`);
+          }
+          // La verdad la dice el almacén.
+          if (await esperarA(efecto)) return { ok: true, forma, motivo: '' };
+        }
+        return { ok: false, forma: null, motivo: motivos.length > 0 ? motivos.join(' · ') : NO_RESULT };
+      };
+
+      const ejecutar = (id, conocida) => ejecutarOrden(
+        `/${linea(id)}`, target, linea(id).slice(target.length).trim(),
+        async () => !(await pendientesAhora()).includes(id), conocida,
+      );
+
+      /** La orden del LOTE: un comando, N ids. Es la forma plural que el servidor entiende. */
+      const ejecutarLote = (ids, conocida) => {
+        const comando = verb === 'globalizar' ? 'skill-aprobar' : target;
+        const ambito = verb === 'aprobar' ? ' --local' : verb === 'globalizar' ? ' --global' : '';
+        const argumentos = `${ids.join(',')}${ambito}`;
+        return ejecutarOrden(`/${comando} ${argumentos}`, comando, argumentos,
+          async () => { const p = await pendientesAhora(); return !ids.some((id) => p.includes(id)); }, conocida);
+      };
+
       const run = async () => {
         setBusy(true);
         setStage('running');
         const done = [];
         const failed = [];
-        for (const id of picked) {
-          try {
-            const result = await runCommand(sessionId, linea(id));
-            const texto = String(result?.text ?? '');
-            // Sin resultado NO hay ejecución. Antes, un `undefined` caía en el «si no es error, hecho»: el
-            // panel decía «N aprobadas · 0 fallos» sin que se hubiera ejecutado un solo comando — medido
-            // tres veces contra el almacén, que seguía con las mismas pendientes.
-            if (result === null || result === undefined) failed.push({ id, reason: NO_RESULT });
-            else if (result.kind === 'error') failed.push({ id, reason: texto });
-            // Y una pregunta no es una decisión: si el comando preguntó el ámbito, no se aprobó nada.
-            else if (texto.startsWith(SCOPE_ASK)) failed.push({ id, reason: texto.split('\n')[0] });
-            else done.push(id);
-          } catch (error) {
-            failed.push({ id, reason: String(error?.message ?? error) });
+        // La forma que funcione se descubre con la primera orden y se reutiliza: una vez por lote.
+        let forma = null;
+        let pendientes = [...picked];
+        // 1) El LOTE como UNA orden: una llamada al host, N aprobaciones dentro, un solo efecto que medir.
+        if ((verb === 'aprobar' || verb === 'globalizar') && picked.length > 1) {
+          const salida = await ejecutarLote(picked, forma);
+          if (salida.ok) {
+            pendientes = [];
+            done.push(...picked);
+            forma = salida.forma;
+            setFormaUsada(salida.forma?.nombre ?? null);
+          } else {
+            // No se pudo el lote: se intenta id a id —el camino singular—, y se dice qué forma sirvió.
+            pendientes = [...picked];
           }
+        }
+        // 2) Lo que quede, id a id (y también todo si el verbo no admite lote: apartar, retirar, encender).
+        for (const id of pendientes) {
+          const salida = await ejecutar(id, forma);
+          if (salida.ok) {
+            done.push(id);
+            if (forma === null && salida.forma) { forma = salida.forma; setFormaUsada(salida.forma.nombre); }
+          } else failed.push({ id, reason: salida.motivo });
         }
         // El informe se comprueba contra el EFECTO: se vuelve a leer la lista del host. Si dice que se
         // aprobaron diez y el host sigue devolviendo diez, lo que se pinta es lo que el host dice.
@@ -660,7 +746,7 @@ window.__ModuleLoader__.load({
           const despues = await listCommands(sessionId);
           restantes = rowIds(despues, listVerbFor(node?.name)).filter((id) => !done.includes(id));
         } catch { restantes = null; }
-        setReport({ done, failed, restantes, lineas: picked.map((id) => `/${linea(id)}`) });
+        setReport({ done, failed, restantes, lineas: picked.map((id) => `/${linea(id)}`), forma: forma?.nombre ?? null });
         setIds(restantes ?? rows.filter((id) => !done.includes(id)));
         setPicked(failed.map((entry) => entry.id));
         setBusy(false);
@@ -739,8 +825,15 @@ window.__ModuleLoader__.load({
               `${report.done.length} ${say(texts.ok)} · ${report.failed.length} ${say('bulk_failed')}`),
             h('div', { className: 'skc-bulk-note' }, `${say('bulk_remaining')}: ${report.restantes === null ? (ids === null ? '' : ids.length) : report.restantes.length}${report.restantes === null ? '' : ''}`),
             // Si no se ejecutó nada, el panel da la salida: las líneas exactas que el humano puede pegar.
+            report.done.length > 0 && report.forma
+              ? h('div', { className: 'skc-bulk-note' }, `${say('bulk_host_form')}: ${report.forma}`)
+              : null,
             report.done.length === 0 && report.failed.length > 0
               ? h('div', { className: 'skc-bulk-note', 'data-tone': 'error' }, diagnóstico)
+              : null,
+            // Si ninguna forma sirvió, las firmas reales de las funciones: con eso la corrección es medida.
+            report.done.length === 0 && report.failed.length > 0
+              ? h('pre', { className: 'skc-bulk-body' }, `runCommand: ${String(runCommand).slice(0, 240)}\nlistCommands: ${String(listCommands).slice(0, 240)}`)
               : null,
             report.done.length === 0 && report.failed.length > 0 && Array.isArray(report.lineas) && report.lineas.length > 0
               ? h('div', null,

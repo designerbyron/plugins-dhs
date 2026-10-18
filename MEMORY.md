@@ -261,3 +261,12 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   ejecutar contra claves que el host no tiene (`undefined`). Hasta saber el contrato real, el panel pinta
   `host · nombre=tipo · …` con todo lo que recibe cuando un lote falla. Una pulsación lo resuelve.
 - Nunca más adivinar: instrumentar la superficie es más rápido que 182 MB de asar minificado.
+
+## v3.6.0 — el lote es una orden del servidor (2026-10-18)
+
+- `/skill-aprobar a,b,c --local|--global`: una orden, N ids, resultado por elemento, error si alguno falla.
+  `aprobarLote()` exportada y probada (6 casos). El panel la usa cuando hay varias marcadas y cae a id a id.
+- El panel **prueba las formas** de `runCommand` (texto con barra, nombre+args, objeto, texto solo) y se queda
+  con la que el **almacén** confirma; si ninguna obra, pinta las firmas reales y las líneas para pegar.
+- Auditoría: descartadas «código viejo» (la app es 3.5.4 y el cliente está enlazado) y «copia del plugin» (no
+  hay ninguna). La causa es la forma de llamar; el efecto es la única prueba aceptada.

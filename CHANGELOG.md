@@ -4,6 +4,37 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.6.0] — 2026-10-18
+
+**Aprobar en lote es una orden del servidor, no diez llamadas al host.** El panel pedía N ejecuciones y el host
+no las ejecutaba —ni un `command/run` en las trazas—, así que el lote nunca ocurrió: decía «N aprobadas · 0
+fallos» y el almacén seguía igual. La auditoría descartó las dos explicaciones fáciles (código viejo, copia del
+plugin) y encontró la real: **la forma de llamar a `runCommand` no es la del host**.
+
+### Añadido
+
+- **`/skill-aprobar <id1>,<id2>,… [--local|--global]`**: un lote es **una** orden. Cada id pasa por la misma
+  puerta, se aprueba o falla por su cuenta, y el informe dice cuál fue cuál (`ok`/`FALLO` por línea). Si alguno
+  falla, el comando devuelve error —un lote con un fallo necesita que alguien lo mire—; si todas estaban ya
+  activas, es éxito («un acto ya hecho»). Sin ámbito pregunta **una vez** y no mueve nada. Los repetidos no se
+  aprueban dos veces.
+- **`aprobarLote()`** en `lib/commands.mjs`, exportada y testeable: la misma puerta que el singular, resultado
+  por elemento, y un solo aviso al catálogo.
+- **El panel usa la orden del lote** cuando hay más de una marcada (una llamada al host, un efecto que medir) y
+  **cae a id a id** si el lote no obra; además **prueba las formas conocidas** de `runCommand` (texto con barra,
+  nombre + args, objeto, texto solo) y **se queda con la que el almacén confirma**, reutilizándola en el resto.
+
+### Corregido
+
+- **El informe del panel se comprueba contra el efecto**: tras cada orden se relee la lista del host, y sólo se
+  cuenta como hecha si el id deja de estar pendiente. Si ninguna forma ejecuta, el panel pinta el fallo con las
+  firmas reales de `runCommand`/`listCommands` y las líneas exactas para pegar en el compositor.
+
+### Pruebas
+
+- Seis casos del lote (local, global, fallo de uno sin arrastrar, ya activo, sin ámbito, repetidos) y la puerta
+  del artefacto ampliada a las formas del host y al lote como una sola orden. **579/579** en verde.
+
 ## [3.5.4] — 2026-10-18
 
 **El panel dice qué props le entrega el host, para dejar de adivinar su contrato.** El asar del harness está

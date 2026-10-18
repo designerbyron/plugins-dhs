@@ -425,3 +425,17 @@ Garantías de integridad:
 - Un fallo al mover (destino ocupado, permisos) es un motivo, no una excepción.
 - Una respuesta que **pregunta** el ámbito no es una aprobación: el panel la cuenta como pendiente, no como
   aprobada.
+
+## Aprobar en lote (plural)
+
+Una orden para varias: separa los ids con comas o espacios, y di el ámbito **una vez**.
+
+```
+/skill-aprobar id1,id2,id3 --local     # este proyecto
+/skill-aprobar id1,id2,id3 --global    # biblioteca de usuario
+```
+
+Cada id pasa por la misma puerta que en singular y el informe da una línea por elemento (`ok` / `FALLO` con su
+motivo). No es una transacción: los que fallan no se mueven y los demás sí. Si alguno falla, el comando entero
+devuelve error para que se mire. El panel «Decide right here» usa esta misma orden cuando hay varias marcadas, y
+si el host no la ejecuta cae a una por una y lo declara.

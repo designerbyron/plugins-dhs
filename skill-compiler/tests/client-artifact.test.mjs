@@ -319,7 +319,7 @@ describe('artefacto de interfaz · decidir no puede contar una pregunta como hec
 
   it('una respuesta que pregunta el ámbito se cuenta como pendiente, no como hecha', () => {
     assert.match(client, /const SCOPE_ASK = '¿Dónde quieres que viva'/);
-    assert.match(client, /texto\.startsWith\(SCOPE_ASK\)/, 'y se comprueba antes de marcar la fila como hecha');
+    assert.match(client, /salida\.startsWith\(SCOPE_ASK\)/, 'y se apunta como motivo antes de comprobar el efecto');
   });
 
   it('el texto del comando y el del panel coinciden en el marcador', async () => {
@@ -337,9 +337,37 @@ describe('artefacto de interfaz · decidir no puede contar una pregunta como hec
 });
 
 describe('artefacto de interfaz · el informe del lote se comprueba contra el efecto', () => {
-  it('sin resultado del host NO hay éxito: es un fallo con motivo', () => {
+  it('sin EFECTO en el almacén no hay éxito, aunque el host diga que sí', () => {
     assert.match(client, /const NO_RESULT = 'el host no devolvió resultado/);
-    assert.match(client, /if \(result === null \|\| result === undefined\) failed\.push/, 'un undefined no puede caer en «hecho»');
+    // La decisión la toma la relectura del host, id por id — no el valor que devuelva la llamada.
+    // El efecto se espera con reintentos y se consulta al host: `esperarA` + `pendientesAhora`.
+    assert.match(client, /const esperarA = async \(condicion/);
+    assert.match(client, /const pendientesAhora = async \(\) => rowIds\(await listCommands\(sessionId\)/);
+    assert.match(client, /if \(await esperarA\(efecto\)\) return \{ ok: true/, 'sólo cuenta si el efecto ocurrió');
+    assert.match(client, /motivo: motivos\.length > 0 \? motivos\.join\(' · '\) : NO_RESULT/);
+  });
+
+  it('prueba las formas conocidas del host, en orden, y reutiliza la que funcione', () => {
+    for (const forma of ['texto con barra', 'nombre + args', 'objeto {name,args}', 'texto solo']) {
+      assert.ok(client.includes(`nombre: '${forma}'`), `falta la forma «${forma}»`);
+    }
+    assert.match(client, /const FORMA_DE = Object\.fromEntries\(FORMAS\.map/);
+    assert.match(client, /let forma = null;/, 'la forma descubierta se guarda en el bucle');
+    assert.match(client, /const salida = await ejecutar\(id, forma\)/);
+    assert.match(client, /setFormaUsada\(salida\.forma\.nombre\)/);
+  });
+
+  it('cada forma lleva la MISMA orden, con su ámbito explícito', () => {
+    assert.match(client, /`\/\$\{linea\(id\)\}`/, 'la orden va con barra, como en el compositor');
+    assert.match(client, /`\/\$\{comando\} \$\{argumentos\}`/, 'y el lote también');
+    assert.match(client, /verb === 'aprobar' \? ' --local'/, 'aprobar local dice el ámbito');
+    assert.match(client, /skill-\$\{verb\}/, 'globalizar usa su propio comando');
+  });
+
+  it('si ninguna forma ejecuta, muestra las firmas reales del host', () => {
+    assert.match(client, /String\(runCommand\)\.slice\(0, 240\)/);
+    assert.match(client, /String\(listCommands\)\.slice\(0, 240\)/);
+    assert.match(client, /host · \$\{Object\.entries\(tipos\)/);
   });
 
   it('después del lote se vuelve a leer la lista del host, y se pinta lo que diga el host', () => {
@@ -352,5 +380,23 @@ describe('artefacto de interfaz · el informe del lote se comprueba contra el ef
     assert.match(client, /bulk_nothing_ran/);
     assert.match(client, /report\.lineas\.join/);
     assert.match(client, /skc-bulk-body/);
+  });
+});
+
+describe('artefacto de interfaz · el lote va en UNA orden', () => {
+  it('con más de una marcada, aprobar y publicar mandan UN comando con los ids', () => {
+    assert.match(client, /const ejecutarLote = \(ids, conocida\)/);
+    assert.match(client, /if \(\(verb === 'aprobar' \|\| verb === 'globalizar'\) && picked\.length > 1\)/);
+    assert.match(client, /const argumentos = `\$\{ids\.join\(','\)\}\$\{ambito\}`/);
+  });
+
+  it('el ámbito del lote: aprobar va a --local, publicar a --global', () => {
+    assert.match(client, /const ambito = verb === 'aprobar' \? ' --local' : verb === 'globalizar' \? ' --global' : ''/);
+    assert.match(client, /const comando = verb === 'globalizar' \? 'skill-aprobar' : target/, 'publicar usa skill-aprobar … --global');
+  });
+
+  it('si el lote no obra, se cae a id a id: el singular sigue disponible', () => {
+    assert.match(client, /pendientes = \[\.\.\.picked\]/);
+    assert.match(client, /for \(const id of pendientes\)/);
   });
 });
