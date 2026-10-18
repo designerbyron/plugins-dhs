@@ -32,10 +32,10 @@ import { join } from 'node:path';
 
 import { AUTO_COMMAND, autoApproveFromEvents, parseAutoCommand } from './auto-approve.mjs';
 import {
-  approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, pending, sugerenciaDeId,
+  approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, move, pending, sugerenciaDeId,
   projectKey, reject, retire, retired,
 } from './compiler.mjs';
-import { huellaDeArbol, motivoDeIdInseguro } from './security.mjs';
+import { ficherosQueDifieren, huellaDeContenido, motivoDeIdInseguro } from './security.mjs';
 import { medirAutoActualizacion } from './auto-update.mjs';
 import { scopeOf } from './definitions.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
@@ -201,23 +201,33 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     ].join('\n'));
   }
 
-  // Lo que se validó es lo que se mueve. La ventana entre la puerta y el `rename` se mide con la huella del
-  // árbol: si alguien cambió la propuesta en medio —o la sustituyó por un enlace—, se para antes de mover.
-  const huellaAntes = huellaDeArbol(check.dir);
-  const moved = approve(wanted, key, { root, scope });
+  // Lo que se validó es lo que se mueve. Se mide la huella del **contenido** —`SKILL.md` y su material, sin
+  // `meta.json`, que el movimiento reescribe a propósito— y se pasa a `approve`, que la verifica ANTES de
+  // renombrar: si alguien cambió la propuesta en medio, no se mueve nada y se dice qué fichero difiere.
+  const huellaAntes = huellaDeContenido(check.dir);
+  const moved = approve(wanted, key, { root, scope, esperada: huellaAntes });
   if (!moved.ok) return bad(`No se pudo aprobar ${wanted}: ${moved.reason}`);
 
   // El catálogo acaba de cambiar: sin este aviso, la skill no llega al agente hasta reiniciar.
   catalog?.notify();
 
-  const huellaDespues = huellaDeArbol(join(moved.path, '..'));
-  const avisoHuella = huellaAntes === huellaDespues
-    ? []
-    : ['', `AVISO: el árbol que se movió no es el que se validó (huella ${huellaAntes.slice(0, 12)} → ${huellaDespues.slice(0, 12)}): revísalo antes de usarlo`];
+  // Belt and braces: si el contenido activado no es el validado, no se queda activo con un aviso — se
+  // devuelve a `proposed`, se dice qué fichero difiere y la aprobación se declara fallida.
+  const destino = join(moved.path, '..');
+  const huellaDespues = huellaDeContenido(destino);
+  if (huellaDespues !== huellaAntes) {
+    const ficheros = (() => { try { return ficherosQueDifieren(check.dir, destino); } catch { return []; } })();
+    const vuelta = move(root, key, wanted, 'approved', 'proposed');
+    return bad([
+      `NO se aprobó ${wanted}: el contenido activado no es el que validaste (${huellaAntes.slice(0, 12)} → ${huellaDespues.slice(0, 12)}).`,
+      ...(ficheros.length ? [`  difiere: ${ficheros.join(', ')}`] : []),
+      vuelta.ok ? '  Se devolvió a propuestas: no queda activa. Vuelve a validarla con /skill-ver y decide otra vez.' : `  No se pudo devolver a propuestas (${vuelta.reason}): revísala a mano antes de usarla.`,
+      '  La versión anterior, si la había, sigue apartada en superseded/ y se recupera a mano.',
+    ].join('\n'));
+  }
 
   return ok([
     `Activa: ${wanted} [${key}]`,
-    ...avisoHuella,
     `  ${moved.path}`,
     ...(moved.superseded ? [`  versión anterior apartada en ${moved.superseded}`] : []),
     ...(check.warnings.length > 0 ? ['', 'Aprobada con avisos:', ...check.warnings.map((w) => `  · ${w}`)] : []),

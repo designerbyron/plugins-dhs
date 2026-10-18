@@ -231,3 +231,17 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   Corregido con `cuentaDiff`. Y `diff-medido`: sin diff no se pasa, porque «no medible» ≠ «pasa».
 - Veredicto real de la actualización pendiente del usuario (`fault-injection-by-category`): **exige humano** —
   nivel sin declarar (3) y **cambia el disparador**; el resto de medidas en verde.
+
+## v3.5.2 — el aviso de huella era falso, y el panel contaba preguntas como aprobaciones (2026-10-18)
+
+- **El aviso «el árbol que se movió no es el que se validó» salía en TODAS las aprobaciones.** Medido en arena:
+  `SKILL.md` idéntico byte a byte y solo `meta.json` distinto — y lo reescribe `move` a propósito (`state`,
+  `approvedAt`, `supersededPrevious`). La comprobación medía el árbol; ahora mide la **huella del contenido**
+  (`SKILL.md` + `references/`) y se verifica **antes** de renombrar: una divergencia aborta sin mover. La
+  comprobación posterior, si no casara, devuelve la skill a `proposed` y la aprobación se declara fallida.
+- **El panel contaba como aprobado lo que era una pregunta.** «Approve the selected» mandaba
+  `skill-aprobar <id>` sin ámbito; el comando pregunta dónde vive la skill (correcto para un humano) y el panel
+  leía esa pregunta como éxito: **11 «aprobadas», 10 pendientes** en el almacén. Ahora el botón manda
+  `--local`, y si la respuesta empieza por «¿Dónde quieres que viva» el panel la cuenta como pendiente.
+- Un fallo al mover devuelve motivo, no excepción. Contrato individual/lote documentado en `docs/OPERACION.md`.
+- 564/564 en verde, hermética verde; almacén real intacto (10 propuestas · 3 aprobadas · 3 publicadas).

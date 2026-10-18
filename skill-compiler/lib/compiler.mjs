@@ -25,7 +25,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { conCerrojo } from './lock.mjs';
-import { esIdSeguro, motivoDeIdInseguro, escanear, huellaDeArbol, revisarArbol } from './security.mjs';
+import { esIdSeguro, ficherosQueDifieren, huellaDeArbol, huellaDeContenido, motivoDeIdInseguro, escanear, revisarArbol } from './security.mjs';
 import {
   MAQUINA, SOLO_DSH, dondeMasViveEseId, leerPropiedad, politicaAplicable, proyectosConocidos, propiedadSinCambios,
 } from './scope.mjs';
@@ -1535,7 +1535,7 @@ export function propose(input, { root = defaultRoot(), cwd, key = null, now = ne
 
 }
 
-function move(root, key, id, from, to) {
+export function move(root, key, id, from, to, { esperada = null } = {}) {
   // Un id llega de la línea de comandos y se convierte en ruta: si no es un id, no es una ruta que tocar.
   // Y el árbol que se mueve tiene que ser un árbol normal —un enlace dentro de una skill es una puerta a
   // otro sitio, y aprobarla sería publicar contenido de fuera como si fuera suyo—.
@@ -1547,6 +1547,22 @@ function move(root, key, id, from, to) {
   const arbol = revisarArbol(source);
   if (!arbol.ok) {
     return { ok: false, reason: `la skill no es un árbol seguro y no se mueve: ${arbol.problemas.map((p) => `${p.observed} — ${p.message}`).join('; ')}` };
+  }
+  // ── La garantía de integridad, ANTES de tocar nada ────────────────────────────────────────────
+  //
+  // Quien aprueba vio un contenido concreto. Si entre la puerta y el movimiento el contenido cambia, aprobar
+  // ese árbol sería aprobar otra cosa: se aborta aquí, sin haber movido nada (ni apartado la versión
+  // anterior), y se dice qué fichero difiere. Antes esto se comprobaba **después** de mover y solo avisaba.
+  if (esperada !== null) {
+    const contenido = huellaDeContenido(source);
+    if (contenido !== esperada) {
+      return {
+        ok: false,
+        reason: `el contenido cambió después de validarse: se esperaba ${String(esperada).slice(0, 12)} y hay ${contenido.slice(0, 12)} — no se movió nada. Vuelve a validarlo con /skill-ver y decide otra vez`,
+        huellaEsperada: esperada,
+        huellaEncontrada: contenido,
+      };
+    }
   }
   let superseded = null;
   // Aprobar una actualización NO destruye la versión vigente: la aparta con su fecha y deja rastro,
@@ -1580,8 +1596,14 @@ function move(root, key, id, from, to) {
       writeFileSync(metaFile, `${JSON.stringify(meta, null, 2)}\n`);
     } catch { /* el meta es accesorio: no impide mover la skill */ }
   }
-  mkdirSync(dirname(target), { recursive: true });
-  renameSync(source, target);
+  // El movimiento puede fallar (un destino ocupado, un disco, permisos): eso es un motivo, no una excepción
+  // que se lleve por delante el comando humano con la propuesta a medio mover.
+  try {
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(source, target);
+  } catch (error) {
+    return { ok: false, reason: `no se pudo mover ${from}/${id} a ${to}/${id}: ${error.code ?? error.message}` };
+  }
   return { ok: true, path: join(target, 'SKILL.md'), superseded };
 }
 
@@ -1590,7 +1612,9 @@ function move(root, key, id, from, to) {
  * una herramienta, el propio modelo podría auto-aprobarse su propuesta y la revisión sería decorativa.
  */
 export const approve = (id, key, opts = {}) =>
-  (scopeOf(opts) === 'global' ? publishToLibrary(id, key, opts) : move(opts.root ?? defaultRoot(), key, id, 'proposed', 'approved'));
+  (scopeOf(opts) === 'global'
+    ? publishToLibrary(id, key, opts)
+    : move(opts.root ?? defaultRoot(), key, id, 'proposed', 'approved', { esperada: opts.esperada ?? null }));
 
 /**
  * Aprobar **para todos los proyectos**: la skill se publica en la biblioteca de usuario, que es la raíz que
@@ -1602,9 +1626,22 @@ export const approve = (id, key, opts = {}) =>
  * carpeta es compartida con otras herramientas y pisar una skill ajena sería destruir trabajo que no es de
  * este plugin.
  */
-export function publishToLibrary(id, key, { root = defaultRoot(), library = null, now = new Date() } = {}) {
+export function publishToLibrary(id, key, { root = defaultRoot(), library = null, now = new Date(), esperada = null } = {}) {
   const source = join(root, 'projects', key, 'proposed', id);
   if (!existsSync(join(source, 'SKILL.md'))) return { ok: false, reason: `no hay ninguna propuesta con el id ${id} en ${key}` };
+  // La misma garantía que en la aprobación local: lo que el humano validó es lo que se publica. Se comprueba
+  // aquí, antes de escribir en la biblioteca compartida, y no después.
+  if (esperada !== null) {
+    const contenido = huellaDeContenido(source);
+    if (contenido !== esperada) {
+      return {
+        ok: false,
+        reason: `el contenido cambió después de validarse: se esperaba ${String(esperada).slice(0, 12)} y hay ${contenido.slice(0, 12)} — no se publicó nada. Vuelve a validarlo con /skill-ver y decide otra vez`,
+        huellaEsperada: esperada,
+        huellaEncontrada: contenido,
+      };
+    }
+  }
   const cartel = join(library ?? curatedLibraryRoot(), id);
   const exists = existsSync(cartel);
   if (exists && !isOurs(cartel)) {

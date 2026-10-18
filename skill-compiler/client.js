@@ -77,6 +77,12 @@ window.__ModuleLoader__.load({
     // decisión lo que queda se ofrece en el propio bloque, sin volver a pedir la lista.
     const LIST_COMMANDS = ['skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito'];
     /**
+     * Con qué empieza la respuesta de `skill-aprobar` cuando **no** ha aprobado: pregunta el ámbito. Es texto
+     * del comando (siempre en español), no de la interfaz, y se comprueba aquí porque el resultado sólo trae
+     * `kind` y `text`: contar esa respuesta como aprobada ya costó diez aprobaciones que no ocurrieron.
+     */
+    const SCOPE_ASK = '¿Dónde quieres que viva';
+    /**
      * Dónde se recuerda un resultado cerrado.
      *
      * No es `sessionStorage`, y eso costó un defecto reportado: con `sessionStorage` el cierre vivía lo que
@@ -607,7 +613,10 @@ window.__ModuleLoader__.load({
       // El verbo decide el comando, y sólo retirar pide confirmación explícita al host.
       const target = `skill-${verb}`;
       const texts = VERB_TEXTS[verb] ?? VERB_TEXTS.aprobar;
-      const linea = (id) => `${target} ${id}${verb === 'eliminar' ? ' --yes' : ''}`;
+      // El ámbito va **explícito**: sin `--local` el comando pregunta dónde vive la skill (que es lo correcto
+      // para un humano que lo teclea), y esa pregunta no aprueba nada. Medido: once «aprobaciones» de este
+      // panel se contaron como hechas y diez siguieron pendientes. Aquí el botón ya dice el ámbito.
+      const linea = (id) => `${target} ${id}${verb === 'aprobar' ? ' --local' : ''}${verb === 'eliminar' ? ' --yes' : ''}`;
 
       const run = async () => {
         setBusy(true);
@@ -617,7 +626,11 @@ window.__ModuleLoader__.load({
         for (const id of picked) {
           try {
             const result = await runCommand(sessionId, linea(id));
-            if (result !== null && result !== undefined && result.kind === 'error') failed.push({ id, reason: String(result.text ?? '') });
+            const texto = String(result?.text ?? '');
+            if (result !== null && result !== undefined && result.kind === 'error') failed.push({ id, reason: texto });
+            // Y una pregunta no es una decisión: si el comando preguntó el ámbito, no se aprobó nada y el
+            // panel no puede contarlo como hecho. `SCOPE_ASK` es el principio del texto del comando.
+            else if (texto.startsWith(SCOPE_ASK)) failed.push({ id, reason: texto.split('\n')[0] });
             else done.push(id);
           } catch (error) {
             failed.push({ id, reason: String(error?.message ?? error) });

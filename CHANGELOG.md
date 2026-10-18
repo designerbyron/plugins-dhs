@@ -4,6 +4,36 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.5.2] — 2026-10-18
+
+**El aviso de huella era un falso positivo en todas las aprobaciones, y el panel contaba como aprobado lo que
+sólo era una pregunta.** Los dos salieron de un mismo acto real: once «aprobaciones» en el panel, diez skills
+que seguían pendientes y un aviso de integridad que nadie podía interpretar.
+
+### Corregido
+
+- **El aviso de huella (`b8d97078ebe8 → 672ed05d2101`) no era una divergencia.** La comprobación medía el
+  árbol entero, `meta.json` incluido, y el movimiento reescribe ese fichero a propósito (`state`,
+  `approvedAt`, `supersededPrevious`). Medido en arena: `SKILL.md` idéntico byte a byte, solo el meta cambia.
+  Ahora se mide la **huella del contenido** (`SKILL.md` y `references/`) y el movimiento la verifica **antes**
+  de renombrar: una divergencia de contenido aborta sin mover y sin apartar la versión anterior. Queda una
+  comprobación posterior que, si alguna vez no casara, devuelve la skill a `proposed` y declara la aprobación
+  **fallida** — nunca un aviso con la skill activa.
+- **El panel contaba como aprobado lo que no lo era.** «Approve the selected» ejecutaba `skill-aprobar <id>`
+  sin ámbito; el comando, para no decidir por el humano, **pregunta** dónde vive la skill, y el panel leía esa
+  pregunta como éxito. Ahora el botón manda `--local` (ámbito explícito) y, si aun así el comando respondiera
+  preguntando, el panel lo cuenta como pendiente con su motivo. Contrato del lote en `docs/OPERACION.md`.
+- **Un fallo al mover** (destino ocupado por un fichero, permisos) devuelve motivo en vez de excepción.
+
+### Pruebas
+
+- `tests/approval-integrity.test.mjs`: **ocho casos** — aprobación sin cambios (sin aviso), local y global con
+  el mismo contenido, lote como N individuales, fallo de uno sin arrastrar al resto, cambio de contenido tras
+  validar (no se mueve nada), transformación legítima del meta (la regresión del aviso), fallo al mover y
+  divergencia que no queda activa.
+- La puerta del artefacto de interfaz comprueba el `--local` y el marcador de la pregunta.
+- **564/564** en verde y suite hermética verde (el almacén real, intacto).
+
 ## [3.5.1] — 2026-10-17
 
 **La etiqueta del medidor en `/skill-propuestas` no se pintaba: faltaba el import.** El módulo existía y el

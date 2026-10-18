@@ -308,3 +308,27 @@ describe('artefacto de interfaz · decidir incluye el ámbito', () => {
     assert.match(client, /texts\.note/, 'la pantalla de confirmación dice el alcance');
   });
 });
+
+describe('artefacto de interfaz · decidir no puede contar una pregunta como hecha', () => {
+  it('la aprobación del panel lleva el ámbito explícito', () => {
+    assert.match(client, /verb === 'aprobar' \? ' --local'/, 'sin --local el comando pregunta y no aprueba');
+  });
+
+  it('una respuesta que pregunta el ámbito se cuenta como pendiente, no como hecha', () => {
+    assert.match(client, /const SCOPE_ASK = '¿Dónde quieres que viva'/);
+    assert.match(client, /texto\.startsWith\(SCOPE_ASK\)/, 'y se comprueba antes de marcar la fila como hecha');
+  });
+
+  it('el texto del comando y el del panel coinciden en el marcador', async () => {
+    const { skillCommands } = await import('../lib/commands.mjs');
+    const { sandbox, goodInput } = await import('./helpers.mjs');
+    const { propose, projectKey } = await import('../lib/compiler.mjs');
+    const s = sandbox();
+    propose(goodInput(), { root: s.root, curated: s.curated, cwd: s.base });
+    const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
+    const r = byName['skill-aprobar'].handler({ agent: { session: { header: { cwd: s.base } } }, rawInput: 'measured-decision-check' });
+    assert.equal(r.kind, 'success', 'para el humano sigue siendo una respuesta, no un fallo');
+    assert.ok(r.text.startsWith('¿Dónde quieres que viva'), `el marcador del panel no casa con el comando: «${r.text.slice(0, 40)}»`);
+    assert.equal(projectKey(s.base).length > 0, true);
+  });
+});

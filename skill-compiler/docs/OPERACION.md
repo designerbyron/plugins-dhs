@@ -406,3 +406,22 @@ Una **corrección** de algo vivo se activa sola sólo si el medidor lo dice: niv
 disparador intacto, seguridad en 0/0, diff presente y las nueve pruebas de `promover` en verde. El listado de
 `/skill-propuestas` lo enseña por cada actualización («auto-actualizable» o «exige humano: …»), y `auto <id>`
 da la tabla completa. Contrato en `docs/POLITICA-DE-ACTUALIZACION.md`.
+
+## Aprobación individual y en lote: el contrato real
+
+**No hay un comando «batch».** El panel «Decide right here» ejecuta **una aprobación por id** —
+`skill-aprobar <id> --local` (este proyecto) o `skill-globalizar <id>` (biblioteca de usuario)— y pinta el
+resultado de cada una: cuántas se aprobaron, cuántas fallaron y el motivo de cada fallo. Si un elemento falla,
+los demás siguen: no hay una transacción que arrastre al resto.
+
+Garantías de integridad:
+
+- Se verifica la huella del **contenido** —`SKILL.md` y `references/`—, no la del árbol: el movimiento reescribe
+  `meta.json` a propósito (`state`, `approvedAt`, `supersededPrevious`), y medirlo producía un aviso en
+  **todas** las aprobaciones (medido: `b8d97078ebe8 → 672ed05d2101` con el contenido idéntico).
+- La comprobación ocurre **antes** de mover: una divergencia aborta sin apartar la versión anterior y sin
+  activar nada; si aun así el contenido activado no casara, la skill vuelve a `proposed` y la aprobación se
+  declara fallida (no un aviso).
+- Un fallo al mover (destino ocupado, permisos) es un motivo, no una excepción.
+- Una respuesta que **pregunta** el ámbito no es una aprobación: el panel la cuenta como pendiente, no como
+  aprobada.

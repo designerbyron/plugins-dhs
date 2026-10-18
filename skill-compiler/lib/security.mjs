@@ -271,6 +271,63 @@ export function huellaDeArbol(dir) {
   return createHash('sha256').update(partes.join('\n')).digest('hex');
 }
 
+/**
+ * La huella del contenido: todo lo que la puerta valida, **sin** `meta.json`.
+ *
+ * Existe por un defecto medido en producción: la comprobación de «lo validado es lo movido» usaba la huella
+ * del árbol entero, y `move` reescribe `meta.json` a propósito (`state`, `approvedAt`, `supersededPrevious`).
+ * Resultado: avisaba en **todas** las aprobaciones, siempre con el mismo aspecto de alarma, y un aviso que
+ * sale siempre no es un aviso. El contenido es `SKILL.md` y el material de `references/`; el meta es
+ * contabilidad del plugin y no se valida.
+ */
+export function huellaDeContenido(dir) {
+  const partes = [];
+  const recorrer = (ruta, rel = '') => {
+    let entradas = [];
+    try { entradas = readdirSync(ruta, { withFileTypes: true }); } catch { return; }
+    for (const entrada of entradas.map((e) => e.name).sort()) {
+      const hijo = join(ruta, entrada);
+      const relativo = rel === '' ? entrada : `${rel}/${entrada}`;
+      if (relativo === 'meta.json') continue;
+      let info;
+      try { info = lstatSync(hijo); } catch { continue; }
+      if (info.isSymbolicLink()) { partes.push(`L ${relativo}`); continue; }
+      if (info.isDirectory()) { partes.push(`D ${relativo}`); recorrer(hijo, relativo); continue; }
+      try { partes.push(`F ${relativo} ${createHash('sha256').update(readFileSync(hijo)).digest('hex')}`); } catch { partes.push(`X ${relativo}`); }
+    }
+  };
+  recorrer(dir);
+  return createHash('sha256').update(partes.join('\n')).digest('hex');
+}
+
+/** Los ficheros de contenido que difieren entre dos fotos de un árbol: para poder decir CUÁL cambió. */
+export function ficherosQueDifieren(dirA, dirB) {
+  const foto = (dir) => {
+    const salida = new Map();
+    const recorrer = (ruta, rel = '') => {
+      let entradas = [];
+      try { entradas = readdirSync(ruta, { withFileTypes: true }); } catch { return; }
+      for (const entrada of entradas.map((e) => e.name).sort()) {
+        const hijo = join(ruta, entrada);
+        const relativo = rel === '' ? entrada : `${rel}/${entrada}`;
+        if (relativo === 'meta.json') continue;
+        let info;
+        try { info = lstatSync(hijo); } catch { continue; }
+        if (info.isDirectory()) { recorrer(hijo, relativo); continue; }
+        try { salida.set(relativo, createHash('sha256').update(readFileSync(hijo)).digest('hex')); } catch { salida.set(relativo, 'ilegible'); }
+      }
+    };
+    recorrer(dir);
+    return salida;
+  };
+  const a = foto(dirA);
+  const b = foto(dirB);
+  const salida = [];
+  for (const [ruta, huella] of a) if (b.get(ruta) !== huella) salida.push(`${ruta} (${huella === b.get(ruta) ? 'igual' : 'cambió'})`);
+  for (const ruta of b.keys()) if (!a.has(ruta)) salida.push(`${ruta} (nuevo)`);
+  return salida;
+}
+
 // ── 4 · El diario, verificable ──────────────────────────────────────────────────────────────────────
 
 /**
