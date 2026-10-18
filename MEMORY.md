@@ -245,3 +245,13 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   `--local`, y si la respuesta empieza por «¿Dónde quieres que viva» el panel la cuenta como pendiente.
 - Un fallo al mover devuelve motivo, no excepción. Contrato individual/lote documentado en `docs/OPERACION.md`.
 - 564/564 en verde, hermética verde; almacén real intacto (10 propuestas · 3 aprobadas · 3 publicadas).
+
+## v3.5.3 — el panel del lote no ejecutaba, y lo contaba como hecho (2026-10-18)
+
+- Tres intentos seguidos del usuario: «N aprobadas · 0 fallos · Pendientes: 0», y el almacén con las mismas 10.
+  En las trazas **no hay un solo `command/run`** de ese lote: el host no ejecuta lo que el panel le pide, y el
+  panel contaba `undefined` como éxito.
+- Arreglado lo que depende de este repo: sin resultado ⇒ fallo con motivo; el informe se relee del host; y si
+  no se ejecutó nada, el panel pinta las líneas exactas para pegar en el compositor (vía que sí funciona).
+- **Pendiente de decidir (fuera del repo)**: el contrato real del `runCommand` del host para el lote. El asar
+  está minificado y no se pudo extraer; si vuelve a hacer falta, el camino es la consola del renderer, no grep.

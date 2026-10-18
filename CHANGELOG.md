@@ -4,6 +4,28 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.5.3] — 2026-10-18
+
+**El panel vuelve a mentir menos de lo que mentía: si el host no ejecuta, se ve.** Tres veces seguidas el panel
+dijo «N aprobadas · 0 fallos · Pendientes: 0» y el almacén siguió con las mismas diez pendientes; en las trazas
+no hay **ni un** `command/run` de ese lote. La causa está fuera de este repositorio —el host no devuelve
+resultado cuando el panel pide ejecutar—, y lo que sí se puede garantizar aquí es que el panel no lo cuente
+como éxito.
+
+### Corregido
+
+- **Sin resultado del host no hay éxito**: un `undefined` caía en el «si no es error, hecho». Ahora es un fallo
+  con motivo («el host no devolvió resultado: el comando no se ejecutó»).
+- **El informe se comprueba contra el efecto**: tras el lote se vuelve a leer la lista del host y «Pendientes
+  ahora» es lo que el host dice, no lo que el panel creía.
+- **Si no se ejecutó nada, da la salida**: muestra las líneas exactas (`/skill-aprobar <id> --local`) para
+  pegarlas en el compositor, que es la vía que sí funciona hoy.
+
+### Pruebas
+
+- Tres comprobaciones nuevas en la puerta del artefacto (sin resultado no hay éxito; relectura del host; líneas
+  para pegar). **567/567** en verde y hermética verde.
+
 ## [3.5.2] — 2026-10-18
 
 **El aviso de huella era un falso positivo en todas las aprobaciones, y el panel contaba como aprobado lo que

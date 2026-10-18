@@ -82,6 +82,8 @@ window.__ModuleLoader__.load({
      * `kind` y `text`: contar esa respuesta como aprobada ya costó diez aprobaciones que no ocurrieron.
      */
     const SCOPE_ASK = '¿Dónde quieres que viva';
+    /** El host no devolvió resultado: no se ejecutó nada. Se dice con estas palabras, no como éxito. */
+    const NO_RESULT = 'el host no devolvió resultado: el comando no se ejecutó';
     /**
      * Dónde se recuerda un resultado cerrado.
      *
@@ -169,6 +171,7 @@ window.__ModuleLoader__.load({
         bulk_failed: 'con fallo',
         bulk_remaining: 'Pendientes ahora',
         bulk_again: 'Volver a marcar',
+        bulk_nothing_ran: 'No se ejecutó ningún comando: pégalos en el compositor, uno por línea, y son la misma puerta.',
       },
       en: {
         analyzing: 'Analysing the work…',
@@ -242,6 +245,7 @@ window.__ModuleLoader__.load({
         bulk_failed: 'failed',
         bulk_remaining: 'Pending now',
         bulk_again: 'Select again',
+        bulk_nothing_ran: 'No command was executed: paste them in the composer, one per line — same gate.',
       },
     };
 
@@ -430,6 +434,10 @@ window.__ModuleLoader__.load({
 .skc-bulk-quiet { border-color: transparent; background: transparent; opacity: 0.7; }
 .skc-bulk-spacer { flex: 1 1 auto; }
 .skc-bulk-note { font-size: 11.5px; line-height: 1.4; }
+/* Las líneas para pegar: se leen como código y se copian enteras — sin heredoc ni adorno. */
+.skc-bulk-body { margin: 4px 0 0; padding: 8px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  background: color-mix(in oklab, currentColor 5%, transparent); border-radius: 6px; }
 .skc-bulk-note[data-tone="error"] { color: color-mix(in oklab, currentColor 70%, #dc2626); }
 @media (forced-colors: active) {
   .skc-bulk, .skc-bulk-button { border-color: CanvasText; }
@@ -627,18 +635,27 @@ window.__ModuleLoader__.load({
           try {
             const result = await runCommand(sessionId, linea(id));
             const texto = String(result?.text ?? '');
-            if (result !== null && result !== undefined && result.kind === 'error') failed.push({ id, reason: texto });
-            // Y una pregunta no es una decisión: si el comando preguntó el ámbito, no se aprobó nada y el
-            // panel no puede contarlo como hecho. `SCOPE_ASK` es el principio del texto del comando.
+            // Sin resultado NO hay ejecución. Antes, un `undefined` caía en el «si no es error, hecho»: el
+            // panel decía «N aprobadas · 0 fallos» sin que se hubiera ejecutado un solo comando — medido
+            // tres veces contra el almacén, que seguía con las mismas pendientes.
+            if (result === null || result === undefined) failed.push({ id, reason: NO_RESULT });
+            else if (result.kind === 'error') failed.push({ id, reason: texto });
+            // Y una pregunta no es una decisión: si el comando preguntó el ámbito, no se aprobó nada.
             else if (texto.startsWith(SCOPE_ASK)) failed.push({ id, reason: texto.split('\n')[0] });
             else done.push(id);
           } catch (error) {
             failed.push({ id, reason: String(error?.message ?? error) });
           }
         }
-        setReport({ done, failed });
-        // Lo que salió bien deja de ofrecerse: el estado de la lista se mueve con lo que se ejecutó.
-        setIds(rows.filter((id) => !done.includes(id)));
+        // El informe se comprueba contra el EFECTO: se vuelve a leer la lista del host. Si dice que se
+        // aprobaron diez y el host sigue devolviendo diez, lo que se pinta es lo que el host dice.
+        let restantes = null;
+        try {
+          const despues = await listCommands(sessionId);
+          restantes = rowIds(despues, listVerbFor(node?.name)).filter((id) => !done.includes(id));
+        } catch { restantes = null; }
+        setReport({ done, failed, restantes, lineas: picked.map((id) => `/${linea(id)}`) });
+        setIds(restantes ?? rows.filter((id) => !done.includes(id)));
         setPicked(failed.map((entry) => entry.id));
         setBusy(false);
         setStage('done');
@@ -714,7 +731,13 @@ window.__ModuleLoader__.load({
           ? h('div', null,
             h('div', { className: 'skc-bulk-note' },
               `${report.done.length} ${say(texts.ok)} · ${report.failed.length} ${say('bulk_failed')}`),
-            h('div', { className: 'skc-bulk-note' }, `${say('bulk_remaining')}: ${ids === null ? '' : ids.length}`),
+            h('div', { className: 'skc-bulk-note' }, `${say('bulk_remaining')}: ${report.restantes === null ? (ids === null ? '' : ids.length) : report.restantes.length}${report.restantes === null ? '' : ''}`),
+            // Si no se ejecutó nada, el panel da la salida: las líneas exactas que el humano puede pegar.
+            report.done.length === 0 && report.failed.length > 0 && Array.isArray(report.lineas) && report.lineas.length > 0
+              ? h('div', null,
+                h('div', { className: 'skc-bulk-note' }, say('bulk_nothing_ran')),
+                h('pre', { className: 'skc-bulk-body' }, report.lineas.join('\n')))
+              : null,
             report.failed.length === 0
               ? null
               : h('ul', { className: 'skc-bulk-list' },

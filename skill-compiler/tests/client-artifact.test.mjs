@@ -236,8 +236,11 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.match(client, /const \{ node, t, sessionId, runCommand, listCommands, ensureCard \} = props;/);
   });
 
-  it('tras el lote, el estado de la lista se mueve con lo ejecutado', () => {
-    assert.match(client, /setIds\(rows\.filter\(\(id\) => !done\.includes\(id\)\)\)/);
+  it('tras el lote, el estado de la lista se mueve con lo que dice el HOST (no con lo que creía el panel)', () => {
+    // Antes se recortaba la lista local con `done`, que es el informe del propio panel: si el host no
+    // ejecutó nada, la lista se vaciaba igual y decía «Pending now: 0». Ahora manda la relectura del host,
+    // y el recorte local queda sólo como respaldo cuando la relectura falla.
+    assert.match(client, /setIds\(restantes \?\? rows\.filter\(\(id\) => !done\.includes\(id\)\)\)/);
     assert.match(client, /bulk_remaining/);
     assert.match(client, /report\.failed\.length === 0/);
   });
@@ -330,5 +333,24 @@ describe('artefacto de interfaz · decidir no puede contar una pregunta como hec
     assert.equal(r.kind, 'success', 'para el humano sigue siendo una respuesta, no un fallo');
     assert.ok(r.text.startsWith('¿Dónde quieres que viva'), `el marcador del panel no casa con el comando: «${r.text.slice(0, 40)}»`);
     assert.equal(projectKey(s.base).length > 0, true);
+  });
+});
+
+describe('artefacto de interfaz · el informe del lote se comprueba contra el efecto', () => {
+  it('sin resultado del host NO hay éxito: es un fallo con motivo', () => {
+    assert.match(client, /const NO_RESULT = 'el host no devolvió resultado/);
+    assert.match(client, /if \(result === null \|\| result === undefined\) failed\.push/, 'un undefined no puede caer en «hecho»');
+  });
+
+  it('después del lote se vuelve a leer la lista del host, y se pinta lo que diga el host', () => {
+    assert.match(client, /const despues = await listCommands\(sessionId\)/);
+    assert.match(client, /report\.restantes/);
+    assert.match(client, /bulk_remaining'}?[^\n]*report\.restantes/);
+  });
+
+  it('si no se ejecutó nada, da las líneas exactas para pegar en el compositor', () => {
+    assert.match(client, /bulk_nothing_ran/);
+    assert.match(client, /report\.lineas\.join/);
+    assert.match(client, /skc-bulk-body/);
   });
 });
