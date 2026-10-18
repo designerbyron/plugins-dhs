@@ -20,8 +20,8 @@
  * un aviso — eso es exactamente lo que `--force` significa.
  */
 import { createHash } from 'node:crypto';
-import { lstatSync, readdirSync, readFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 
 // ── 1 · El id ────────────────────────────────────────────────────────────────────────────────────────
 
@@ -376,6 +376,27 @@ export function verificarCadena(entradas = []) {
     anterior = entrada.huella;
   });
   return { ok: roturas.length === 0, roturas, entradas: entradas.length, sinHuella };
+}
+
+/**
+ * Escribe una entrada **encadenada** en un diario.
+ *
+ * Vive aquí —y no en `promote`— porque ahora escriben tres caminos: la promoción, la aprobación del humano
+ * (comando, panel, CLI) y la aprobación automática de la herramienta. Un solo escritor, una sola cadena: si
+ * cada camino la compusiera por su cuenta, una de las tres se olvidaría del eslabón y `security` lo llamaría
+ * manipulación. Devuelve `false` si no se pudo escribir (un diario roto no tumba la aprobación, pero se dice).
+ */
+export function anotarEntradaEnDiario(fichero, entrada, { now = new Date().toISOString() } = {}) {
+  try {
+    mkdirSync(dirname(fichero), { recursive: true });
+    const cuerpo = { at: now, ...entrada };
+    const previas = leerDiario(fichero).entradas.filter((e) => typeof e?.huella === 'string');
+    const conEslabon = { ...cuerpo, huellaAnterior: huellaDeLaCola(previas) };
+    writeFileSync(fichero, `${JSON.stringify({ ...conEslabon, huella: huellaDeEntrada(conEslabon) })}\n`, { flag: 'a' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Lee un diario `jsonl` tolerando líneas rotas (una línea ilegible no invalida las demás: se cuenta). */

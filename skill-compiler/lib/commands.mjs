@@ -35,7 +35,7 @@ import {
   approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, move, pending, sugerenciaDeId,
   projectKey, reject, retire, retired,
 } from './compiler.mjs';
-import { ficherosQueDifieren, huellaDeContenido, motivoDeIdInseguro } from './security.mjs';
+import { anotarEntradaEnDiario, ficherosQueDifieren, huellaDeContenido, motivoDeIdInseguro } from './security.mjs';
 import { medirAutoActualizacion } from './auto-update.mjs';
 import { scopeOf } from './definitions.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
@@ -183,6 +183,9 @@ function noEstáElId(wanted, key, root, { que = 'propuesta' } = {}) {
   ].join('\n'));
 }
 
+/** El diario del proyecto: una sola ruta, para que tres caminos no inventen tres. */
+const diarioDelProyecto = (root, key) => join(root, 'projects', key, 'journal.jsonl');
+
 export function approveProposal({ root = defaultRoot(), key, id, force = false, scope = 'project', catalog } = {}) {
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
@@ -243,6 +246,22 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   // El catálogo acaba de cambiar: sin este aviso, la skill no llega al agente hasta reiniciar.
   catalog?.notify();
 
+  // La aprobación queda registrada **con sus huellas**: qué contenido se aprobó y cuál quedó activo. Sin esta
+  // entrada, «se aprobó» es una afirmación sin respaldo —y las aprobaciones eran justo lo único que no
+  // anotaba el diario, mientras las promociones sí.
+  anotarEntradaEnDiario(diarioDelProyecto(root, key), {
+    id: wanted,
+    key,
+    decision: scope === 'global' ? 'publicada' : 'aprobada',
+    ambito: scope,
+    por: 'humano',
+    canal: 'comando',
+    hashAnterior: huellaAntes,
+    hashResultante: huellaDeContenido(join(moved.path, '..')),
+    superseded: moved.superseded ?? null,
+    avisos: check.warnings,
+  });
+
   // Belt and braces: si el contenido activado no es el validado, no se queda activo con un aviso — se
   // devuelve a `proposed`, se dice qué fichero difiere y la aprobación se declara fallida.
   const destino = join(moved.path, '..');
@@ -294,6 +313,11 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
   if (!moved.ok) return bad(`No se pudo apartar ${wanted}: ${moved.reason}`);
 
   catalog?.notify();
+
+  anotarEntradaEnDiario(diarioDelProyecto(root, key), {
+    id: wanted, key, decision: 'apartada', ambito: 'project', por: 'humano', canal: 'comando',
+    hashAnterior: null, hashResultante: null, superseded: moved.path ?? null,
+  });
 
   return ok([
     `Apartada: ${wanted} [${key}]`,
@@ -497,8 +521,12 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
-        const id = String(rawInput ?? '').trim();
-        const result = approveProposal({ root, key, id, force: true, scope: 'global', catalog });
+        const bruto = String(rawInput ?? '').trim();
+        // `force: true` incondicional era una puerta trasera: publicar para todos se saltaba los avisos sin
+        // que nadie lo dijera. Ahora se pide explícito, como en la aprobación local.
+        const force = /(?:^|\s)--force$/.test(bruto);
+        const id = bruto.replace(/(?:\s+--force)+$/, '').trim();
+        const result = approveProposal({ root, key, id, force, scope: 'global', catalog });
         if (result?.kind !== 'ok') return result;
         return ok([result.text, '', `Para dejarla sólo en este proyecto: /skill-ambito ${id} --local`].join('\n'));
       }),

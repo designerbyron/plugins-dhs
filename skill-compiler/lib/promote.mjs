@@ -50,23 +50,9 @@ export function diarioDe(key, { root = defaultRoot() } = {}) {
  * una afirmación sin respaldo.
  */
 export function anotarEnDiario(key, entrada, { root = defaultRoot(), now = new Date().toISOString() } = {}) {
-  const fichero = diarioDe(key, { root });
-  try {
-    mkdirSync(dirname(fichero), { recursive: true });
-    // Encadenado: cada entrada lleva la huella de la anterior y la suya propia. Borrar, añadir o editar una
-    // entrada rompe la cadena y `skill-compiler security` lo dice. Límite declarado: sin secreto local no hay
-    // firma, así que un atacante con escritura podría recalcular la cadena entera; lo que sí detecta es la
-    // edición accidental, la de una herramienta torpe y la de quien no sabía que esto estaba encadenado.
-    const cuerpo = { at: now, ...entrada };
-    const huellaAnterior = huellaDeLaCola(leerDiario(key, { root }).filter((e) => typeof e?.huella === 'string'));
-    const conEslabon = { ...cuerpo, huellaAnterior };
-    writeFileSync(fichero, `${JSON.stringify({ ...conEslabon, huella: huellaDeEntrada(conEslabon) })}\n`, { flag: 'a' });
-    return true;
-  } catch {
-    // Un diario que no se puede escribir no puede tumbar la operación, pero tampoco se calla: el resultado
-    // de la promoción lleva `registrado: false` y quien lo mire lo verá.
-    return false;
-  }
+  // Un solo escritor encadenado para los tres caminos que anotan (`lib/security.mjs`): la promoción, la
+  // aprobación humana y la automática. Aquí se conserva la API que ya usaba el resto del motor.
+  return anotarEntradaEnDiario(diarioDe(key, { root }), entrada, { now });
 }
 
 /** Lee el diario entero de un proyecto. */
@@ -80,7 +66,7 @@ export function leerDiario(key, { root = defaultRoot() } = {}) {
 
 // El cerrojo vive en `lib/lock.mjs` porque lo comparten proponer, promocionar y publicar: dos mecanismos
 // de exclusión serían dos verdades sobre lo mismo. Se importa y se re-exporta para no cambiar la API.
-import { escanear, huellaDeEntrada, huellaDeLaCola } from './security.mjs';
+import { anotarEntradaEnDiario, escanear } from './security.mjs';
 import { conCerrojo, rutaDelCerrojo } from './lock.mjs';
 
 export { conCerrojo, rutaDelCerrojo };

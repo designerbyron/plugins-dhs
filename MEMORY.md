@@ -270,3 +270,11 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   con la que el **almacén** confirma; si ninguna obra, pinta las firmas reales y las líneas para pegar.
 - Auditoría: descartadas «código viejo» (la app es 3.5.4 y el cliente está enlazado) y «copia del plugin» (no
   hay ninguna). La causa es la forma de llamar; el efecto es la única prueba aceptada.
+
+## v3.7.0 — el ciclo del aprendizaje queda auditado entero (2026-10-18)
+
+- El diario sólo anotaba promociones: las **aprobaciones** (humano y auto) no dejaban rastro. Ahora hay un solo
+  escritor encadenado en `security.mjs` y los tres caminos anotan `decision/ambito/por/canal/hash*/avisos`.
+- `skill-globalizar` **forzaba** los avisos (`force: true`); ahora pide `--force`. Y la herramienta automática
+  pasa la huella del contenido a `approve` (antes aprobaba sin comprobarla).
+- 7 pruebas nuevas (local, global, lote, apartar, auto, cadena manipulada, --force). 586/586 y hermética verde.

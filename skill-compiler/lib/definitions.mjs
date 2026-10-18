@@ -7,7 +7,7 @@
  * registra.
  */
 
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { autoApproveFor } from './auto-approve.mjs';
@@ -15,6 +15,7 @@ import { medirAutoActualizacion } from './auto-update.mjs';
 import { promover } from './promote.mjs';
 import { approve, checkProposal, defaultRoot, listForProject, overview, projectKey, propose, readSkill } from './compiler.mjs';
 import { markerLine } from './presentation.mjs';
+import { anotarEntradaEnDiario, huellaDeContenido } from './security.mjs';
 import { upstreamStatus, vendor } from './vendor.mjs';
 
 /**
@@ -125,7 +126,18 @@ export function autoApproveIfAsked({ exec, root, catalog, id, key, curated, cwd 
   }
   const check = checkProposal(id, key, { root, ...(curated === undefined ? {} : { curated }) });
   if (!check.ok) return { asked: true, approved: false, reason: check.errors[0] };
-  const moved = approve(id, key, { root });
+  // La misma garantía que la aprobación humana: se aprueba el contenido que se validó, y queda anotado. Antes
+  // este camino aprobaba sin huella y sin entrada del diario — el modo automático era el único que no dejaba
+  // rastro, justo el que más lo necesita.
+  const huella = huellaDeContenido(check.dir);
+  const moved = approve(id, key, { root, esperada: huella });
+  if (moved.ok) {
+    anotarEntradaEnDiario(join(root, 'projects', key, 'journal.jsonl'), {
+      id, key, decision: 'aprobada', ambito: 'project', por: 'auto', canal: 'herramienta',
+      hashAnterior: huella, hashResultante: huellaDeContenido(join(moved.path, '..')),
+      superseded: moved.superseded ?? null, avisos: check.warnings,
+    });
+  }
   if (!moved.ok) return { asked: true, approved: false, reason: moved.reason };
   // El catálogo acaba de cambiar: sin este aviso, la skill no llegaría al agente hasta reiniciar.
   catalog?.notify();

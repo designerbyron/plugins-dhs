@@ -4,6 +4,40 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.7.0] — 2026-10-18
+
+**Toda aprobación deja rastro: el ciclo del aprendizaje se puede auditar de punta a punta.** El diario anotaba
+las promociones del motor, y **no** las aprobaciones humanas ni las del modo automático —justo lo que convierte
+una propuesta en conocimiento servido—. «Se aprobó» era una afirmación sin respaldo, y el camino que más lo
+necesita (la herramienta que aprueba sola, con el modo encendido) era el único que no anotaba nada.
+
+### Añadido
+
+- **Un solo escritor encadenado** (`anotarEntradaEnDiario` en `lib/security.mjs`) usado por los **tres** caminos:
+  promoción (`lib/promote.mjs`, misma API), aprobación humana (`/skill-aprobar`, `/skill-globalizar`, el panel y
+  la CLI) y aprobación automática de la herramienta. Una cadena, no tres.
+- **Cada decisión lleva lo que hace falta para auditarla**: `decision` (`aprobada`/`publicada`/`apartada`),
+  `ambito` (`project`/`global`), `por` (`humano`/`auto`), `canal` (`comando`/`herramienta`), `hashAnterior` y
+  `hashResultante` del **contenido**, `superseded` y los `avisos` con los que se aprobó. Con eso se responde
+  «¿qué se aprobó, sobre qué contenido, y quién lo decidió?» sin mirar otra cosa.
+- **El lote anota una entrada por elemento** (aprobar diez es diez decisiones, no una); `security` verifica la
+  cadena entera, incluidos los diarios que sólo tenían promociones.
+
+### Corregido
+
+- **`skill-globalizar` ya no fuerza los avisos.** Llamaba con `force: true` incondicional: publicar para todos
+  se saltaba los avisos de la puerta sin que nadie lo dijera. Ahora se pide `--force` explícito, como en la
+  aprobación local, y queda registrado en la entrada.
+- **La herramienta automática aprueba el contenido que validó**: pasa la huella del contenido a `approve`, así
+  que la garantía de integridad cubre también ese camino (antes aprobaba sin comprobarla).
+
+### Pruebas
+
+- `tests/journal-aprobaciones.test.mjs`: **siete casos** — aprobación local con sus huellas, publicación global
+  con su ámbito, lote con una entrada por elemento, apartar, la herramienta automática con `por: auto`, la
+  cadena detectando una entrada editada y `skill-globalizar` exigiendo `--force`. **586/586** en verde y
+  hermética verde; el almacén real, intacto.
+
 ## [3.6.0] — 2026-10-18
 
 **Aprobar en lote es una orden del servidor, no diez llamadas al host.** El panel pedía N ejecuciones y el host

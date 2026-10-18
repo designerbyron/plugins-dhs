@@ -439,3 +439,21 @@ Cada id pasa por la misma puerta que en singular y el informe da una línea por 
 motivo). No es una transacción: los que fallan no se mueven y los demás sí. Si alguno falla, el comando entero
 devuelve error para que se mire. El panel «Decide right here» usa esta misma orden cuando hay varias marcadas, y
 si el host no la ejecuta cae a una por una y lo declara.
+
+## El rastro del aprendizaje (diario)
+
+Cada decisión sobre una skill queda en `projects/<clave>/journal.jsonl`, **encadenada** (cada entrada lleva la
+huella de la anterior) y con lo necesario para auditarla:
+
+| Campo | Qué dice |
+|---|---|
+| `decision` | `aprobada` · `publicada` · `apartada` · `promovida` · `espera-medidor` · `rechazada-por-regresion` |
+| `ambito` | `project` (este proyecto) o `global` (biblioteca de usuario) |
+| `por` / `canal` | `humano` + `comando` (comando, panel, CLI) o `auto` + `herramienta` (modo automático) |
+| `hashAnterior` / `hashResultante` | el contenido que se validó y el que quedó activo: si difieren, algo se movió por el camino |
+| `superseded` | la versión anterior, apartada (nunca borrada) |
+| `avisos` | con qué avisos se aprobó, si alguno |
+
+`node bin/skill-compiler.mjs security` recorre los diarios y verifica la cadena: una entrada editada, borrada o
+insertada se detecta (`journal-tamper` / `journal-chain`). Las entradas anteriores a la cadena se declaran
+(`sinHuella`) y no cuentan como rotura.
