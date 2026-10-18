@@ -255,3 +255,9 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   no se ejecutó nada, el panel pinta las líneas exactas para pegar en el compositor (vía que sí funciona).
 - **Pendiente de decidir (fuera del repo)**: el contrato real del `runCommand` del host para el lote. El asar
   está minificado y no se pudo extraer; si vuelve a hacer falta, el camino es la consola del renderer, no grep.
+## v3.5.4 — el diagnóstico del contrato del host
+
+- `listCommands` y `runCommand` **no existen** en el asar del harness: sus nombres son otros, y el panel pide
+  ejecutar contra claves que el host no tiene (`undefined`). Hasta saber el contrato real, el panel pinta
+  `host · nombre=tipo · …` con todo lo que recibe cuando un lote falla. Una pulsación lo resuelve.
+- Nunca más adivinar: instrumentar la superficie es más rápido que 182 MB de asar minificado.

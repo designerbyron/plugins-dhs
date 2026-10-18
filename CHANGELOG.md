@@ -4,6 +4,14 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.5.4] — 2026-10-18
+
+**El panel dice qué props le entrega el host, para dejar de adivinar su contrato.** El asar del harness está
+minificado y no contiene `listCommands` ni `runCommand` bajo esos nombres; el panel pide ejecutar y recibe
+`undefined`. En vez de suponer, cuando un lote falla entero el panel pinta `host · say=function · node=object ·
+sessionId=string · …` con **todos** los nombres y tipos que recibe: una sola pulsación basta para saber con qué
+se habla. **567/567** en verde.
+
 ## [3.5.3] — 2026-10-18
 
 **El panel vuelve a mentir menos de lo que mentía: si el host no ejecuta, se ve.** Tres veces seguidas el panel

@@ -573,6 +573,12 @@ window.__ModuleLoader__.load({
      */
     function BulkActions(props) {
       const { say, node, sessionId, runCommand, listCommands } = props;
+      // Diagnóstico del contrato: el host no documenta sus props y el asar está minificado. Esta línea dice
+      // lo que entrega de verdad —nombres y tipos— para dejar de adivinar. Se pinta sólo cuando algo falla.
+      const diagnóstico = React.useMemo(() => {
+        const tipos = Object.fromEntries(Object.keys(props).sort().map((k) => [k, typeof props[k]]));
+        return `host · ${Object.entries(tipos).map(([k, v]) => `${k}=${v}`).join(' · ')}`;
+      }, [props]);
       const bulk = node?.name === 'skill-propuestas';
       const reading = typeof node?.args === 'string' ? node.args.trim() : '';
 
@@ -733,6 +739,9 @@ window.__ModuleLoader__.load({
               `${report.done.length} ${say(texts.ok)} · ${report.failed.length} ${say('bulk_failed')}`),
             h('div', { className: 'skc-bulk-note' }, `${say('bulk_remaining')}: ${report.restantes === null ? (ids === null ? '' : ids.length) : report.restantes.length}${report.restantes === null ? '' : ''}`),
             // Si no se ejecutó nada, el panel da la salida: las líneas exactas que el humano puede pegar.
+            report.done.length === 0 && report.failed.length > 0
+              ? h('div', { className: 'skc-bulk-note', 'data-tone': 'error' }, diagnóstico)
+              : null,
             report.done.length === 0 && report.failed.length > 0 && Array.isArray(report.lineas) && report.lineas.length > 0
               ? h('div', null,
                 h('div', { className: 'skc-bulk-note' }, say('bulk_nothing_ran')),
