@@ -304,6 +304,11 @@ describe('activación', () => {
     assert.equal(sano.kind, 'success');
     assert.equal(sano.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'ya no hay nada que avisar');
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-con-montaje-roto']);
+
+    // Con la lista vacía el aviso sobra: no hay nada que anunciar. Se aparta la pendiente y se vuelve a mirar.
+    assert.equal(global.map.get('skill-rechazar').handler({ agent, rawInput: 'pendiente-con-montaje-roto' }).kind, 'success');
+    const vacia = propuestas.handler({ agent, rawInput: '' });
+    assert.equal(vacia.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'sin pendientes no se avisa');
     disposeAll();
   });
 

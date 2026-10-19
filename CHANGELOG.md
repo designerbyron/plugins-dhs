@@ -4,6 +4,21 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.8.4] — 2026-10-19
+
+**El aviso del menú calla cuando no hay nada que anunciar.** Con cero pendientes seguía apareciendo en cada
+consulta, y en ese estado no informa de nada: no hay propuestas que el menú pudiera ofrecer, así que tampoco hay
+nada que se esté perdiendo. El aviso nació para explicar por qué una pendiente no aparecía en el menú «/»; sin
+pendientes no hay pregunta que responder y sólo queda ruido en la respuesta.
+
+Ahora la condición tiene dos partes: el montaje falló **y** hay pendientes. Con la lista vacía la salida es la
+lista de activas y nada más; con pendientes, el aviso reaparece exactamente donde sirve —con la orden exacta
+arriba y la nota de que no hay nada que corregir—. La prueba de activación lo fija de punta a punta: monta con
+el `inject` roto, comprueba el aviso, arregla el `inject` y comprueba que desaparece, aparta la pendiente y
+vuelve a listar para verificar que **tampoco** se avisa.
+
+**592/592** en verde y hermética verde.
+
 ## [3.8.3] — 2026-10-19
 
 **El plugin deja de depender del menú: la lista trae la orden exacta que decide todas.**

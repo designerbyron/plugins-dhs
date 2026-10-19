@@ -418,7 +418,9 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           `Aprobación automática en esta sesión: ${auto ? 'ACTIVA' : 'desactivada'}`,
           auto ? '  (las propuestas que pasen la validación se activan solas; /skill-auto desactivar para pararlo)' : '  (actívala con /skill-auto activar)',
           '',
-          ...(montaje.ok ? [] : [
+          // Sin pendientes no hay nada que anunciar: el aviso sólo aparece cuando de verdad hay una fila
+          // que el menú podría ofrecer y no ofrece. Con la lista vacía era ruido en cada consulta.
+          ...(montaje.ok || waiting.length === 0 ? [] : [
             `Aviso: este anfitrión no anuncia filas por propuesta en el menú «/» (${montaje.motivo}).`,
             '  No hay nada que corregir por tu parte: la orden de arriba las decide todas, y el panel de esta tarjeta también.',
           ]),
