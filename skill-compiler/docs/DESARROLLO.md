@@ -173,6 +173,11 @@ Dos garantías que conviene no romper:
   `menor` cuando se añade capacidad; `parche` cuando se corrige un defecto.
 - Antes de publicar: `npm run test:hermetic` en verde, `CHANGELOG.md` al día, y ningún secreto en el
   árbol (`git diff --check` no comprueba eso: míralo tú).
+- **Una versión publicada se etiqueta**, y la etiqueta no se mueve nunca: se crea en el commit que declara
+  la versión (`package.json` + su entrada del CHANGELOG, ya escritos), con mensaje que resuma el alcance y
+  `git push origin <etiqueta>`. Si una versión se publicó sin etiqueta, la etiqueta **no se inventa después**:
+  se declara el hueco y se etiqueta desde la siguiente. (`v3.4.0`–`v3.7.0` se publicaron sin etiqueta: es un
+  hueco declarado, no una serie de releases retroactivas.)
 - **Los recuentos de pruebas que citan los README y esta documentación se actualizan al cerrar la
   versión**: un número desfasado es una afirmación falsa, no un detalle. La entrada histórica del
   CHANGELOG no se toca: allí el número viejo era verdad, y un historial que se reescribe deja de ser un
@@ -192,11 +197,13 @@ No son olvidos; son decisiones, y cada una tiene su motivo:
 
 ## Estado conocido
 
-- **Pendiente, con plan escrito**: las acciones dentro de la tarjeta del resultado —checkbox por pendiente,
-  aprobar en lote con paso a paso, y las mismas acciones en `/skill-ver`—. El análisis con el contrato
-  medido (qué superficie admite qué), las fases y el experimento que decide están en
-  [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md).
-  Nada de eso está implementado: lo que hay hoy es la fila por pendiente en el menú y la tarjeta con su X.
+- **Hecho (3.4.0 → 3.8.5)**: las acciones dentro de la tarjeta del resultado —casilla por pendiente, tres
+  acciones con su ámbito, confirmación con alcance, y el lote como **una** orden del servidor—, con el
+  informe verificado por efecto y teñido por significado. Las filas por pendiente en el menú «/» dependen de
+  que el anfitrión componga el registro de comandos en el contexto del agente: en las compilaciones medidas
+  **no lo hace**, y el plugin no depende de ellas (ver [`ANFITRION.md`](ANFITRION.md)).
+- **Pendiente real**: los 16 avisos `body-budget` de la auditoría (14 proponibles; 2 exigen criterio humano,
+  `brandkit` entre ellas) y la propiedad del puesto, que sigue sin declarar (`ownership.json` ausente).
 - `index.js` no tiene cobertura directa (no se puede importar fuera del harness). Es la razón de que sea
   fino; su verificación es la instalación real y el arranque del perfil.
 - Las pruebas no cubren el comportamiento del **harness** (que la sección entre en el prompt, que el
