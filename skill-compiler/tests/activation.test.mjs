@@ -267,7 +267,7 @@ describe('activación', () => {
     const r = propuestas.handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-del-comando']);
-    assert.equal(r.text.includes('Aviso: las filas del menú'), false, 'montadas: no hay nada que avisar');
+    assert.equal(r.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'montadas: no hay nada que avisar');
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
   });
@@ -293,14 +293,16 @@ describe('activación', () => {
 
     const roto = propuestas.handler({ agent, rawInput: '' });
     assert.equal(roto.kind, 'success', 'el comando funciona aunque el montaje falle: hay vía manual');
-    assert.match(roto.text, /Aviso: las filas del menú «\/» no se pudieron anunciar/);
+    assert.match(roto.text, /Aviso: este anfitrión no anuncia filas por propuesta/);
+    // Y la orden exacta, aunque no haya filas: lo que decide no depende del menú.
+    assert.match(roto.text, /Una orden para todas: \/skill-aprobar pendiente-con-montaje-roto --local/);
     assert.equal(deLaSesion.map.size, 0, 'sin inject no hay filas');
 
     // El inject empieza a funcionar: el siguiente comando vuelve a intentar el montaje y esta vez sí monta.
     elInjectFunciona = true;
     const sano = propuestas.handler({ agent, rawInput: '' });
     assert.equal(sano.kind, 'success');
-    assert.equal(sano.text.includes('Aviso: las filas del menú'), false, 'ya no hay nada que avisar');
+    assert.equal(sano.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'ya no hay nada que avisar');
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-con-montaje-roto']);
     disposeAll();
   });
@@ -327,7 +329,7 @@ describe('activación', () => {
 
     const r = global.map.get('skill-propuestas').handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
-    assert.equal(r.text.includes('Aviso: las filas del menú'), false, 'montadas por la vía directa: no hay aviso');
+    assert.equal(r.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'montadas por la vía directa: no hay aviso');
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-sin-inject']);
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
@@ -360,7 +362,7 @@ describe('activación', () => {
 
     const r = global.map.get('skill-propuestas').handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
-    assert.equal(r.text.includes('Aviso: las filas del menú'), false, 'montadas por el hijo: no hay aviso');
+    assert.equal(r.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'montadas por el hijo: no hay aviso');
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-del-hijo']);
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');

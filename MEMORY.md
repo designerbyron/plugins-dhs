@@ -305,3 +305,11 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   desmonta con el plugin.
 - Para leer docs del anfitrión sin extraer 180 MB: parsear el header del asar (JSON en offset 12, offsets como
   string) y leer sólo el README que interesa.
+
+## v3.8.3 — el menú no compone filas en este anfitrión (2026-10-19)
+
+- Medido tres veces: `inject` no llama, el hijo montado no recibe `commands`, y `agent.ctx.commands` lanza.
+  **No hay filas por agente en esta compilación**; se deja de prometerlas y de depender de ellas.
+- `/skill-propuestas` imprime la orden exacta (`Una orden para todas: /skill-aprobar a,b,c --local`) — esa vía,
+  el panel y la CLI no dependen del menú.
+- El aviso ya no dice «conviene reportarlo»: está medido, y lo que hay que hacer está en la línea de arriba.

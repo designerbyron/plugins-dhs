@@ -396,7 +396,17 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           `Pendientes de tu aprobación (${waiting.length}):`,
           waiting.length ? bullet(waiting) : '  · ninguna',
           ...rows.map((row) => `      /${row.name}`),
-          ...(rows.length > 0 ? ['', 'Para decidir: escribe «/» y elige la fila, o teclea el comando entero. Son lo mismo.'] : []),
+          // La orden exacta, siempre: con filas o sin ellas. Depender del menú para decidir era depender de
+          // un servicio que este anfitrión no compone en el contexto del agente (tres caminos medidos). Una
+          // línea pegable decide todas y no pide recordar nada.
+          ...(waiting.length > 0
+            ? [
+              '',
+              `Una orden para todas: /skill-aprobar ${waiting.map((fila) => fila.id).join(',')} --local`,
+              'Una a una: /skill-aprobar <id> --local · para todos tus proyectos: --global · aceptando avisos: --force',
+            ]
+            : []),
+          ...(rows.length > 0 ? ['', 'Sin teclear: escribe «/» y elige la fila; es la misma orden.'] : []),
           '',
           `Aprobadas y activas (${active.length}):`,
           active.length ? bullet(active) : '  · ninguna',
@@ -409,8 +419,8 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           auto ? '  (las propuestas que pasen la validación se activan solas; /skill-auto desactivar para pararlo)' : '  (actívala con /skill-auto activar)',
           '',
           ...(montaje.ok ? [] : [
-            `Aviso: las filas del menú «/» no se pudieron anunciar en esta sesión (${montaje.motivo}).`,
-            '  Las decisiones funcionan igual escribiendo el comando entero; si esto se repite, es un fallo del montaje y conviene reportarlo.',
+            `Aviso: este anfitrión no anuncia filas por propuesta en el menú «/» (${montaje.motivo}).`,
+            '  No hay nada que corregir por tu parte: la orden de arriba las decide todas, y el panel de esta tarjeta también.',
           ]),
           'Con un id a mano: /skill-ver <id> · /skill-aprobar <id> [--force] · /skill-rechazar <id>',
         ].join('\n'));

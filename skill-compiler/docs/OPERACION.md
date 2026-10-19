@@ -477,3 +477,11 @@ El montaje, en orden: (1) `agent.ctx.inject(['commands'], …)`; (2) un **hijo**
 `agent.ctx.plugin({ inject: ['commands'], apply })`, que es la forma documentada por `@deepseek-ai/dsh-commands`
 y la que recibe el servicio de verdad; (3) el registro directo, sólo si leer la propiedad no lanza. Los tres
 motivos son distintos en el aviso, así que un fallo futuro dice **cuál** de los tres se agotó.
+
+### Decidir sin el menú (la vía canónica)
+
+En las compilaciones del anfitrión medidas, el contexto del agente **no compone** el servicio `commands`, así que
+las filas por propuesta no se pueden montar y el menú «/» no las anuncia. No es un fallo del plugin ni algo que
+el humano deba reportar: `/skill-propuestas` imprime, junto a las pendientes, la **orden exacta** que las decide
+(`/skill-aprobar a,b,c --local`), y su panel las marca y las ejecuta. Las tres formas —orden escrita, panel y
+CLI— funcionan sin el menú; las filas son una comodidad cuando el anfitrión las ofrece.

@@ -4,6 +4,34 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.8.3] — 2026-10-19
+
+**El plugin deja de depender del menú: la lista trae la orden exacta que decide todas.**
+
+### Medido
+
+Tres caminos probados contra el anfitrión real, tres motivos distintos y ninguno sirve: `agent.ctx.inject(['commands'])`
+no llama a su callback; el hijo montado con `agent.ctx.plugin({ inject: ['commands'] })` tampoco recibe el servicio; y
+`agent.ctx.commands` lanza `cannot get property "commands" without inject`. **El contexto del agente no compone
+`commands` en esta compilación**, así que las filas por propuesta no se pueden montar ahí. Seguir intentándolo era
+insistir en una API que el anfitrión no ofrece.
+
+### Añadido
+
+- **La orden exacta, siempre**: `/skill-propuestas` imprime, con las pendientes, una línea que las decide todas
+  (`Una orden para todas: /skill-aprobar a,b,c --local`) y las variantes por id, por ámbito y con `--force`. Con
+  filas o sin ellas — lo que decide no depende del menú, y no hay que recordar ningún identificador.
+- **El aviso dice la verdad y no culpa a nadie**: «este anfitrión no anuncia filas por propuesta en el menú «/»»,
+  con la nota de que no hay nada que corregir: la orden de arriba y el panel las deciden. Se retira el «conviene
+  reportarlo», que ya está medido.
+
+### Se conserva
+
+Los tres intentos de montaje (cuestan nada y otro anfitrión puede ofrecerlos) y las filas cuando el host las
+componga. Lo que **no** se hace es prometerlas.
+
+**592/592** en verde y hermética verde.
+
 ## [3.8.2] — 2026-10-19
 
 **Las filas del menú se montan con la forma que documenta el anfitrión: un hijo bajo `agent.ctx` que declara su
