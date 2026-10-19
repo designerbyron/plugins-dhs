@@ -4,6 +4,22 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.8.5] — 2026-10-19
+
+**La auditoría deja de contar el archivo como si fueran skills a arreglar: 7 errores falsos desaparecen.**
+
+### Corregido
+
+- `superseded/` guarda la versión anterior con el nombre `<id>-<fecha>` —la convención **del propio archivo**— y
+  con el cuerpo que se aprobó entonces. Al auditarlo con las reglas de hoy salían dos errores que no se pueden
+  arreglar sin reescribir la evidencia: `security-id` (el nombre del archivo no es un id) y `body-max` (el
+  cuerpo de entonces era más largo). En el almacén real eran **7 errores** de 51 fichas, todos en el archivo, y
+  tapaban el estado verdadero. Ahora se **cuentan y se declaran aparte** («archivadas: N · no se auditan») y no
+  entran en el total medido: 44 auditadas, PASS 27, WARN 17, **ERROR 0**.
+- Vale igual para el archivo de la biblioteca global (`global-superseded`).
+
+**592/592** en verde y hermética verde.
+
 ## [Sin versión] — 2026-10-19 · documentación
 
 **`docs/ANFITRION.md`: el anfitrión medido, sus límites y la preparación.** Recoge en un solo sitio lo que la

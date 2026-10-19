@@ -199,18 +199,28 @@ describe('cobertura: qué se audita y qué no', () => {
     assert.deepEqual(informe.skills, []);
   });
 
-  it('audita todos los estados y los cuenta por separado', () => {
+  it('audita los estados vivos y cuenta el archivo aparte', () => {
     const arena = sandbox({ curated: false });
     const parejas = [
       ['proposed', 'copias-de-seguridad'], ['approved', 'registro-de-puertos'], ['disabled', 'indices-de-mysql'],
-      ['rejected', 'certificados-tls'], ['superseded', 'rotacion-de-logs'], ['published', 'permisos-de-carpetas'],
+      ['rejected', 'certificados-tls'], ['published', 'permisos-de-carpetas'],
     ];
     for (const [estado, id] of parejas) sembrar(arena, skillDe(id), { estado });
+    // El archivo guarda la versión anterior con el nombre `<id>-<fecha>` y el cuerpo que se aprobó entonces:
+    // auditarlo con las reglas de hoy marcaría el nombre del archivo como id inválido. Se cuenta, no se mide.
+    // Se siembra con un id válido y se renombra como lo hace el archivo: `<id>-<fecha>`, con el contenido de
+    // entonces. La puerta no admitiría ese nombre, y por eso el archivo no se audita.
+    const semilla = sembrar(arena, skillDe('version-anterior-web'), { estado: 'approved' });
+    const archivo = join(arena.root, 'projects', KEY, 'superseded');
+    mkdirSync(archivo, { recursive: true });
+    renameSync(semilla, join(archivo, 'version-anterior-web-2026-10-18T18-35-34-156Z'));
     const informe = auditarAlmacen({ root: arena.root, curated: arena.curated });
-    assert.equal(informe.totals.total, 6);
-    assert.deepEqual(Object.keys(informe.byState).sort(), ['approved', 'disabled', 'proposed', 'published', 'rejected', 'superseded']);
+    assert.equal(informe.totals.total, 5, 'el archivo no entra en el total auditado');
+    assert.deepEqual(Object.keys(informe.byState).sort(), ['approved', 'disabled', 'proposed', 'published', 'rejected']);
     for (const [estado] of parejas) assert.equal(informe.byState[estado].total, 1, `el estado ${estado} no se contó`);
-    assert.equal(informe.totals.pass, 6, 'las seis están bien formadas');
+    assert.equal(informe.totals.pass, 5, 'las cinco están bien formadas');
+    assert.equal(informe.archivadas.length, 1, 'el archivo se declara');
+    assert.match(informe.archivadas[0], /^superseded\//);
     const publicada = informe.skills.find((s) => s.estado === 'published');
     assert.equal(publicada.estadoLegible, NOMBRE_DE_ESTADO.published);
   });

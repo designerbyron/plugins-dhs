@@ -172,6 +172,7 @@ describe('el ciclo completo, con las dos superficies', () => {
     const despues = auditarAlmacen({ root: arena.root, curated: arena.curated });
     const activada = despues.skills.find((s) => s.id === 'registro-de-flota' && s.estado === 'approved');
     assert.equal(activada.status, 'PASS', JSON.stringify(activada.findings));
-    assert.equal(despues.skills.some((s) => s.estado === 'superseded'), true, 'la versión anterior sigue en el almacén');
+    assert.ok(despues.archivadas.length >= 1, 'la versión anterior se declara como archivada');
+    assert.equal(despues.skills.some((s) => s.estado === 'superseded'), false, 'el archivo no entra en la auditoría');
   });
 });

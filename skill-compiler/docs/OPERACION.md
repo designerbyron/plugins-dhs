@@ -489,3 +489,11 @@ las filas por propuesta no se pueden montar y el menú «/» no las anuncia. No 
 el humano deba reportar: `/skill-propuestas` imprime, junto a las pendientes, la **orden exacta** que las decide
 (`/skill-aprobar a,b,c --local`), y su panel las marca y las ejecuta. Las tres formas —orden escrita, panel y
 CLI— funcionan sin el menú; las filas son una comodidad cuando el anfitrión las ofrece.
+
+### Qué audita `audit` y qué no
+
+Se audita **todo lo que puede llegar a servirse o decidirse**: `proposed`, `approved`, `disabled`, `rejected`,
+`published` y la biblioteca global. El **archivo** (`superseded/`, `global-superseded/`) no se audita: guarda la
+versión anterior con el nombre `<id>-<fecha>` y el cuerpo que se aprobó entonces, y medirlo con las reglas de
+hoy produce errores que sólo se arreglarían reescribiendo la evidencia. Se cuenta y se declara en el informe
+(`archivadas: N · no se auditan`), para que su ausencia del total no parezca un olvido.

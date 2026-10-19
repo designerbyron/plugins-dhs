@@ -22,10 +22,23 @@ import { join, relative, sep } from 'node:path';
 
 import { auditarCarpeta, curatedLibraryRoot, defaultRoot, isOurs, listProjects } from './compiler.mjs';
 
-/** Los estados en los que puede vivir una skill dentro de un proyecto. */
-export const ESTADOS_DE_PROYECTO = ['proposed', 'approved', 'disabled', 'rejected', 'superseded', 'published'];
+/**
+ * Los estados que **se auditan**: todo lo que puede llegar a servirse o a decidirse.
+ *
+ * `superseded` no está aquí a propósito. El archivo guarda la versión anterior con el nombre
+ * `<id>-<fecha>` —convención del propio archivo— y con el cuerpo que se aprobó entonces. Auditarlo con las
+ * reglas de hoy marca el nombre como id inválido y el cuerpo como demasiado largo: errores que no se pueden
+ * arreglar sin reescribir la evidencia. Se cuenta aparte y se declara, pero no se mide.
+ */
+export const ESTADOS_DE_PROYECTO = ['proposed', 'approved', 'disabled', 'rejected', 'published'];
+
+/** Los estados de archivo: evidencia congelada. Se cuentan, no se auditan. */
+export const ESTADOS_ARCHIVADOS = ['superseded'];
 /** Los estados de la biblioteca curada global: la raíz misma, y sus dos carpetas de retiro. */
-export const ESTADOS_GLOBALES = ['global', 'global-disabled', 'global-superseded'];
+export const ESTADOS_GLOBALES = ['global', 'global-disabled'];
+
+/** El archivo de la biblioteca global, por la misma razón que `ESTADOS_ARCHIVADOS`. */
+export const ESTADOS_GLOBALES_ARCHIVADOS = ['global-superseded'];
 
 /**
  * Cómo se ordenan y se nombran los estados en el informe. «published» es una constancia archivada de lo
@@ -135,8 +148,13 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
     anotaContenedor('error', 'store-unreadable', root, `no se pudo listar el almacén: ${error.message}`, 'Revisa los permisos de la carpeta del almacén');
   }
 
+  const archivadas = [];
   for (const projectKey of claves) {
     const base = join(root, 'projects', projectKey);
+    for (const estado of ESTADOS_ARCHIVADOS) {
+      const { nombres } = subcarpetas(join(base, estado));
+      archivadas.push(...nombres.map((id) => `${estado}/${projectKey}/${id}`));
+    }
     for (const estado of ESTADOS_DE_PROYECTO) {
       if (!quiere(estado)) continue;
       const dir = join(base, estado);
@@ -149,7 +167,7 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
     }
     // Un estado que el auditor no conoce no puede caerse del informe en silencio.
     const { nombres: enProyecto } = subcarpetas(base);
-    const conocidos = new Set([...ESTADOS_DE_PROYECTO, '.git']);
+    const conocidos = new Set([...ESTADOS_DE_PROYECTO, ...ESTADOS_ARCHIVADOS, '.git']);
     for (const nombre of enProyecto) {
       if (!conocidos.has(nombre)) {
         anotaContenedor('warn', 'unknown-state', aRelativa(root, join(base, nombre)), `«${nombre}» no es un estado conocido: se ha quedado fuera de la auditoría`, 'Comprueba si el almacén estrena un estado que el auditor debe conocer');
@@ -158,6 +176,10 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
   }
 
   // ── 2. La biblioteca global (lo que se sirve fuera de todo proyecto) ────────────────────────────
+  for (const estado of ESTADOS_GLOBALES_ARCHIVADOS) {
+    const { nombres } = subcarpetas(join(curated, estado.replace(/^global-/, '')));
+    archivadas.push(...nombres.map((id) => `${estado}/${id}`));
+  }
   for (const estado of ESTADOS_GLOBALES) {
     if (!quiere(estado)) continue;
     const dir = estado === 'global' ? curated : join(curated, estado.replace(/^global-/, ''));
@@ -225,6 +247,8 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
     byRule,
     contenedores,
     skills: fichas,
+    // Evidencia congelada: se cuenta y se declara, para que su ausencia del total no parezca un olvido.
+    archivadas,
   };
 }
 
@@ -232,6 +256,9 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
 export function resumenDeAuditoria(informe) {
   const lineas = [
     `skills auditadas: ${informe.totals.total} · PASS ${informe.totals.pass} · WARN ${informe.totals.warn} · ERROR ${informe.totals.error} · ilegibles ${informe.totals.unreadable}`,
+    ...(informe.archivadas.length > 0
+      ? [`archivadas: ${informe.archivadas.length} · no se auditan (evidencia congelada: su nombre y su cuerpo son los del archivo)`]
+      : []),
   ];
   for (const [estado, c] of Object.entries(informe.byState)) {
     lineas.push(`  ${(NOMBRE_DE_ESTADO[estado] ?? estado).padEnd(15)} ${String(c.total).padStart(3)}   PASS ${c.pass} · WARN ${c.warn} · ERROR ${c.error}${c.unreadable ? ` · ilegibles ${c.unreadable}` : ''}`);
