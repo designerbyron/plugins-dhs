@@ -4,7 +4,7 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
-## [3.8.5] — 2026-10-19
+## [3.8.5] — 2026-10-19 · release
 
 **La auditoría deja de contar el archivo como si fueran skills a arreglar: 7 errores falsos desaparecen.**
 
@@ -20,16 +20,16 @@ añade capacidad, `parche` cuando se corrige un defecto.
 
 **592/592** en verde y hermética verde.
 
-## [Sin versión] — 2026-10-19 · documentación
+### Documentación
 
-**`docs/ANFITRION.md`: el anfitrión medido, sus límites y la preparación.** Recoge en un solo sitio lo que la
+**`docs/ANFITRION.md`: el anfitrión medido, sus límites y la preparación.** Un solo sitio para lo que la
 compilación instalada ofrece de verdad (comandos globales, `runCommand` con texto con barra, `listCommands`,
-eventos de sesión) y lo que no (registro de comandos por agente: tres caminos, tres motivos), qué se implementó
-para no depender de lo que falta (tres caminos de montaje con motivo, la orden exacta en la lista, verificación
-por efecto, aviso mudo sin pendientes, huella de contenido y diario encadenado) y qué ocurrirá cuando el
-anfitrión gane la capacidad: nada que tocar, porque ninguno de los caminos está desactivado a mano y
-`tests/activation.test.mjs` monta un anfitrión falso por camino exigiendo filas sin aviso. Cierra con las cinco
-limitaciones declaradas y qué las cierra a cada una.
+eventos de sesión y catálogo por proyecto) y lo que no (registro de comandos por agente: tres caminos, tres
+motivos), qué se implementó para no depender de lo que falta —tres caminos de montaje con motivo, la orden
+exacta en la lista, verificación por efecto, aviso mudo sin pendientes, huella de contenido y diario
+encadenado— y qué ocurrirá cuando el anfitrión gane la capacidad: nada que tocar, porque ningún camino está
+desactivado a mano y `tests/activation.test.mjs` monta un anfitrión falso por camino exigiendo filas sin aviso.
+Cierra con las cinco limitaciones declaradas y qué las cierra a cada una.
 
 ## [3.8.4] — 2026-10-19
 
