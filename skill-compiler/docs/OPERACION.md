@@ -480,6 +480,10 @@ motivos son distintos en el aviso, así que un fallo futuro dice **cuál** de lo
 
 ### Decidir sin el menú (la vía canónica)
 
+> El detalle medido de por qué, y qué ocurre cuando el anfitrión componga el registro, en
+> [`ANFITRION.md`](ANFITRION.md).
+
+
 En las compilaciones del anfitrión medidas, el contexto del agente **no compone** el servicio `commands`, así que
 las filas por propuesta no se pueden montar y el menú «/» no las anuncia. No es un fallo del plugin ni algo que
 el humano deba reportar: `/skill-propuestas` imprime, junto a las pendientes, la **orden exacta** que las decide
