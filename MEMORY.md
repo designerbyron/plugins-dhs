@@ -295,3 +295,13 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   distingue «no existe» de «no tiene register()».
 - **Panel**: «Nada pendiente» (verde) ≠ «no hay filas» (ámbar + comando por id). Eran el mismo mensaje.
 - 591/591 y hermética verde; una prueba de activación nueva y el artefacto de interfaz ampliado.
+
+## v3.8.2 — la forma real del montaje por agente (2026-10-19)
+
+- `agent.ctx.commands` **lanza** sin inject («cannot get property "commands" without inject») y el `inject`
+  suelto desde el plugin raíz no llama: el servicio no está en el ámbito del agente tal cual.
+- La forma documentada por `@deepseek-ai/dsh-commands` (README dentro de app.asar) es un **hijo montado bajo
+  `agent.ctx`** con `inject: ['commands']` propio. Implementado con `agent.ctx.plugin({...})`; el hijo se
+  desmonta con el plugin.
+- Para leer docs del anfitrión sin extraer 180 MB: parsear el header del asar (JSON en offset 12, offsets como
+  string) y leer sólo el README que interesa.

@@ -332,4 +332,38 @@ describe('activación', () => {
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
   });
+
+  // La forma que documenta `dsh-commands`: el plugin se **monta bajo** `agent.ctx` y declara su propio
+  // `inject: ['commands']`. Así el servicio llega al hijo, y el hijo lo ve sin lanzar.
+  it('monta las filas con un hijo que declara inject, cuando el contexto del agente ofrece plugin()', () => {
+    const s = sandbox();
+    const signal = createCatalogSignal({ root: s.root, watch: false });
+    assert.equal(propose(goodInput({ id: 'pendiente-del-hijo' }), { root: s.root, curated: s.curated, cwd: CWD }).status, 'proposed');
+    const global = registroFalso();
+    const deLaSesion = registroFalso();
+    let montado = null;
+    const agent = {
+      session: { header: { cwd: CWD } },
+      ctx: {
+        effect: (callback) => callback(),
+        inject: () => undefined,
+        plugin: (hijo) => {
+          assert.deepEqual(hijo.inject, ['commands'], 'el hijo declara su dependencia');
+          montado = hijo;
+          hijo.apply({ commands: deLaSesion.commands });
+          return () => { montado = null; };
+        },
+      },
+    };
+    const { ctx, disposeAll } = fakeContext({ commands: global.commands });
+    apply(ctx, { root: s.root, catalog: signal });
+
+    const r = global.map.get('skill-propuestas').handler({ agent, rawInput: '' });
+    assert.equal(r.kind, 'success');
+    assert.equal(r.text.includes('Aviso: las filas del menú'), false, 'montadas por el hijo: no hay aviso');
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-del-hijo']);
+    disposeAll();
+    assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
+    assert.equal(montado, null, 'el hijo también se desmonta');
+  });
 });

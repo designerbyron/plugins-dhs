@@ -4,6 +4,28 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.8.2] — 2026-10-19
+
+**Las filas del menú se montan con la forma que documenta el anfitrión: un hijo bajo `agent.ctx` que declara su
+propio `inject`.**
+
+### Corregido
+
+- El aviso ya traía el motivo exacto (`cannot get property "commands" without inject`) y eso descartó las dos
+  hipótesis anteriores: el servicio **no está** en el ámbito del contexto del agente tal cual, y leerlo directo
+  lanza. El README de `@deepseek-ai/dsh-commands` dice la forma correcta —«un plugin montado bajo `agent.ctx`
+  que declara su propio `inject` y registra un comando exacto de ese agente»—. Ahora el montaje lo hace así:
+  `agent.ctx.plugin({ name, inject: ['commands'], apply })`, y ese hijo recibe el servicio (o queda esperándolo
+  si aún no está) sin acceder nunca a una propiedad no inyectada.
+- Se conservan como respaldo el `inject` suelto y el registro directo —cada uno en su `try`—, y el motivo final
+  distingue los tres caminos agotados. El hijo se desmonta con el plugin: al descargarlo no queda nada colgando.
+
+### Pruebas
+
+- `tests/activation.test.mjs`: **dos más** — el hijo montado que recibe `commands` (monta, no avisa, y se
+  desmonta al descargar) y el caso anterior del `inject` que no llama con registro directo disponible.
+  **592/592** en verde y hermética verde.
+
 ## [3.8.1] — 2026-10-19
 
 **Dos avisos de la sesión, atendidos: el montaje de filas no se rinde sin probar el registro directo, y el

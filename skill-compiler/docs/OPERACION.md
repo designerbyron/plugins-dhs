@@ -472,3 +472,8 @@ del **agente**, no en el global —una fila global se le ofrece a todas las sesi
 caminos: el `inject` del servicio `commands` y, si no llama, el registro del propio contexto. Si ninguno existe,
 `/skill-propuestas` lo dice con el motivo exacto y las decisiones siguen funcionando tecleando el comando
 entero (`/skill-aprobar <id> --local`), que es la vía que nunca depende del menú.
+
+El montaje, en orden: (1) `agent.ctx.inject(['commands'], …)`; (2) un **hijo** montado con
+`agent.ctx.plugin({ inject: ['commands'], apply })`, que es la forma documentada por `@deepseek-ai/dsh-commands`
+y la que recibe el servicio de verdad; (3) el registro directo, sólo si leer la propiedad no lanza. Los tres
+motivos son distintos en el aviso, así que un fallo futuro dice **cuál** de los tres se agotó.

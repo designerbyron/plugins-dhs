@@ -182,7 +182,7 @@ export function apply(ctx, config = {}) {
         }
         const previo = perAgent.get(agent);
         if (previo !== undefined && typeof previo.refresh === 'function') return { ok: true };
-        const entry = previo ?? { applied: '', refresh: null, clear: null, disposers: [], intentos: 0, motivo: null };
+        const entry = previo ?? { applied: '', refresh: null, clear: null, disposers: [], intentos: 0, motivo: null, desmontarHijo: null };
         if (entry.intentos >= MAX_INTENTOS_DE_MONTAJE) {
           return { ok: false, motivo: entry.motivo ?? 'el montaje no llegó a registrar nada en los intentos hechos' };
         }
@@ -241,20 +241,44 @@ export function apply(ctx, config = {}) {
           // puede tenerlo igual: se usa directo antes de declarar que no hay filas. Es el caso medido en la
           // sesión del 19-10: el registro global existía (los comandos humanos funcionaban) y el del agente
           // no se anunciaba. Rendirse ahí dejaba al humano sin filas y con un motivo impreciso.
-          if (entry.refresh === null) {
-            const directo = agent.ctx?.commands;
+          // La forma que documenta `dsh-commands` para el ámbito del agente: un plugin **montado bajo**
+          // `agent.ctx` que declara su propio `inject: ['commands']`. El `inject` suelto no basta —el
+          // servicio no está en el ámbito del contexto tal cual, y leerlo directo lanza «cannot get property
+          // commands without inject»—; el hijo montado sí lo recibe, y si aún no está, queda esperándolo.
+          if (entry.refresh === null && typeof agent.ctx?.plugin === 'function') {
             try {
-              const limpiador = montarEn(directo);
+              const filas = {
+                name: 'skill-compiler-rows',
+                inject: ['commands'],
+                apply(hijoCtx) {
+                  const limpiador = montarEn(hijoCtx.commands);
+                  if (limpiador !== null) {
+                    entry.motivo = null;
+                    entry.hijo = limpiador;
+                  }
+                },
+              };
+              const montaje = agent.ctx.plugin(filas);
+              entry.desmontarHijo = typeof montaje === 'function' ? montaje : null;
+            } catch (error) {
+              entry.motivo = `el montaje del hijo de filas lanzó: ${error.message}`;
+            }
+          }
+          if (entry.refresh === null) {
+            // Última vía, sólo si el contexto expone el servicio sin lanzar: se prueba sin arriesgar el
+            // montaje entero.
+            try {
+              const limpiador = montarEn(agent.ctx.commands);
               if (limpiador !== null) {
                 inner = limpiador;
                 entry.motivo = null;
               } else {
-                entry.motivo = entry.motivo ?? (directo === undefined || directo === null
-                  ? 'el contexto del agente no expone «commands» ni por inject ni directamente'
+                entry.motivo = entry.motivo ?? (agent.ctx.commands === undefined
+                  ? 'el contexto del agente no expone «commands» ni por inject, ni montando un hijo, ni directo'
                   : '«commands» del agente existe pero no ofrece register()');
               }
             } catch (error) {
-              entry.motivo = `el registro directo de las filas lanzó: ${error.message}`;
+              entry.motivo = entry.motivo ?? `el registro directo de las filas lanzó: ${error.message}`;
             }
           }
           return () => {
@@ -263,6 +287,12 @@ export function apply(ctx, config = {}) {
             } catch {
               /* ya retirado */
             }
+            try {
+              if (typeof entry.desmontarHijo === 'function') entry.desmontarHijo();
+            } catch {
+              /* ya desmontado */
+            }
+            entry.desmontarHijo = null;
           };
         });
         entry.disposers.push(disposer);
