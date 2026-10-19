@@ -189,49 +189,73 @@ export function apply(ctx, config = {}) {
         entry.intentos += 1;
         const disposer = agent.ctx.effect(() => {
           let inner = null;
+          /**
+           * Registra las filas en **un** registro concreto y deja `entry.refresh` listo. Devuelve el
+           * limpiador, o `null` si ese registro no sirve.
+           */
+          const montarEn = (rowsRegistry) => {
+            if (rowsRegistry === undefined || rowsRegistry === null || typeof rowsRegistry.register !== 'function') return null;
+            const rows = [];
+            const apply = () => {
+              const definitions = composeFor(cwd);
+              if (definitions === null) return;
+              const signature = definitions.map((definition) => definition.name).join('\n');
+              if (signature === entry.applied) return;
+              for (const dispose of rows.splice(0)) {
+                try {
+                  dispose();
+                } catch {
+                  /* ya retirada */
+                }
+              }
+              for (const definition of definitions) {
+                try {
+                  rows.push(rowsRegistry.register(definition));
+                } catch {
+                  /* una fila que no se puede registrar no se lleva las demás */
+                }
+              }
+              entry.applied = signature;
+            };
+            const clear = () => {
+              for (const dispose of rows.splice(0)) {
+                try {
+                  dispose();
+                } catch {
+                  /* ya retirada */
+                }
+              }
+              entry.applied = '';
+            };
+            entry.refresh = apply;
+            entry.clear = clear;
+            apply();
+            return clear;
+          };
           try {
-            inner = agent.ctx.inject(['commands'], (scopedRows) => {
-              const rowsRegistry = scopedRows?.commands ?? agent.ctx.commands;
-              if (rowsRegistry === undefined || typeof rowsRegistry.register !== 'function') return undefined;
-              const rows = [];
-              const apply = () => {
-                const definitions = composeFor(cwd);
-                if (definitions === null) return;
-                const signature = definitions.map((definition) => definition.name).join('\n');
-                if (signature === entry.applied) return;
-                for (const dispose of rows.splice(0)) {
-                  try {
-                    dispose();
-                  } catch {
-                    /* ya retirada */
-                  }
-                }
-                for (const definition of definitions) {
-                  try {
-                    rows.push(rowsRegistry.register(definition));
-                  } catch {
-                    /* una fila que no se puede registrar no se lleva las demás */
-                  }
-                }
-                entry.applied = signature;
-              };
-              const clear = () => {
-                for (const dispose of rows.splice(0)) {
-                  try {
-                    dispose();
-                  } catch {
-                    /* ya retirada */
-                  }
-                }
-                entry.applied = '';
-              };
-              entry.refresh = apply;
-              entry.clear = clear;
-              apply();
-              return clear;
-            });
+            inner = agent.ctx.inject(['commands'], (scopedRows) => montarEn(scopedRows?.commands ?? agent.ctx.commands));
           } catch (error) {
             entry.motivo = `el montaje de las filas lanzó: ${error.message}`;
+          }
+          // Si `inject` no llegó a llamar —el servicio no está en el ámbito de este contexto—, el contexto
+          // puede tenerlo igual: se usa directo antes de declarar que no hay filas. Es el caso medido en la
+          // sesión del 19-10: el registro global existía (los comandos humanos funcionaban) y el del agente
+          // no se anunciaba. Rendirse ahí dejaba al humano sin filas y con un motivo impreciso.
+          if (entry.refresh === null) {
+            const directo = agent.ctx?.commands;
+            try {
+              const limpiador = montarEn(directo);
+              if (limpiador !== null) {
+                inner = limpiador;
+                entry.motivo = null;
+              } else {
+                entry.motivo = entry.motivo ?? (directo === undefined || directo === null
+                  ? 'el contexto del agente no expone «commands» ni por inject ni directamente'
+                  : '«commands» del agente existe pero no ofrece register()');
+              }
+            } catch (error) {
+              entry.motivo = `el registro directo de las filas lanzó: ${error.message}`;
+            }
           }
           return () => {
             try {

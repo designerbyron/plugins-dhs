@@ -287,3 +287,11 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   que se apaga con movimiento reducido; 4 pruebas de artefacto nuevas (47 en ese fichero).
 - Trampa repetida: backtick dentro del template literal del CSS (`currentColor`) rompió `client.js`; `node
   --check` lo cazó antes de seguir. Ya estaba anotada y aun así cayó — comprobar SIEMPRE tras editar `client.js`.
+
+## v3.8.1 — los dos avisos de la sesión del 19-10 (2026-10-19)
+
+- **Filas sin anunciar**: el `inject(['commands'])` del contexto del agente no llamaba a su callback; el
+  contexto sí tenía `commands`. Ahora se prueba el registro directo antes de declarar el motivo, y el motivo
+  distingue «no existe» de «no tiene register()».
+- **Panel**: «Nada pendiente» (verde) ≠ «no hay filas» (ámbar + comando por id). Eran el mismo mensaje.
+- 591/591 y hermética verde; una prueba de activación nueva y el artefacto de interfaz ampliado.

@@ -137,6 +137,7 @@ window.__ModuleLoader__.load({
         bulk_reading: 'Leyendo las pendientes…',
         bulk_none: 'Ninguna pendiente: si acabas de aprobar, ya no queda nada que decidir.',
         bulk_no_rows: 'No hay filas que decidir en el catálogo de esta sesión. La lista está en el resultado de arriba: escribe «/» y elige la fila, o teclea el comando con su id.',
+        bulk_nothing: 'Nada pendiente: no hay ninguna propuesta esperando tu decisión. Las activas siguen en el resultado de arriba.',
         bulk_unreadable: 'No se pudieron leer las pendientes',
         bulk_unreadable_hint: 'Síguelo desde el terminal o desde el menú «/»: la lista y la aprobación funcionan igual, pasan por la misma puerta',
         bulk_habilitar: 'Volver a encender las marcadas',
@@ -212,6 +213,8 @@ window.__ModuleLoader__.load({
         bulk_reading: 'Reading the pending ones…',
         bulk_none: 'Nothing pending: if you just approved, there is nothing left to decide.',
         bulk_no_rows: 'No rows to decide on in this session catalog. The list is in the result above: type «/» and pick the row, or type the command with its id.',
+        bulk_nothing: 'Nothing pending: no proposal is waiting for your decision. The active ones are in the result above.',
+        bulk_ids_hint: 'Sin filas en esta sesión: el comando con el id funciona igual.',
         bulk_unreadable: 'Could not read the pending ones',
         bulk_unreadable_hint: 'Follow it from the terminal or from the «/» menu: the list and the approval work the same, through the same gate',
         bulk_habilitar: 'Switch the marked ones back on',
@@ -808,8 +811,16 @@ window.__ModuleLoader__.load({
         // «no hay nada» sin haber podido preguntar es una mentira por omisión, y además deja al humano sin
         // salida: el error añade por dónde seguir.
         ids === null && failure === '' ? h('div', { className: 'skc-bulk-note' }, say('bulk_reading')) : null,
-        ids !== null && failure === '' && rows.length === 0 && report === null
-          ? h('div', { className: 'skc-bulk-note' }, say('bulk_no_rows'))
+        // «Nada pendiente» y «no hay filas» son cosas distintas y se decían igual. Si la lectura salió bien y
+        // la lista vino vacía, lo que hay que decir es que no hay nada que decidir —no mandar a buscar filas
+        // que no existen—. «No hay filas» se reserva para el caso de verdad: había pendientes y el catálogo de
+        // la sesión no las anunció (ahí sí: el comando con el id funciona igual).
+        ids !== null && failure === '' && ids.length === 0 && report === null
+          ? h('div', { className: 'skc-bulk-note', 'data-tone': 'ok' }, say('bulk_nothing'))
+          : null,
+        ids !== null && failure === '' && ids.length > 0 && rows.length === 0 && report === null
+          ? h('div', { className: 'skc-bulk-note', 'data-tone': 'warn' },
+            `${say('bulk_no_rows')} ${say('bulk_ids_hint')}`)
           : null,
         rows.length === 0
           ? null

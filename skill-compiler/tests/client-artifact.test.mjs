@@ -282,7 +282,11 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     // Las dos afirmaciones dependen de que se haya podido leer: «leyendo…» mientras se lee, y «ninguna
     // pendiente» sólo si la lectura salió bien y vino vacía. Sin `failure === ''`, las dos mienten.
     assert.match(client, /ids === null && failure === '' \? h\('div', \{ className: 'skc-bulk-note' \}, say\('bulk_reading'\)\)/);
-    assert.match(client, /ids !== null && failure === '' && rows\.length === 0 && report === null/);
+    // Tres estados distintos, tres mensajes: leyendo, nada pendiente, y pendientes sin fila anunciada.
+    assert.match(client, /ids !== null && failure === '' && ids\.length === 0 && report === null/);
+    assert.match(client, /ids !== null && failure === '' && ids\.length > 0 && rows\.length === 0 && report === null/);
+    assert.match(client, /bulk_nothing/);
+    assert.match(client, /bulk_ids_hint/);
     assert.equal(
       /ids !== null && rows\.length === 0 && report === null/.test(client),
       false,

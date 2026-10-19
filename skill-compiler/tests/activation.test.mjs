@@ -304,4 +304,32 @@ describe('activación', () => {
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-con-montaje-roto']);
     disposeAll();
   });
+
+  // El caso medido el 19-10: el registro global funcionaba (los comandos humanos contestaban) y el `inject`
+  // del agente no llamaba a su callback. El contexto del agente SÍ tenía `commands`: rendirse sin probarlo
+  // dejaba al humano sin filas y con un motivo que culpaba al anfitrión sin haberlo mirado.
+  it('si `inject` no llama pero el contexto del agente tiene commands, monta por la vía directa', () => {
+    const s = sandbox();
+    const signal = createCatalogSignal({ root: s.root, watch: false });
+    assert.equal(propose(goodInput({ id: 'pendiente-sin-inject' }), { root: s.root, curated: s.curated, cwd: CWD }).status, 'proposed');
+    const global = registroFalso();
+    const deLaSesion = registroFalso();
+    const agent = {
+      session: { header: { cwd: CWD } },
+      ctx: {
+        effect: (callback) => callback(),
+        inject: () => undefined,
+        commands: deLaSesion.commands,
+      },
+    };
+    const { ctx, disposeAll } = fakeContext({ commands: global.commands });
+    apply(ctx, { root: s.root, catalog: signal });
+
+    const r = global.map.get('skill-propuestas').handler({ agent, rawInput: '' });
+    assert.equal(r.kind, 'success');
+    assert.equal(r.text.includes('Aviso: las filas del menú'), false, 'montadas por la vía directa: no hay aviso');
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-sin-inject']);
+    disposeAll();
+    assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
+  });
 });

@@ -4,6 +4,31 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.8.1] — 2026-10-19
+
+**Dos avisos de la sesión, atendidos: el montaje de filas no se rinde sin probar el registro directo, y el
+panel deja de confundir «nada pendiente» con «no hay filas».**
+
+### Corregido
+
+- **El montaje de filas prueba el registro del propio contexto cuando `inject` no llama.** El aviso medido en
+  la sesión («el anfitrión no expone el registro de comandos en el contexto del agente») se debía a que el
+  `inject` del contexto del agente no ejecutaba su callback; el contexto **sí** tenía `commands`, y ningún
+  código lo miraba. Ahora, si `inject` no llama, se usa `agent.ctx.commands` directamente —con la misma lógica
+  de recomposición y retirada— y sólo si tampoco existe se declara el motivo, **distinguiendo** «no existe» de
+  «existe sin `register()`». Una fila más de diagnóstico en vez de una acusación genérica al anfitrión.
+- **«Nada pendiente» no es «no hay filas».** Con cero pendientes el panel decía «No hay filas que decidir…,
+  escribe «/» y elige la fila», que manda a buscar algo que no existe. Ahora son dos estados con su mensaje y
+  su tono: verde «Nada pendiente…» cuando la lectura salió bien y la lista vino vacía; ámbar con la pista del
+  comando por id cuando había pendientes y el catálogo de la sesión no las anunció.
+
+### Pruebas
+
+- `tests/activation.test.mjs`: **una más** — agente cuyo `inject` nunca llama y cuyo `ctx.commands` sí registra:
+  las filas se montan, `/skill-propuestas` no avisa, y al descargar el plugin no queda ninguna colgando.
+- `tests/client-artifact.test.mjs`: las tres condiciones de estado (leyendo, nada, pendientes sin fila) y los
+  dos textos nuevos. **591/591** en verde y hermética verde.
+
 ## [3.8.0] — 2026-10-18 · release
 
 **El panel de decisiones se lee de un vistazo y se mueve lo justo.** Aprobado en vivo: el anfitrión ejecuta

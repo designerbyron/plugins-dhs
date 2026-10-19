@@ -464,3 +464,11 @@ El informe del panel usa **un tono por significado** —verde (todo salió), ám
 (fallos), apagado (informativo)—, siempre mezclado con `currentColor` para no bajar del contraste del tema. La
 información **no** depende del color: el texto dice lo mismo. Las líneas entran con una animación de dos píxeles
 que desaparece con `prefers-reduced-motion: reduce`.
+
+### Si el menú «/» no anuncia las filas
+
+Las filas por propuesta (`skill-aprobar-<id>`, `skill-rechazar-<id>`, los ámbitos) se registran en el contexto
+del **agente**, no en el global —una fila global se le ofrece a todas las sesiones—. El montaje prueba dos
+caminos: el `inject` del servicio `commands` y, si no llama, el registro del propio contexto. Si ninguno existe,
+`/skill-propuestas` lo dice con el motivo exacto y las decisiones siguen funcionando tecleando el comando
+entero (`/skill-aprobar <id> --local`), que es la vía que nunca depende del menú.
