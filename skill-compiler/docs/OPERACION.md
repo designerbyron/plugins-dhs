@@ -499,3 +499,47 @@ Se audita **todo lo que puede llegar a servirse o decidirse**: `proposed`, `appr
 versión anterior con el nombre `<id>-<fecha>` y el cuerpo que se aprobó entonces, y medirlo con las reglas de
 hoy produce errores que sólo se arreglarían reescribiendo la evidencia. Se cuenta y se declara en el informe
 (`archivadas: N · no se auditan`), para que su ausencia del total no parezca un olvido.
+
+### Reparar el presupuesto: qué mueve y qué queda
+
+`repair` mueve secciones **enteras** a `references/` y deja el enlace en su sitio. Como el cuerpo es también el
+índice del material, la reparación añade una sección **«Material consultable»** con las referencias que el texto
+no enlaza ya: un enlace que viaja dentro de una sección movida no puede dejar de estar a la vista. El índice
+cuenta en el presupuesto del movimiento, y no se acumula: se refresca en cada pasada.
+
+El bloque es **del motor** y va marcado:
+
+```markdown
+## Material consultable
+<!-- skill-compiler:indice:inicio -->
+- `references/lo-que-no-se-enlaza-arriba.md`
+<!-- skill-compiler:indice:fin -->
+```
+
+Sólo se reemplaza un bloque con esos marcadores y con esa forma. **Una sección del autor llamada «Material
+consultable» no se toca**: no se mueve a `references/`, no se duplica y el reparador lo declara como aviso. Los
+índices escritos por la versión anterior (sin marcadores) se reconocen sólo si son exactamente su huella —
+última sección del cuerpo, frase fija y nada más que rutas —; si no, se conservan.
+
+Si el peso está donde el motor no mira —un preámbulo largo antes de la primera sección, o secciones en `#` de
+primer nivel cuando el motor sólo parte por `##`—, la corrección automática se **bloquea** con
+`body-sin-corte-posible`. Eso no es un fallo: es el límite entre lo mecánico y lo que exige criterio, y se
+resuelve normalizando la estructura (bajar los encabezados de nivel, o llevar el preámbulo a `references/`) y
+volviendo a ejecutar `repair`.
+
+### Corregir una skill sin cambiar su estado ni su ámbito
+
+- **Apagada**: `repair <id>` prepara la corrección y `approve <id> --local --preserve-state` la coloca en
+  `disabled/` —el estado del que salió—, apartando la anterior en `superseded/`. El flag se **niega** en una
+  skill activa: el estado se lee del origen, no se declara a mano, así que no hay forma de encenderla sin querer.
+  En el diario la decisión queda como `actualizada-apagada`.
+- **Global**: `repair <id>` toma como base la copia **publicada** (`base: published`) y `approve <id> --global`
+  vuelve a publicar en la biblioteca. La versión anterior se aparta en `<almacén>/global/superseded/<id>-<fecha>`
+  —dentro de nuestro almacén, no en la biblioteca— y el proyecto sólo guarda la constancia en `published/`: la
+  skill no se localiza ni cambia de ámbito.
+
+Qué garantiza cada puerta: `check` valida la propuesta contra la puerta de calidad; `approve` verifica la
+**huella del contenido** antes y después de mover; `promote` exige además las nueve pruebas y su guarda de
+tamaño; `audit` mide el almacén (sin tocar nada); `security` revisa ids, contenido, árboles y la cadena del
+diario; `doctor` comprueba dependencias, comandos y propiedad. Preparar una propuesta no la activa; aprobarla la
+activa en su ámbito; publicarla la pone en la biblioteca compartida; y `--preserve-state` la deja apagada.

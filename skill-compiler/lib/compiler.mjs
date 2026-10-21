@@ -1568,7 +1568,9 @@ export function move(root, key, id, from, to, { esperada = null } = {}) {
   // Aprobar una actualización NO destruye la versión vigente: la aparta con su fecha y deja rastro,
   // porque en esta biblioteca una skill aprobada es una herramienta de trabajo, no un borrador.
   if (existsSync(target)) {
-    if (to !== 'approved') return { ok: false, reason: `ya existe ${to}/${id}` };
+    // `approved` y `disabled` son los dos estados **vivos**: una corrección los reemplaza apartando el
+    // anterior. Cualquier otro destino no admite reemplazo: su nombre ya existe y pisarlo sería perderlo.
+    if (to !== 'approved' && to !== 'disabled') return { ok: false, reason: `ya existe ${to}/${id}` };
     superseded = join(root, 'projects', key, 'superseded', `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
     mkdirSync(dirname(superseded), { recursive: true });
     renameSync(target, superseded);
@@ -1614,7 +1616,9 @@ export function move(root, key, id, from, to, { esperada = null } = {}) {
 export const approve = (id, key, opts = {}) =>
   (scopeOf(opts) === 'global'
     ? publishToLibrary(id, key, opts)
-    : move(opts.root ?? defaultRoot(), key, id, 'proposed', 'approved', { esperada: opts.esperada ?? null }));
+    // `estado` permite corregir una skill **sin encenderla**: la corrección se valida igual y se coloca en
+    // el estado donde estaba. Sin esto, arreglar una apagada exigía activarla, que es cambiar su contrato.
+    : move(opts.root ?? defaultRoot(), key, id, 'proposed', opts.estado === 'disabled' ? 'disabled' : 'approved', { esperada: opts.esperada ?? null }));
 
 /**
  * Aprobar **para todos los proyectos**: la skill se publica en la biblioteca de usuario, que es la raíz que

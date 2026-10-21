@@ -46,7 +46,12 @@
  *                                                       # (aprobarlo es entero o nada; cada una pasa su puerta)
  *   node bin/skill-compiler.mjs review [--port N]         # página local para aprobar y rechazar
  *
- * Opciones: `--project-key <clave>` para actuar sobre otro proyecto, `--force` para aprobar aunque
+ *   node bin/skill-compiler.mjs approve <id> --preserve-state   # corregir una APAGADA sin encenderla
+ *   node bin/skill-compiler.mjs repair <id> && approve <id> --global
+ *                                                         # corregir una GLOBAL: base published, se republica
+ *
+ * Opciones: `--project-key <clave>` para actuar sobre otro proyecto, `--preserve-state` para devolver la
+ * corrección al estado apagado del que salió, `--force` para aprobar aunque
  * `check` avise (nunca si `check` falla), `--yes` para confirmar una retirada, `--grupo <lote>` para
  * mirar o decidir las propuestas de un lote como lo que son.
  *
@@ -83,6 +88,7 @@ const positional = [];
 for (let i = 1; i < argv.length; i++) {
   const arg = argv[i];
   if (arg === '--project-key') { flags.projectKey = argv[++i]; continue; }
+  if (arg === '--preserve-state') { flags.preserveState = true; continue; }
   if (arg === '--force') { flags.force = true; continue; }
   if (arg === '--yes') { flags.yes = true; continue; }
   // El ámbito: publicar para todos los proyectos es un gesto explícito, y volver a local, otro.
@@ -246,7 +252,7 @@ switch (command) {
     // reimplementa la aprobación (tenía su propia copia de las comprobaciones, y olvidaba el diario y la
     // comprobación de contenido).
     const { approveProposal } = await import('../lib/commands.mjs');
-    const r = approveProposal({ root, key, id, force: flags.force === true, scope: ambitoPedido });
+    const r = approveProposal({ root, key, id, force: flags.force === true, scope: ambitoPedido, preservarEstado: flags.preserveState === true });
     process.stdout.write(`${r.text}\n`);
     if (ambitoPedido === 'project') process.stdout.write(`Para que la vean todos tus proyectos: approve ${id} --global\n`);
     process.exit(r.kind === 'success' ? 0 : 1);
@@ -813,6 +819,14 @@ switch (command) {
       lineas.push(`  puerta de la propuesta: ${check.ok ? 'en verde' : `ROJA — ${check.errors[0]}`}`);
       lineas.push('', `  siguiente: node bin/skill-compiler.mjs promote ${id} --nivel ${r.nivel}   (activar, con pruebas)`);
       lineas.push(`             node bin/skill-compiler.mjs show ${id}                        (leerla entera)`);
+    }
+    if (r.notas?.length) {
+      lineas.push('', '  avisos del motor:');
+      for (const nota of r.notas) {
+        lineas.push(nota === 'seccion-ajena'
+          ? '    · el cuerpo ya tiene una sección «Material consultable» del autor: se respeta tal cual y no se añade otra; revisa a mano si falta alguna referencia'
+          : `    · ${nota}`);
+      }
     }
     if (r.sinReparacion?.length) {
       lineas.push('', '  no reparable por el motor:');

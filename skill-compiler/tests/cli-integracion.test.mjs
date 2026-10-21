@@ -1,0 +1,155 @@
+/**
+ * La CLI, de verdad: subproceso sobre una caja de arena.
+ *
+ * Las pruebas del motor llaman a las funciones; esto ejecuta `bin/skill-compiler.mjs` como lo ejecuta una
+ * persona, con `DSH_HOME` apuntando a la arena, y comprueba el **estado en disco**. Cubre lo que sólo se puede
+ * romper en el borde: el `--preserve-state` que corrige una skill apagada sin encenderla, el guard que impide
+ * usarlo en una activa, y el camino global (publicar, reparar desde la copia publicada y volver a publicar)
+ * conservando la ubicación.
+ */
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { after, describe, it } from 'node:test';
+
+import { approve, disable, propose, projectKey } from '../lib/compiler.mjs';
+import { reparar } from '../lib/repair.mjs';
+import { cleanupSandboxes, sandbox } from './helpers.mjs';
+
+after(cleanupSandboxes);
+
+const CWD = 'C:\\xampp\\htdocs\\saas-corporative';
+const KEY = projectKey(CWD);
+const CLI = join(process.cwd(), 'bin', 'skill-compiler.mjs');
+
+const cuerpoLargo = (titulo) => [
+  '## Procedimiento', '',
+  'Se lee el registro y se anota la cifra antes de decidir, nunca después.', '',
+  `## ${titulo}`, '',
+  'Se mide el estado, se anota la cifra y se contrasta con el sistema antes de tocar nada. '.repeat(150), '',
+  '## Cierre', '',
+  'Se firma el parte con la hora y la persona que lo hizo.', '',
+].join('\n');
+
+function cli(arena, ...args) {
+  const r = spawnSync(process.execPath, [CLI, ...args], {
+    cwd: process.cwd(),
+    env: { ...process.env, DSH_HOME: arena.base },
+    encoding: 'utf8',
+  });
+  return { code: r.status, salida: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+}
+
+/** Una skill viva (aprobada o apagada) en la arena, por la vía real del plugin. */
+const cuerpoCorto = () => [
+  '## Procedimiento', '',
+  'Se lee el registro del turno, se anota la cifra y se contrasta con el sistema antes de decidir nada.',
+  'Cuando la cifra no cuadra, se para y se avisa: decidir con un número inventado es peor que no decidir.',
+  'El parte se firma con la hora y con la persona que lo hizo, para que la decisión tenga dueño.',
+  'Si el registro no se puede leer, no se toca el turno: se documenta el bloqueo y se escala al responsable.', '',
+  '## Cierre', '',
+  'Se firma el parte con la hora y la persona que lo hizo.', '',
+].join('\n');
+
+function sembrar(arena, id, { apagada = false, publicada = false, tema = 'inventario del almacén', corta = false, descripcion = null, cuando = null } = {}) {
+  const hecho = propose({
+    id,
+    description: descripcion ?? `Procedimiento de ${tema}: se mide su estado y se cierra con la cifra delante.`,
+    whenToUse: cuando ?? `Cuando haya que ocuparse de ${tema} y falte la cifra medida que lo decide.`,
+    body: corta ? cuerpoCorto() : cuerpoLargo('Medición'),
+  }, { root: arena.root, curated: arena.curated, cwd: CWD });
+  assert.equal(hecho.status, 'proposed', JSON.stringify(hecho.errors ?? hecho.conflicts));
+  const movido = approve(id, KEY, { root: arena.root, curated: arena.curated, ...(publicada ? { scope: 'global' } : {}) });
+  assert.equal(movido.ok, true, movido.reason);
+  if (apagada) {
+    const apagado = disable(id, KEY, { root: arena.root });
+    assert.equal(apagado.ok, true, apagado.reason);
+  }
+}
+
+const cuerpoDe = (dir) => readFileSync(join(dir, 'SKILL.md'), 'utf8').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
+const bytes = (dir) => Buffer.byteLength(cuerpoDe(dir));
+
+describe('CLI real (subproceso, arena) · corregir sin cambiar el estado', () => {
+  it('una skill apagada se repara y SIGUE apagada; no aparece en approved/', () => {
+    const arena = sandbox();
+    const id = 'apagada-que-se-corrige';
+    sembrar(arena, id, { apagada: true });
+    const dirApagada = join(arena.root, 'projects', KEY, 'disabled', id);
+    assert.equal(bytes(dirApagada) > 8000, true, 'parte por encima del presupuesto');
+
+    const r = cli(arena, 'repair', id, '--project-key', KEY);
+    assert.equal(r.code, 0, r.salida);
+    assert.equal(existsSync(join(arena.root, 'projects', KEY, 'proposed', id)), true, 'deja propuesta');
+
+    const a = cli(arena, 'approve', id, '--local', '--preserve-state', '--project-key', KEY);
+    assert.equal(a.code, 0, a.salida);
+    assert.match(a.salida, /Actualizada \(sigue apagada\)/);
+    assert.equal(existsSync(dirApagada), true, 'sigue en disabled/');
+    assert.equal(bytes(dirApagada) <= 8000, true, 'y ya cabe');
+    assert.equal(existsSync(join(arena.root, 'projects', KEY, 'approved', id)), false, 'no se ha encendido');
+    assert.equal(readdirSync(join(arena.root, 'projects', KEY, 'superseded')).some((x) => x.startsWith(id)), true, 'la anterior se apartó');
+  });
+
+  it('`--preserve-state` sobre una skill activa es un error, no un cambio de estado silencioso', () => {
+    const arena = sandbox();
+    const id = 'activa-sin-apagar';
+    sembrar(arena, id);
+    assert.equal(cli(arena, 'repair', id, '--project-key', KEY).code, 0);
+    const a = cli(arena, 'approve', id, '--local', '--preserve-state', '--project-key', KEY);
+    assert.notEqual(a.code, 0);
+    assert.match(a.salida, /sólo tiene sentido con una skill apagada/);
+    assert.equal(bytes(join(arena.root, 'projects', KEY, 'approved', id)) > 8000, true, 'no se ha tocado la activa');
+  });
+});
+
+describe('CLI real (subproceso, arena) · corregir una skill global sin moverla', () => {
+  it('repara desde la copia publicada y vuelve a publicar en el mismo sitio, guardando la anterior', () => {
+    const arena = sandbox();
+    const id = 'global-que-se-corrige';
+    sembrar(arena, id, { publicada: true });
+    const cartel = join(arena.curated, id);
+    assert.equal(existsSync(cartel), true, 'vive en la biblioteca');
+    assert.equal(bytes(cartel) > 8000, true, 'y pasa del presupuesto');
+
+    const r = cli(arena, 'repair', id, '--project-key', KEY);
+    assert.equal(r.code, 0, r.salida);
+    assert.match(r.salida, /base: published/, 'la base es la copia global, no una local');
+
+    const a = cli(arena, 'approve', id, '--global', '--project-key', KEY);
+    assert.equal(a.code, 0, a.salida);
+    assert.equal(bytes(cartel) <= 8000, true, 'la global ya cabe');
+    assert.equal(existsSync(join(arena.root, 'projects', KEY, 'published', id)), true, 'la propuesta queda como publicada');
+    assert.equal(existsSync(join(arena.root, 'projects', KEY, 'approved', id)), false, 'no se ha localizado');
+    const archivadas = readdirSync(join(arena.root, 'global', 'superseded'));
+    assert.equal(archivadas.some((x) => x.startsWith(id)), true, 'la versión anterior de la global queda recuperable');
+    assert.equal(bytes(join(arena.root, 'global', 'superseded', archivadas.find((x) => x.startsWith(id)))) > 8000, true, 'y entera');
+  });
+});
+
+describe('CLI real (subproceso, arena) · el motor dice la verdad', () => {
+  it('`audit` sin avisos devuelve 0 y lo dice; con el cuerpo largo, 0 pero con el aviso contado', () => {
+    const arena = sandbox();
+    sembrar(arena, 'conforme-a-la-primera', { corta: true });
+    const limpio = cli(arena, 'audit');
+    assert.equal(limpio.code, 0, limpio.salida);
+    assert.match(limpio.salida, /WARN 0/);
+
+    sembrar(arena, 'larga-sin-reparar', {
+      descripcion: 'Rotación de certificados TLS: renovar la cadena de confianza y comprobar el vencimiento con la fecha delante.',
+      cuando: 'Cuando venza un certificado del servidor y haya que renovarlo sin cortar el servicio.',
+    });
+    const conAviso = cli(arena, 'audit');
+    assert.equal(conAviso.code, 0);
+    assert.match(conAviso.salida, /WARN 1/);
+    assert.match(conAviso.salida, /body-budget/);
+  });
+
+  it('`repair` de un id que no existe sale con código distinto de cero y no escribe nada', () => {
+    const arena = sandbox();
+    const r = cli(arena, 'repair', 'no-existe-esta-skill', '--project-key', KEY);
+    assert.notEqual(r.code, 0);
+    assert.match(r.salida, /no hay ninguna skill viva/);
+  });
+});

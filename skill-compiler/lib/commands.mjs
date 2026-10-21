@@ -186,7 +186,7 @@ function noEstáElId(wanted, key, root, { que = 'propuesta' } = {}) {
 /** El diario del proyecto: una sola ruta, para que tres caminos no inventen tres. */
 const diarioDelProyecto = (root, key) => join(root, 'projects', key, 'journal.jsonl');
 
-export function approveProposal({ root = defaultRoot(), key, id, force = false, scope = 'project', catalog } = {}) {
+export function approveProposal({ root = defaultRoot(), key, id, force = false, scope = 'project', catalog, preservarEstado = false } = {}) {
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
   if (wanted === '') return bad('Falta el id. Uso: /skill-aprobar <id> [--force]');
@@ -240,7 +240,15 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   // `meta.json`, que el movimiento reescribe a propósito— y se pasa a `approve`, que la verifica ANTES de
   // renombrar: si alguien cambió la propuesta en medio, no se mueve nada y se dice qué fichero difiere.
   const huellaAntes = huellaDeContenido(check.dir);
-  const moved = approve(wanted, key, { root, scope, esperada: huellaAntes });
+  // Corregir una skill apagada **sin encenderla**: el estado se lee del origen, no se pide a mano, así que no
+  // hay forma de «activarla sin querer» al repararla.
+  // El estado **vivo** de la skill (aprobada o apagada); `locate` mira también lo propuesto y aquí lo que
+  // importa es dónde se sirve —o se dejaría de servir—.
+  const estadoOrigen = ['approved', 'disabled'].find((estado) => existsSync(join(root, 'projects', key, estado, wanted))) ?? locate(wanted, key, { root });
+  if (preservarEstado && estadoOrigen !== 'disabled') {
+    return bad(`--preserve-state sólo tiene sentido con una skill apagada: «${wanted}» está en ${estadoOrigen ?? 'ningún estado vivo'}.`);
+  }
+  const moved = approve(wanted, key, { root, scope, esperada: huellaAntes, ...(preservarEstado ? { estado: 'disabled' } : {}) });
   if (!moved.ok) return bad(`No se pudo aprobar ${wanted}: ${moved.reason}`);
 
   // El catálogo acaba de cambiar: sin este aviso, la skill no llega al agente hasta reiniciar.
@@ -252,7 +260,7 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   anotarEntradaEnDiario(diarioDelProyecto(root, key), {
     id: wanted,
     key,
-    decision: scope === 'global' ? 'publicada' : 'aprobada',
+    decision: scope === 'global' ? 'publicada' : (preservarEstado ? 'actualizada-apagada' : 'aprobada'),
     ambito: scope,
     por: 'humano',
     canal: 'comando',
@@ -278,12 +286,14 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   }
 
   return ok([
-    `Activa: ${wanted} [${key}]`,
+    preservarEstado ? `Actualizada (sigue apagada): ${wanted} [${key}]` : `Activa: ${wanted} [${key}]`,
     `  ${moved.path}`,
     ...(moved.superseded ? [`  versión anterior apartada en ${moved.superseded}`] : []),
     ...(check.warnings.length > 0 ? ['', 'Aprobada con avisos:', ...check.warnings.map((w) => `  · ${w}`)] : []),
     '',
-    'Ya la sirve el catálogo de este proyecto: el agente la ve en su siguiente paso, sin reiniciar.',
+    preservarEstado
+      ? 'Sigue apagada: no se sirve al modelo. Se enciende con /skill-habilitar cuando lo decidas.'
+      : 'Ya la sirve el catálogo de este proyecto: el agente la ve en su siguiente paso, sin reiniciar.',
     `Invocarla tú: /${wanted}`,
     ...remaining(root, key),
   ].join('\n'));

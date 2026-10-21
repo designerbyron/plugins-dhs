@@ -538,46 +538,136 @@ describe('los nombres de las referencias: únicos, legibles y estables', () => {
   });
 });
 
-describe('los dos casos reales del defecto, en una arena aislada', () => {
-  const casos = ['design-taste-frontend', 'imagegen-frontend-web'];
-  const estados = ['approved', 'disabled', 'published', 'proposed'];
-
-  for (const id of casos) {
-    it(`${id}: repara sin chocar con su propio material y sin perder un fichero`, () => {
-      const raiz = process.env.HOME ? join(process.env.HOME, '.dsh') : null;
-      if (raiz === null) return;
-      const proyectos = join(raiz, 'skill-compiler', 'projects');
-      if (!existsSync(proyectos)) return;
-      const key = readdirSync(proyectos).find((k) => estados.some((e) => existsSync(join(proyectos, k, e, id))));
-      if (key === undefined) return; // el almacén de esta máquina no lo tiene: caso sin cubrir, declarado
-
-      // Una copia de arena con la skill tal cual (nunca se toca la real).
-      const arena = sandbox();
-      for (const estado of estados) {
-        const origen = join(proyectos, key, estado, id);
-        if (existsSync(origen)) cpSync(origen, join(arena.root, 'projects', key, estado, id), { recursive: true });
-      }
-      const viva = join(arena.root, 'projects', key, 'approved', id);
-      const referenciasAntes = existsSync(join(viva, 'references'))
-        ? readdirSync(join(viva, 'references')).sort().map((f) => [f, readFileSync(join(viva, 'references', f), 'utf8')])
-        : [];
-
-      const r = reparar(id, key, { root: arena.root, curated: arena.curated, cwd: join(arena.root, 'projects', key, 'approved', id) });
-      assert.equal(r.status, 'proposed', r.reason ?? '');
-
-      const propuesta = join(arena.root, 'projects', key, 'proposed', id);
-      const refsPropuesta = readdirSync(join(propuesta, 'references')).sort();
-      assert.equal(new Set(refsPropuesta).size, refsPropuesta.length, 'sin rutas repetidas: la puerta lo rechazaría');
-      for (const [nombre, contenido] of referenciasAntes) {
-        const destino = join(propuesta, 'references', nombre);
-        assert.equal(existsSync(destino), true, `el material que la skill ya tenía sigue ahí: ${nombre}`);
-        assert.equal(readFileSync(destino, 'utf8'), contenido, `y sin cambiar: ${nombre}`);
-      }
-      // El conocimiento del cuerpo, entero: cada sección movida tiene su fichero con su texto.
-      for (const movida of r.movidas) {
-        assert.equal(existsSync(join(propuesta, movida.ruta)), true, `falta el material de «${movida.titulo}»`);
-      }
-      assert.equal(existsSync(join(viva, 'references', 'reglas-locales-que-anulan-el-original-le.md')) , referenciasAntes.some(([n]) => n === 'reglas-locales-que-anulan-el-original-le.md'), 'el fichero del choque se conserva tal cual si existía');
+describe('el índice del material sobrevive a la corrección (arena sintética)', () => {
+  // El defecto medido en el mantenimiento del 2026-10-21: una sección que enlazaba `references/viejo.md`
+  // viajó a `references/nueva.md`, y el cuerpo dejó de listar `viejo.md` (design-taste: 11 enlaces → 1). El
+  // conocimiento seguía a dos saltos, pero la skill dejaba de decir dónde. Aquí se fija el contrato: **toda**
+  // referencia de la skill queda alcanzable desde el cuerpo, o enlazada en el texto o listada en el índice.
+  it('el cuerpo sigue siendo el índice de TODAS sus referencias', () => {
+    const arena = sandbox();
+    const id = 'indice-del-material';
+    const seccionGrande = 'Se midió el estado y se anotó la cifra antes de decidir.\n\n'.repeat(180);
+    const cuerpo = [
+      '## Procedimiento', '', 'Se lee el registro y se anota la cifra.', '',
+      '## Casos raros', '', 'Cuando el registro no se puede leer, se para.', '',
+      '## Detalle largo', '', seccionGrande,
+      'Como decía el material del origen, ver `references/viejo.md` para el resto.', '',
+      '## Cierre', '', 'Se firma el parte con la hora.', '',
+    ].join('\n');
+    const hecho = propose({
+      id,
+      description: 'Procedimiento con material de consulta que sobrevive a la corrección.',
+      whenToUse: 'Cuando haya que medir antes de decidir y el detalle viva en referencias.',
+      body: cuerpo,
+    }, {
+      root: arena.root, curated: arena.curated, cwd: CWD,
+      references: [{ path: 'references/viejo.md', content: '# Viejo\n\nEl detalle heredado que no se puede perder.\n' }],
     });
-  }
+    assert.equal(hecho.status, 'proposed', JSON.stringify(hecho.errors ?? hecho.conflicts));
+    assert.equal(approve(id, KEY, { root: arena.root, curated: arena.curated }).ok, true);
+
+    const r = reparar(id, KEY, { root: arena.root, curated: arena.curated, cwd: CWD });
+    assert.equal(r.status, 'proposed', r.reason ?? '');
+    const propuesta = join(arena.root, 'projects', KEY, 'proposed', id);
+    const cuerpoPropuesta = readFileSync(join(propuesta, 'SKILL.md'), 'utf8');
+    const existentes = readdirSync(join(propuesta, 'references')).sort();
+    for (const nombre of existentes) {
+      assert.match(cuerpoPropuesta, new RegExp(`references/${nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), `alcanzable desde el cuerpo: ${nombre}`);
+    }
+    assert.equal(existentes.includes('viejo.md'), true, 'el material previo sigue ahí');
+    // Byte a byte: lo que ya estaba no se toca ni se reformatea.
+    assert.equal(readFileSync(join(propuesta, 'references', 'viejo.md'), 'utf8'), '# Viejo\n\nEl detalle heredado que no se puede perder.\n', 'la referencia previa conserva sus bytes');
+    // Y cada sección movida viaja íntegra: su fichero contiene su texto, tal cual.
+    const cuerpoBase = readFileSync(join(arena.root, 'projects', KEY, 'approved', id, 'SKILL.md'), 'utf8');
+    const seccionDe = (texto, titulo) => {
+      const i = texto.indexOf(`## ${titulo}`);
+      if (i === -1) return null;
+      const resto = texto.slice(i);
+      const siguiente = resto.indexOf('\n## ', 1);
+      return (siguiente === -1 ? resto : resto.slice(0, siguiente)).trim();
+    };
+    for (const movida of r.movidas) {
+      const destino = readFileSync(join(propuesta, movida.ruta), 'utf8');
+      assert.equal(destino.trim(), seccionDe(cuerpoBase, movida.titulo), `la sección «${movida.titulo}» viaja entera y sin retoques`);
+    }
+    assert.equal(Buffer.byteLength(cuerpoPropuesta.replace(/^---[\s\S]*?---\n/, '')) <= 8000, true, 'y el cuerpo cabe');
+  });
+
+});
+
+describe('el índice propio no puede confundirse con prosa del autor', () => {
+  const relleno = (n) => 'Se midió el estado y se anotó la cifra antes de decidir. '.repeat(n);
+
+  it('una sección del autor llamada «Material consultable», con secciones detrás, sobrevive intacta', () => {
+    const autor = '## Material consultable\n\nEsto lo escribió el autor: el catálogo de marca vive en Drive, no aquí.\n\n- pieza A\n- pieza B\n';
+    const cuerpo = `# Título\n\n${relleno(60)}\n\n## Procedimiento\n\n${relleno(80)}\n\n${autor}\n## Cierre\n\nSe firma el parte con la hora.\n`;
+    const mov = moverMaterialPesado({ id: 'x', body: cuerpo, budget: 8000, objetivo: 6000 });
+    assert.notEqual(mov, null, 'hay material que mover');
+    assert.equal(mov.body.includes(autor.trim()), true, 'la sección del autor sigue entera y byte a byte');
+    assert.match(mov.body, /^## Cierre$/m, 'y la sección que venía después sigue ahí');
+    assert.equal((mov.body.match(/## Material consultable/g) ?? []).length, 1, 'no se añade una segunda con el mismo nombre');
+    assert.deepEqual(mov.avisos, ['seccion-ajena'], 'y el motor lo declara en vez de callarse');
+  });
+
+  it('el bloque propio se refresca en cada pasada: uno solo y sin crecer', () => {
+    const cuerpo = `# T\n\n${relleno(200)}\n\n## Uno\n\n${relleno(20)}\n\n## Dos\n\n${relleno(20)}\n`;
+    const uno = moverMaterialPesado({ id: 'y', body: cuerpo, budget: 8000, objetivo: 6000, nombresOcupados: ['viejo'] });
+    assert.notEqual(uno, null);
+    const marcas = (txt) => (txt.match(/<!-- skill-compiler:indice:inicio -->/g) ?? []).length;
+    assert.equal(marcas(uno.body), 1, 'un bloque, no dos');
+    const lista = (txt) => (txt.match(/^- `references\/[^`]+\.md`$/gm) ?? []).sort();
+    const primera = lista(uno.body);
+    // Segunda pasada sobre el resultado, forzando otro movimiento.
+    const dos = moverMaterialPesado({ id: 'y', body: uno.body, budget: 1, objetivo: 5000, nombresOcupados: ['viejo'] });
+    assert.notEqual(dos, null);
+    assert.equal(marcas(dos.body), 1, 'sigue habiendo un solo bloque');
+    assert.deepEqual(lista(dos.body), primera, 'y la lista es la misma: se refresca, no se acumula');
+    // El bloque no crece: misma cabecera, misma lista, mismos marcadores. (El cuerpo puede no bajar si no queda
+    // nada grande que mover; lo que no puede es engordar por el índice.)
+    const bloque = (txt) => txt.slice(txt.indexOf('## Material consultable'), txt.indexOf('<!-- skill-compiler:indice:fin -->'));
+    assert.equal(Buffer.byteLength(bloque(dos.body)), Buffer.byteLength(bloque(uno.body)), 'el índice ocupa lo mismo en las dos pasadas');
+  });
+
+  it('con nombres de referencia muy largos, el cuerpo no se pasa del presupuesto en silencio', () => {
+    const largo = 'r'.repeat(130);
+    const cuerpo = `# T\n\n${relleno(80)}\n\n## Uno\n\n${relleno(20)}\n\n## Dos\n\n${relleno(20)}\n`;
+    const mov = moverMaterialPesado({ id: 'z', body: cuerpo, budget: 8000, objetivo: 6000, nombresOcupados: [largo] });
+    // O cabe, o el motor no propone: lo que no puede es devolver un cuerpo por encima del umbral.
+    assert.ok(mov === null || mov.bodyBytes <= 8000, `bodyBytes=${mov?.bodyBytes}`);
+  });
+
+  it('dos secciones con el mismo título van a rutas distintas y dentro de references/', () => {
+    const cuerpo = `# T\n\n${relleno(80)}\n\n## Igual\n\n${relleno(30)}\n\n## Igual\n\n${relleno(30)}\n`;
+    const mov = moverMaterialPesado({ id: 'w', body: cuerpo, budget: 8000, objetivo: 5000 });
+    const rutas = (mov?.references ?? []).map((r) => r.path);
+    assert.equal(new Set(rutas).size, rutas.length, 'sin rutas repetidas');
+    for (const r of rutas) {
+      assert.match(r, /^references\/[^/]+\.md$/, `ruta segura: ${r}`);
+      assert.equal(r.includes('..'), false);
+    }
+  });
+});
+
+describe('migración del índice de la versión anterior', () => {
+  const relleno = (n) => 'Se midió el estado y se anotó la cifra antes de decidir. '.repeat(n);
+
+  it('reconoce la huella exacta del índice viejo y la reemplaza por el bloque marcado', () => {
+    const viejo = '## Material consultable\n\nAdemás de las enlazadas arriba, en `references/` están: `references/a.md` · `references/b.md`';
+    const cuerpo = `# T\n\n${relleno(200)}\n\n## Uno\n\n${relleno(20)}\n\n## Dos\n\n${relleno(20)}\n\n${viejo}\n`;
+    const mov = moverMaterialPesado({ id: 'm', body: cuerpo, budget: 8000, objetivo: 6000, nombresOcupados: ['a', 'b'] });
+    assert.notEqual(mov, null);
+    assert.equal((mov.body.match(/<!-- skill-compiler:indice:inicio -->/g) ?? []).length, 1, 'un bloque marcado');
+    assert.equal(mov.body.includes('Además de las enlazadas arriba'), false, 'el formato viejo se sustituye, no se duplica');
+    assert.match(mov.body, /`references\/a\.md`/);
+    assert.equal(mov.avisos.length, 0, 'sin ambigüedad: era exactamente su huella');
+  });
+
+  it('si la sección con esa frase tiene algo más, es del autor: se conserva y se declara', () => {
+    const autor = '## Material consultable\n\nAdemás de las enlazadas arriba, en `references/` están: `references/a.md`\n\nNota del autor: esto lo mantengo a mano.';
+    const cuerpo = `# T\n\n${relleno(200)}\n\n## Uno\n\n${relleno(20)}\n\n## Dos\n\n${relleno(20)}\n\n${autor}\n`;
+    const mov = moverMaterialPesado({ id: 'n', body: cuerpo, budget: 8000, objetivo: 6000, nombresOcupados: ['a'] });
+    assert.notEqual(mov, null);
+    assert.equal(mov.body.includes(autor.trim()), true, 'la sección del autor sigue entera');
+    assert.deepEqual(mov.avisos, ['seccion-ajena'], 'y se declara la ambigüedad en vez de borrarla');
+  });
 });

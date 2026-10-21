@@ -35,6 +35,49 @@ que faltaba no era ejecutar, era **creer la evidencia correcta**.
   `kind: 'success'` sin veredicto **no** es éxito, y que sin filas no se pinta una cifra. **48/48** en ese
   fichero; **593/593** en la suite, hermética verde.
 
+## [3.9.0] — 2026-10-21
+
+**El cuerpo de una skill es también el índice de su material: mover una sección ya no deja referencias a la vista
+de nadie.** Defecto medido durante el mantenimiento del almacén: `moverMaterialPesado` mueve secciones enteras, y
+un enlace que vivía dentro de una sección movida **viaja con ella**; el cuerpo deja de listar referencias que sí
+existen. En el caso real, `design-taste-frontend` pasó de 11 enlaces en el cuerpo a **1** y `imagegen-frontend-web`
+de 6 a 5. El conocimiento seguía a dos saltos, pero la skill dejaba de decir dónde estaba.
+
+### Añadido
+
+- **Índice «Material consultable»**: tras mover, el cuerpo recibe una sección con las referencias que el texto
+  **no** enlaza ya —la unión de las dos cosas es todo el material—, de modo que ninguna queda sólo alcanzable
+  desde dentro de otra. Es una sola lista, no una por sección, y se refresca en cada pasada en vez de acumularse.
+- **El bloque lleva marcadores propios** (`<!-- skill-compiler:indice:inicio -->` / `…:fin`), y sólo se reemplaza
+  el bloque con esos marcadores y la forma exacta que escribe el motor. Antes se borraba desde cualquier
+  `## Material consultable` hasta el final: el título lo puede usar el autor, y eso era borrar prosa legítima.
+  Una sección del autor con ese nombre se **respeta** (no se mueve, no se duplica) y el aviso viaja a quien
+  repara.
+- **Migración del índice anterior**: se reconoce sólo si es exactamente su huella (última sección, frase fija,
+  nada más que rutas). Cualquier otra cosa se conserva y se declara ambigua.
+- **El presupuesto se mide sobre el cuerpo final real** —marcadores y lista incluidos—, no con una constante
+  aproximada por referencia: con nombres largos, la constante se quedaba corta y el cuerpo salía del umbral en
+  silencio.
+
+### Añadido
+
+- **`approve <id> --local --preserve-state`**: corrige una skill **apagada sin encenderla**. El estado se lee
+  del origen y el flag se niega en una activa; la corrección vuelve a `disabled/` y la anterior se aparta. El
+  diario la registra como `actualizada-apagada`.
+- **Corrección de una skill global sin moverla**: `repair` toma como base la copia publicada (`base: published`)
+  y `approve --global` republica; la versión anterior se archiva en nuestro almacén
+  (`global/superseded/<id>-<fecha>`) y el proyecto sólo guarda `published/`. No se localiza ni cambia de ámbito.
+
+### Corregido
+
+- El índice se retiraba con una expresión que casaba en el primer salto de línea y dejaba los puntos colgando: cada
+  pasada añadía otra lista y el cuerpo crecía en vez de bajar.
+
+### Pruebas
+
+- `tests/repair.test.mjs`: caso de arena con una sección que enlaza material previo — tras reparar, **toda**
+  referencia de la skill es alcanzable desde el cuerpo y el cuerpo cabe. **592/592** y hermética verde.
+
 ## [3.8.5] — 2026-10-19 · release
 
 **La auditoría deja de contar el archivo como si fueran skills a arreglar: 7 errores falsos desaparecen.**

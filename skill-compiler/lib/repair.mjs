@@ -178,7 +178,13 @@ export function topeDeMovimiento(bytesAntes, { umbral = 24000, objetivo = null, 
 export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000, topeBytes = Infinity, nombresOcupados = [] }) {
   const original = String(body ?? '');
   if (Buffer.byteLength(original) <= budget) return null;
-  const secciones = seccionesDe(original).sort((a, b) => b.bytes - a.bytes);
+  /**
+   * La sección «Material consultable» **no se mueve**: es el índice, del autor o del motor. Moverla dejaba sus
+   * marcadores huérfanos y, en el caso del autor, convertía su índice en material de consulta —cuando lo que
+   * quiere es estar a la vista—. Se queda donde está y se declara.
+   */
+  const esIndice = (s) => /^material consultable$/i.test(String(s.titulo ?? '').trim());
+  const secciones = seccionesDe(original).filter((s) => !esIndice(s)).sort((a, b) => b.bytes - a.bytes);
   if (secciones.length < 2) return null; // sin una segunda sección no hay nada que mover sin dejar el cuerpo vacío
   const movidas = [];
   let restante = original;
@@ -187,8 +193,93 @@ export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000
   // Lo que ya está ocupado en la skill (sus `references/…` de siempre) cuenta igual que lo que esta pasada
   // va creando: un nombre libre solo lo es si no lo usa nadie.
   const ocupados = new Set(nombresOcupados);
+  /**
+   * El índice **propio** del motor va entre marcadores estables. Sin ellos, reemplazarlo exigía adivinar por el
+   * título de la sección —y el título lo puede usar el autor para su propio contenido: se medía borrando desde
+   * el primer `## Material consultable` hasta el final del cuerpo, que es borrar prosa legítima—.
+   *
+   * Sólo se considera nuestro un bloque con los DOS marcadores, en orden, y con la forma exacta que escribe
+   * este motor (encabezado + una línea de lista). Cualquier otra cosa se deja intacta.
+   */
+  const MARCA_INICIO = '<!-- skill-compiler:indice:inicio -->';
+  const MARCA_FIN = '<!-- skill-compiler:indice:fin -->';
+  const CUERPO_BLOQUE = /^(?:-\s+`references\/[^`\n]+\.md`\s*\n?)+$/;
+
+  /**
+   * Rango del bloque propio, si existe y es exactamente eso. El marcador de inicio va **dentro** del bloque,
+   * en la línea siguiente al encabezado: si fuera antes del `##`, el texto de la sección anterior lo incluiría
+   * —`seccionesDe` corta en el `##`— y al mover esa sección se llevaría el marcador dejando el bloque a medias
+   * (medido: `inicio` desaparecía y `fin` quedaba colgando).
+   */
+  const rangoPropio = (texto) => {
+    const i = texto.indexOf(MARCA_INICIO);
+    if (i === -1) return null;
+    const j = texto.indexOf(MARCA_FIN, i);
+    if (j === -1) return null;
+    const cabecera = '## Material consultable\n';
+    const desde = texto.lastIndexOf(cabecera, i);
+    if (desde === -1 || i !== desde + cabecera.length) return null;
+    const fin2 = texto.indexOf('\n', j);
+    const bloque = texto.slice(i + MARCA_INICIO.length, j).replace(/^\n+|\n+$/g, '');
+    if (!CUERPO_BLOQUE.test(`${bloque}\n`)) return null; // marcadores con otra cosa dentro: no se toca
+    return { desde, hasta: fin2 === -1 ? texto.length : fin2 + 1 };
+  };
+
+  /**
+   * Migración del índice de la versión anterior (sin marcadores). Sólo se reconoce si es **exactamente** la
+   * huella que escribía aquel motor: la última sección del cuerpo, un solo párrafo con la frase fija y luego
+   * nada más que nombres de referencia. Si hay una sola diferencia, es del autor y se preserva.
+   */
+  const FRASE_HEREDADA = 'Además de las enlazadas arriba, en `references/` están: ';
+  const rangoHeredado = (texto) => {
+    const marca = `## Material consultable`;
+    const i = texto.lastIndexOf(marca);
+    if (i === -1) return null;
+    const resto = texto.slice(i);
+    const lineas = resto.split('\n');
+    if (lineas[0].trim() !== marca) return null;
+    const cuerpo = lineas.slice(1).join('\n').trim();
+    if (!cuerpo.startsWith(FRASE_HEREDADA)) return null;
+    const lista = cuerpo.slice(FRASE_HEREDADA.length).trim();
+    if (!/^`references\/[^`]+\.md`(?: · `references\/[^`]+\.md`)*$/.test(lista)) return null;
+    return { desde: i, hasta: texto.length };
+  };
+
+  const quitarIndice = (texto) => {
+    const propio = rangoPropio(texto);
+    if (propio !== null) return texto.slice(0, propio.desde) + texto.slice(propio.hasta);
+    const heredado = rangoHeredado(texto);
+    if (heredado !== null) return texto.slice(0, heredado.desde);
+    return texto; // hay una sección con ese título, pero no es nuestra: se queda como está
+  };
+
+  /** ¿Hay una sección del autor llamada igual? Entonces no se añade otra: se avisa. */
+  const haySeccionAjena = (texto) => /^##\s+Material consultable\s*$/m.test(texto) && rangoPropio(texto) === null && rangoHeredado(texto) === null;
+
+  const avisos = [];
+  /**
+   * Devuelve el cuerpo con el índice refrescado. El presupuesto se mide sobre **este** texto —marcadores y
+   * lista incluidos—, no sobre una estimación por referencia: con nombres largos, una constante se queda corta
+   * y el cuerpo sale del umbral en silencio.
+   */
+  const indiceCon = (cuerpo) => {
+    const limpio = quitarIndice(cuerpo).replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
+    if (haySeccionAjena(limpio)) {
+      if (!avisos.includes('seccion-ajena')) avisos.push('seccion-ajena');
+      return `${limpio}\n`;
+    }
+    const enlazadas = new Set([...limpio.matchAll(/references\/([^\s)`'",;:]+)\.md/g)].map((m) => m[1].replace(/\.md$/, '')));
+    const todas = [...new Set([...nombresOcupados.map((n) => String(n).replace(/\.md$/i, '')), ...references.map((r) => r.path.replace(/^references\//, '').replace(/\.md$/i, ''))])].sort();
+    const huerfanas = todas.filter((n) => !enlazadas.has(n));
+    if (huerfanas.length === 0) return `${limpio}\n`;
+    const lista = huerfanas.map((n) => `- \`references/${n}.md\``).join('\n');
+    return `${limpio}\n\n## Material consultable\n${MARCA_INICIO}\n${lista}\n${MARCA_FIN}\n`;
+  };
+
   for (const seccion of secciones) {
-    if (Buffer.byteLength(restante) <= objetivo) break;
+    // El objetivo se mide sobre el cuerpo final **real**, con sus marcadores y su lista. Una constante por
+    // referencia se queda corta con nombres largos y deja el cuerpo fuera del umbral sin que nadie lo note.
+    if (Buffer.byteLength(indiceCon(restante)) <= objetivo) break;
     // El cuerpo no puede quedarse sin procedimiento: como mínimo tiene que quedar una sección.
     if (seccionesDe(restante).length < 2) break;
     // El tope acota la corrección **entera**: pasarlo la haría impromovible, y preparar algo que la puerta
@@ -204,8 +295,17 @@ export function moverMaterialPesado({ id, body, budget = 24000, objetivo = 20000
     bytesMovidos += seccion.bytes;
   }
   if (movidas.length === 0) return null;
+
+  // El cuerpo es también el **índice** del material. Un enlace que vivía dentro de una sección movida viaja
+  // con ella, así que tras la corrección el cuerpo dejaría de listar referencias que sí existen —se midió:
+  // `design-taste-frontend` pasó de 11 enlaces en el cuerpo a 1—. El conocimiento seguía ahí, a dos saltos,
+  // pero la skill dejaba de decir dónde. Se refresca un índice único con TODO el material (el que ya estaba y
+  // el de esta pasada), no una lista por sección: así vale igual para las referencias que se movieron y para
+  // las que estaban huérfanas de antes.
+  restante = indiceCon(restante);
+
   const bodyBytes = Buffer.byteLength(restante);
-  return { body: restante, references, movidas, bodyBytes, bytesMovidos, alcanzoObjetivo: bodyBytes <= objetivo };
+  return { body: restante, references, movidas, bodyBytes, bytesMovidos, avisos, alcanzoObjetivo: bodyBytes <= objetivo };
 }
 
 // ── El catálogo: qué repara cada hallazgo, y quién lo firma ──────────────────────────────────────
@@ -397,6 +497,8 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
   }
 
   let cuerpo = mecanica.texto;
+  // Lo que el movimiento no pudo resolver y hay que decir (p. ej. una sección del autor con el mismo título).
+  let notasDeMotor = [];
   let umbral = Buffer.byteLength(cuerpoBase) > 24000 ? 24000 : 8000;
   // El material se recoge **del disco**, no de `meta.json`: un fichero añadido a mano a la carpeta de la
   // skill (o puesto por otra vía) no aparece en el meta, y tomarlo del meta lo perdería en la propuesta.
@@ -463,6 +565,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
       cuerpo = movimiento.body;
       material.push(...movimiento.references);
       movidas.push(...movimiento.movidas);
+      notasDeMotor = movimiento.avisos ?? [];
       ronda = {
         umbral, objetivo, bytesAntes, topeBytes, paso,
         bytesMovidos: movimiento.bytesMovidos,
@@ -598,6 +701,9 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
 
   return {
     status: propuesta.status, id, nivel: nivelFinal, reparaciones: plan, sinReparacion, movidas,
+    // Lo que el motor **no** ha podido resolver y no debe callar (por ejemplo: el autor ya tiene una sección
+    // llamada «Material consultable», que se respeta en vez de duplicar o borrar).
+    notas: notasDeMotor,
     base, propuesta, diff: propuesta.diff ?? null, revision,
     // Un diff de líneas puede salir `+0/-0` cuando lo que cambia es la FORMA (un `\r`, un espacio al
     // final): sin esta señal, la propuesta parecería no haber cambiado nada.

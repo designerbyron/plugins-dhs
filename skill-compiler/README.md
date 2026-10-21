@@ -20,6 +20,7 @@ skill es **nueva** o si se **actualizó** una existente.
 | Documento | Para qué |
 |---|---|
 | [`docs/DEPENDENCIAS.md`](docs/DEPENDENCIAS.md) | Las dependencias del harness: por qué existen, qué está declarado, cómo se instala y qué hacer cuando el harness se actualiza |
+| [`docs/MANTENIMIENTO-2026-10-21-ownership-body-budget.md`](docs/MANTENIMIENTO-2026-10-21-ownership-body-budget.md) | El mantenimiento del 2026-10-21: propiedad «machine», los 17 avisos de presupuesto con su medición, las dos excepciones documentadas y la corrección del índice del material |
 | [`docs/ANFITRION.md`](docs/ANFITRION.md) | El anfitrión medido: qué capacidades ofrece hoy, qué no (filas de comando por agente), qué se implementó para no depender de ellas y qué ocurrirá cuando lleguen |
 | [`docs/FUNCIONAMIENTO.md`](docs/FUNCIONAMIENTO.md) | Cómo funciona por dentro: puntos de extensión, dónde guarda, recorrido de cada operación, ciclo de vida y reglas de validación |
 | [`docs/FEEDBACK-VISUAL.md`](docs/FEEDBACK-VISUAL.md) | La píldora de la interfaz: qué se ve, de dónde sale el estado, las reglas de diseño que la sostienen y lo que **no** está verificado |
