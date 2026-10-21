@@ -182,7 +182,9 @@ no es de un proyecto: y al aprobar se elige dónde vive.
 /skill-ambito <id> --global|--local # cambiar de sitio una que ya aprobaste, en las dos direcciones
 ```
 
-Y las **filas del menú `»/»`**: cada pendiente ofrece las cuatro —`skill-ver-<id>`, `skill-aprobar-<id>`,
+Y las **filas del menú `»/»`** (cuando el anfitrión compone el registro de comandos en el contexto del agente; si
+no, `/skill-propuestas` imprime la orden exacta que las decide — ver [`ANFITRION.md`](ANFITRION.md)): cada pendiente
+ofrece las cuatro —`skill-ver-<id>`, `skill-aprobar-<id>`,
 `skill-globalizar-<id>` y `skill-rechazar-<id>`— así que aprobar para todos es elegir la fila, sin recordar
 ninguna sintaxis.
 

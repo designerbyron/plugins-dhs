@@ -1,6 +1,7 @@
 # Plan — acciones en la tarjeta del resultado, y decidir en lote
 
-**Estado: F1–F3 IMPLEMENTADAS en v1.5.0.** Este documento conserva el análisis con el contrato medido y las
+**Estado: F1–F3 IMPLEMENTADAS en v1.5.0; el conjunto completo —casilla por pendiente, tres acciones con
+ámbito, lote como UNA orden del servidor y veredicto por id— en v3.4.0–v3.8.6 (IMPLEMENTADO).** Este documento conserva el análisis con el contrato medido y las
 fases; cada fase dice abajo si está hecha o pendiente. Lo que queda por verificar en vivo, y los candidatos
 de la Fase 4, siguen abiertos.
 

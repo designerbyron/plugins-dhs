@@ -199,7 +199,7 @@ No son olvidos; son decisiones, y cada una tiene su motivo:
 
 - **Hecho (3.4.0 → 3.8.5)**: las acciones dentro de la tarjeta del resultado —casilla por pendiente, tres
   acciones con su ámbito, confirmación con alcance, y el lote como **una** orden del servidor—, con el
-  informe verificado por efecto y teñido por significado. Las filas por pendiente en el menú «/» dependen de
+  informe verificado por el **veredicto por id del comando** —la frase que ve el humano— con las filas del menú como respaldo cuando el anfitrión las ofrece, y teñido por significado. Las filas por pendiente en el menú «/» dependen de
   que el anfitrión componga el registro de comandos en el contexto del agente: en las compilaciones medidas
   **no lo hace**, y el plugin no depende de ellas (ver [`ANFITRION.md`](ANFITRION.md)).
 - **Pendiente real**: los 16 avisos `body-budget` de la auditoría (14 proponibles; 2 exigen criterio humano,

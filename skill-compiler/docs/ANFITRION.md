@@ -66,7 +66,7 @@ cada uno, que las filas aparezcan, que el aviso no salga y que al descargar el p
 | Limitación | Alcance | Qué la cierra |
 |---|---|---|
 | Filas por propuesta en el menú «/» | cosmético: la decisión tiene tres vías sin menú | una compilación del anfitrión que componga `commands` en el contexto del agente |
-| La forma de `runCommand` no está publicada | el panel la sondea y la verifica por efecto | un contrato documentado por el anfitrión |
+| La forma de `runCommand` no está publicada | el panel la sondea y verifica con el veredicto por id del comando (las filas, si existen, como respaldo) | un contrato documentado por el anfitrión |
 | 16 avisos `body-budget` en la auditoría | 14 son proponibles; 2 exigen criterio humano (`brandkit` entre ellas, sin corte posible) | decisión del humano sobre el material |
 | `ownership.json` ausente | la propiedad del puesto no se presume | `ownership dsh-only` o `ownership machine` |
 | Sin etiqueta de release por encima de `v3.8.0` | el tree va en `3.8.4`; se etiqueta al promover | una promoción de release (`docs` del repo) |
