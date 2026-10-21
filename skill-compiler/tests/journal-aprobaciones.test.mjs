@@ -14,7 +14,7 @@ import { after, describe, it } from 'node:test';
 
 import { AUTO_COMMAND } from '../lib/auto-approve.mjs';
 import { approveProposal, rejectProposal, skillCommands } from '../lib/commands.mjs';
-import { projectKey, propose } from '../lib/compiler.mjs';
+import { ambito, projectKey, propose } from '../lib/compiler.mjs';
 import { autoApproveIfAsked } from '../lib/definitions.mjs';
 import { leerDiario, diarioDe } from '../lib/promote.mjs';
 import { verificarCadena } from '../lib/security.mjs';
@@ -159,5 +159,23 @@ describe('diario del aprendizaje · publicar no se salta los avisos', () => {
     assert.equal(conForce.kind, 'success', conForce.text);
     assert.equal(existsSync(join(s.curated, 'con-aviso', 'SKILL.md')), true);
     assert.equal(entradas(s).at(-1).ambito, 'global');
+  });
+});
+
+describe('diario · cambiar de ámbito deja asiento', () => {
+  it('publicar y volver a local queda anotado, y la cadena sigue válida', () => {
+    const s = sandbox();
+    otra(s, 'ambito-con-rastro', 'Cambio de ámbito con rastro');
+    const k = clave(s);
+    const a = approveProposal({ root: s.root, key: k, id: 'ambito-con-rastro', scope: 'project' });
+    assert.equal(a.kind, 'success', a.text);
+
+    const aGlobal = ambito('ambito-con-rastro', k, { root: s.root, library: s.curated, to: 'global' });
+    assert.equal(aGlobal.ok, true, aGlobal.reason);
+    const aLocal = ambito('ambito-con-rastro', k, { root: s.root, library: s.curated, to: 'project' });
+    assert.equal(aLocal.ok, true, aLocal.reason);
+
+    assert.deepEqual(entradas(s).slice(-2).map((e) => e.decision), ['globalizada', 'localizada']);
+    assert.equal(verificarCadena(entradas(s)).ok, true, 'la cadena sigue válida');
   });
 });

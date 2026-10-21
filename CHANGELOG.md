@@ -35,6 +35,24 @@ que faltaba no era ejecutar, era **creer la evidencia correcta**.
   `kind: 'success'` sin veredicto **no** es éxito, y que sin filas no se pinta una cifra. **48/48** en ese
   fichero; **593/593** en la suite, hermética verde.
 
+## [3.9.3] — 2026-10-21
+
+**Cambiar de ámbito deja rastro.** `ambito` movía la skill y no anotaba nada: tras localizar una publicación, el
+diario seguía diciendo «publicada · global» mientras el almacén decía «local». El diario mentía por omisión.
+
+### Corregido
+
+- `ambito` anota `globalizada` / `localizada` con las huellas de origen y destino, por el escritor único del
+  diario (el mismo de las aprobaciones), así que la cadena sigue verificándose.
+
+### Documentado
+
+- El ámbito lo decide el **origen de la operación** —el proyecto desde el que se dirigía el trabajo—, no el sitio
+  donde acaba el artefacto. La propuesta guarda `project`/`projectKey` desde que nace; publicar es una decisión
+  aparte.
+
+**614/614** en verde y hermética verde.
+
 ## [3.9.2] — 2026-10-21
 
 **La tarjeta pregunta antes de ejecutar, no después del fallo.** Los avisos de una propuesta valen para

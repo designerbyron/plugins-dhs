@@ -559,3 +559,11 @@ activa en su ámbito; publicarla la pone en la biblioteca compartida; y `--prese
 sin `--force`. La tarjeta no espera a la negativa: `/skill-pendientes` publica `avisos: <id>=<n>` y las líneas
 `aviso:` leídas del `meta.json`, y si alguno de los ids marcados los tiene, abre la pantalla de avisos antes de
 mandar la orden. Aceptar ejecuta la misma orden con `--force`; cancelar no ejecuta nada.
+
+### El ámbito lo decide el origen, no el destino del artefacto
+
+Una skill aprendida mientras se dirigía trabajo en un proyecto **pertenece a ese proyecto**, aunque el artefacto
+acabe en otro sitio: publicarla o localizarla es una decisión aparte, posterior, y no cambia de quién es el
+conocimiento. Por eso la propuesta guarda `project` y `projectKey` desde que nace, y por eso el cambio de ámbito
+(`ambito`, `/skill-ambito`, `scope`) deja asiento en el diario con las dos huellas: sin él, el diario diría
+«publicada» mientras el almacén dice «local», y la evidencia mentiría.

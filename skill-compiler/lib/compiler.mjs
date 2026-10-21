@@ -25,7 +25,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { conCerrojo } from './lock.mjs';
-import { esIdSeguro, ficherosQueDifieren, huellaDeArbol, huellaDeContenido, motivoDeIdInseguro, escanear, revisarArbol } from './security.mjs';
+import { anotarEntradaEnDiario, esIdSeguro, ficherosQueDifieren, huellaDeArbol, huellaDeContenido, motivoDeIdInseguro, escanear, revisarArbol } from './security.mjs';
 import {
   MAQUINA, SOLO_DSH, dondeMasViveEseId, leerPropiedad, politicaAplicable, proyectosConocidos, propiedadSinCambios,
 } from './scope.mjs';
@@ -1705,6 +1705,12 @@ export function ambito(id, key, { to, root = defaultRoot(), library = null, now 
     if (folderHash(cartel) !== hash) return { ok: false, reason: 'la copia no coincide con el original (huella distinta): no se retira nada' };
     const moved = moverConConstancia(root, key, id, 'approved');
     if (!moved.ok) return { ok: false, reason: moved.reason };
+    // Cambiar de ámbito es una decisión: sin asiento, el diario dice «publicada/global» mientras el almacén
+    // dice «local», y la evidencia miente. Se anota con las dos huellas, como la aprobación.
+    anotarEntradaEnDiario(join(root, 'projects', key, 'journal.jsonl'), {
+      id, key, decision: 'globalizada', ambito: 'global', por: 'humano', canal: 'comando',
+      hashAnterior: hash, hashResultante: folderHash(cartel),
+    });
     return { ok: true, id, projectKey: key, scope: 'global', path: join(cartel, 'SKILL.md'), library: cartel, sha256: hash };
   }
   if (!existsSync(cartel)) return { ok: false, reason: `no hay ninguna skill publicada con el id ${id}` };
@@ -1733,6 +1739,10 @@ export function ambito(id, key, { to, root = defaultRoot(), library = null, now 
   } catch (error) {
     return { ok: false, reason: `quedó en el proyecto pero no se pudo retirar de la biblioteca: ${error.message}` };
   }
+  anotarEntradaEnDiario(join(root, 'projects', key, 'journal.jsonl'), {
+    id, key, decision: 'localizada', ambito: 'project', por: 'humano', canal: 'comando',
+    hashAnterior: hash, hashResultante: folderHash(enProyecto),
+  });
   return { ok: true, id, projectKey: key, scope: 'project', path: join(enProyecto, 'SKILL.md'), sha256: hash };
 }
 
