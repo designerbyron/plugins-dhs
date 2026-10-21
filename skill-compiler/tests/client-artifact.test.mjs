@@ -341,14 +341,42 @@ describe('artefacto de interfaz · decidir no puede contar una pregunta como hec
 });
 
 describe('artefacto de interfaz · el informe del lote se comprueba contra el efecto', () => {
-  it('sin EFECTO en el almacén no hay éxito, aunque el host diga que sí', () => {
+  it('el éxito lo dice el veredicto por id del comando, no el `kind` que devuelva el host', () => {
     assert.match(client, /const NO_RESULT = 'el host no devolvió resultado/);
-    // La decisión la toma la relectura del host, id por id — no el valor que devuelva la llamada.
-    // El efecto se espera con reintentos y se consulta al host: `esperarA` + `pendientesAhora`.
-    assert.match(client, /const esperarA = async \(condicion/);
-    assert.match(client, /const pendientesAhora = async \(\) => rowIds\(await listCommands\(sessionId\)/);
-    assert.match(client, /if \(await esperarA\(efecto\)\) return \{ ok: true/, 'sólo cuenta si el efecto ocurrió');
-    assert.match(client, /motivo: motivos\.length > 0 \? motivos\.join\(' · '\) : NO_RESULT/);
+    // La evidencia es la frase que vería el humano: `Activa: <id>`, `Ya estaba activa: <id>`, `ok <id> — …`.
+    // Un `kind: 'success'` sin veredicto NO basta: se sigue con la comprobación por filas y, si no las hay,
+    // no se declara éxito.
+    assert.match(client, /const v = veredicto\(salida, idsPedidos\)/);
+    assert.match(client, /ok: v\.fallos\.size === 0 && idsPedidos\.every\(\(id\) => v\.hechos\.has\(id\)\)/);
+    assert.equal(/resultado\?\.kind === 'success'\)?\s*return \{ ok: true/.test(client), false, 'no se cree al kind');
+    // Las filas quedan como comprobación de respaldo, y su ausencia es un estado de primera clase.
+    assert.match(client, /medible: filas\.length > 0/);
+    assert.match(client, /if \(observado === true\) \{/);
+  });
+
+  it('el veredicto se lee de las marcas reales del comando, y la puerta no se confunde con un fallo', () => {
+    // Se extrae el bloque marcado del cliente y se ejecuta: es la MISMA función que corre en la interfaz.
+    const ini = client.indexOf('// <veredicto>');
+    const fin = client.indexOf('// </veredicto>');
+    assert.ok(ini > 0 && fin > ini, 'el bloque del veredicto tiene que existir y estar marcado');
+    const fuente = client.slice(ini, fin);
+    const { veredicto } = new Function(`${fuente}; return { veredicto };`)();
+
+    const lote = veredicto([
+      'ok   mixed-encoding-repair — Activa en el proyecto',
+      'FALLO nexus-authenticated-qa-session — tiene avisos: body-budget',
+      'Pendientes de tu aprobación (0):',
+    ].join('\n'), ['mixed-encoding-repair', 'nexus-authenticated-qa-session']);
+    assert.deepEqual([...lote.hechos], ['mixed-encoding-repair']);
+    assert.equal(lote.fallos.get('nexus-authenticated-qa-session'), 'tiene avisos: body-budget');
+
+    const singular = veredicto('Ya estaba activa: mixed-encoding-repair [nexusbusinesssuite-3495896e]\n\nPendientes de tu aprobación (0):', ['mixed-encoding-repair']);
+    assert.deepEqual([...singular.hechos], ['mixed-encoding-repair']);
+
+    // La puerta imprime `  FALLO  <regla> …` sangrado y sin id: no puede contar como fallo de un id.
+    const puerta = veredicto('  FALLO  body-max — el cuerpo es demasiado largo', ['otro-id']);
+    assert.equal(puerta.fallos.size, 0);
+    assert.equal(puerta.hechos.size, 0);
   });
 
   it('prueba las formas conocidas del host, en orden, y reutiliza la que funcione', () => {
@@ -374,8 +402,10 @@ describe('artefacto de interfaz · el informe del lote se comprueba contra el ef
     assert.match(client, /host · \$\{Object\.entries\(tipos\)/);
   });
 
-  it('después del lote se vuelve a leer la lista del host, y se pinta lo que diga el host', () => {
-    assert.match(client, /const despues = await listCommands\(sessionId\)/);
+  it('después del lote se vuelve a leer la lista del host —si la ofrece— y se pinta lo que diga', () => {
+    assert.match(client, /const despues = await pendientesAhora\(\)/);
+    assert.match(client, /restantes = despues\.medible \? despues\.ids\.filter/, 'sin filas no se afirma una cifra');
+    assert.match(client, /bulk_remaining_unknown/);
     assert.match(client, /report\.restantes/);
     assert.match(client, /bulk_remaining'}?[^\n]*report\.restantes/);
   });

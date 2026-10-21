@@ -4,6 +4,37 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [3.8.6] — 2026-10-21
+
+**La prueba de que una decisión ocurrió es el veredicto del comando —la frase que ve el humano—, no el menú.**
+
+### Corregido
+
+El panel daba por buena una aprobación sólo si la pendiente desaparecía de la lista de **filas del menú**. En un
+anfitrión que no anuncia filas, esa lista no existe: el efecto no se podía observar y **una aprobación correcta
+se contaba como fallida**. Se midió en vivo: el panel aprobó dos propuestas («0 approved · 2 failed»), y al
+escribir el comando el propio plugin contestó «Ya estaba activa» — estaban hechas desde el primer intento. Lo
+que faltaba no era ejecutar, era **creer la evidencia correcta**.
+
+- **Se lee el veredicto por id** del texto que devuelve el comando: `Activa: <id>`, `Ya estaba activa: <id>`,
+  `Apartada: <id>` y el `ok <id> — …` / `FALLO <id> — …` del lote. Es la misma frase que ve el humano, así
+  que no hay dos verdades. Las líneas de la puerta (`  FALLO  <regla> …`, sangradas y sin id) no cuentan.
+- **Las filas quedan como comprobación de respaldo**, y su ausencia es un estado de primera clase
+  (`medible: false`): si no hay filas, no se afirma nada. «Pendientes ahora» dice «no medible en este
+  anfitrión» en vez de repetir el número de la tarjeta como si fuera el del almacén.
+- **Un lote con resultados parciales no tira lo que sí ocurrió**: se cuenta lo que el comando dijo por id y
+  sólo se reintenta lo que quedó sin veredicto.
+- **Un error semántico no se reintenta con otras firmas**: si el comando contestó («tiene avisos», «no hay
+  ninguna propuesta»), repetir tres veces sólo ensucia el motivo. Sólo un error de transporte justifica otra
+  forma.
+
+### Pruebas
+
+- `tests/client-artifact.test.mjs`: el veredicto se **extrae del cliente y se ejecuta** con un corpus real
+  (lote, `Ya estaba activa`, y la línea de la puerta que no debe confundirse). Se afirma que un
+  `kind: 'success'` sin veredicto **no** es éxito, y que sin filas no se pinta una cifra. **48/48** en ese
+  fichero; **593/593** en la suite, hermética verde.
+
 ## [3.8.5] — 2026-10-19 · release
 
 **La auditoría deja de contar el archivo como si fueran skills a arreglar: 7 errores falsos desaparecen.**

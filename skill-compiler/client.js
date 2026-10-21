@@ -84,6 +84,35 @@ window.__ModuleLoader__.load({
     const SCOPE_ASK = '¿Dónde quieres que viva';
     /** El host no devolvió resultado: no se ejecutó nada. Se dice con estas palabras, no como éxito. */
     const NO_RESULT = 'el host no devolvió resultado: el comando no se ejecutó';
+
+    // <veredicto>
+    /**
+     * Lee el veredicto del propio comando. Es la **misma** frase que ve el humano cuando escribe la orden, y
+     * por eso es evidencia: `Activa: <id> [<key>]`, `Ya estaba activa: <id>`, `Apartada: <id>`, o el
+     * `ok   <id> — …` / `FALLO <id> — …` del lote. Las líneas de la puerta van sangradas (`  FALLO  …`) y se
+     * distinguen justamente por eso: no nombran un id.
+     *
+     * Vivía sólo en la comprobación por filas, y ahí está el defecto que esto cierra: en un anfitrión que no
+     * anuncia filas, el efecto no se puede medir, así que una aprobación correcta se contaba como fallida.
+     */
+    const veredicto = (texto, ids) => {
+      const pedidos = new Set(ids);
+      const hechos = new Set();
+      const fallos = new Map();
+      for (const cruda of String(texto ?? '').split('\n')) {
+        const linea = cruda.trim();
+        if (linea === '') continue;
+        let m = /^ok\s+(\S+)/.exec(linea) || /^(?:Activa|Publicada|Apartada|Habilitada|Deshabilitada|Retirada|Ya estaba activa):\s*(\S+)/.exec(linea);
+        if (m !== null && pedidos.has(m[1])) { hechos.add(m[1]); continue; }
+        m = /^FALLO\s+(\S+)\s+—\s*(.*)$/.exec(linea);
+        if (m !== null && pedidos.has(m[1])) fallos.set(m[1], m[2] || 'falló');
+      }
+      return { hechos, fallos };
+    };
+
+    /** ¿El motivo es de transporte (otra firma puede servir) o del comando (repetir no cambia nada)? */
+    const esDeTransporte = (motivo) => /wire field|descriptor|boundary validation|is not a function|no expone|cannot get property|undefined is not|TypeError/i.test(String(motivo ?? ''));
+    // </veredicto>
     /**
      * Dónde se recuerda un resultado cerrado.
      *
@@ -171,6 +200,7 @@ window.__ModuleLoader__.load({
         bulk_ok_reject: 'apartadas',
         bulk_failed: 'con fallo',
         bulk_remaining: 'Pendientes ahora',
+        bulk_remaining_unknown: 'no medible en este anfitrión (no anuncia filas)',
         bulk_again: 'Volver a marcar',
         bulk_nothing_ran: 'No se ejecutó ningún comando: pégalos en el compositor, uno por línea, y son la misma puerta.',
         bulk_host_form: 'Forma del host que funcionó',
@@ -248,6 +278,7 @@ window.__ModuleLoader__.load({
         bulk_ok_reject: 'set aside',
         bulk_failed: 'failed',
         bulk_remaining: 'Pending now',
+        bulk_remaining_unknown: 'not measurable on this host (it announces no rows)',
         bulk_again: 'Select again',
         bulk_nothing_ran: 'No command was executed: paste them in the composer, one per line — same gate.',
         bulk_host_form: 'Host call shape that worked',
@@ -673,8 +704,16 @@ window.__ModuleLoader__.load({
       const FORMA_DE = Object.fromEntries(FORMAS.map((f) => [f.nombre, f]));
       const [formaUsada, setFormaUsada] = React.useState(null);
 
-      /** La lista de pendientes **del host**, ahora mismo. Es la única prueba de que algo cambió. */
-      const pendientesAhora = async () => rowIds(await listCommands(sessionId), listVerbFor(node?.name));
+      /**
+       * Las pendientes **según el host**, ahora mismo, y si el host ofrece filas.
+       *
+       * `medible === false` es un estado de primera clase: sin filas no hay efecto que observar, y decir
+       * «sigue pendiente» cuando no se ha podido mirar es la mentira que hacía fallar aprobaciones correctas.
+       */
+      const pendientesAhora = async () => {
+        const filas = rowIds(await listCommands(sessionId), listVerbFor(node?.name));
+        return { ids: filas, medible: filas.length > 0 };
+      };
 
       /** Espera a que una condición se cumpla (el efecto tarda lo que tarde el host). */
       const esperarA = async (condicion, intentos = 6, espera = 250) => {
@@ -699,27 +738,67 @@ window.__ModuleLoader__.load({
        * @param resto - sus argumentos.
        * @param efecto - `() => Promise<boolean>`: ¿ocurrió? Se le pregunta al almacén, no a la llamada.
        */
-      const ejecutarOrden = async (texto, nombre, resto, efecto, conocida) => {
+      const ejecutarOrden = async (texto, nombre, resto, idsPedidos, conocida) => {
         const orden = conocida === null ? FORMAS : [conocida];
         const motivos = [];
         for (const forma of orden) {
+          let resultado;
           try {
-            const resultado = await runCommand(...forma.args(texto, nombre, resto));
-            const salida = String(resultado?.text ?? '');
-            if (resultado?.kind === 'error') motivos.push(`${forma.nombre}: ${salida.split('\n')[0]}`);
-            if (salida.startsWith(SCOPE_ASK)) motivos.push(`${forma.nombre}: el comando preguntó el ámbito`);
+            resultado = await runCommand(...forma.args(texto, nombre, resto));
           } catch (error) {
             motivos.push(`${forma.nombre}: ${String(error?.message ?? error)}`);
+            continue;
           }
-          // La verdad la dice el almacén.
-          if (await esperarA(efecto)) return { ok: true, forma, motivo: '' };
+          const salida = String(resultado?.text ?? '');
+
+          // 1) El comando contestó con veredicto por id. Es la evidencia: exactamente la frase que vería el
+          //    humano al escribirlo. No hace falta preguntar por filas —y en este anfitrión, además, no hay—.
+          const v = veredicto(salida, idsPedidos);
+          if (v.hechos.size > 0 || v.fallos.size > 0) {
+            return {
+              ok: v.fallos.size === 0 && idsPedidos.every((id) => v.hechos.has(id)),
+              forma,
+              motivo: [...v.fallos].map(([id, m]) => `${id}: ${m}`).join(' · '),
+              hechos: v.hechos,
+              fallos: v.fallos,
+            };
+          }
+
+          // 2) Pidió el ámbito: la orden llegó, sólo faltaba `--local`. Otra firma no lo arregla.
+          if (salida.startsWith(SCOPE_ASK)) {
+            motivos.push(`${forma.nombre}: el comando preguntó el ámbito`);
+            break;
+          }
+
+          // 3) Error sin veredicto: si es del comando (no de la forma de llamar), repetir con otra firma sólo
+          //    produce el mismo error tres veces y ensucia el motivo.
+          if (resultado?.kind === 'error') {
+            motivos.push(`${forma.nombre}: ${salida.split('\n')[0]}`);
+            if (!esDeTransporte(salida)) break;
+            continue;
+          }
+
+          // 4) Sin veredicto ni error: se pregunta al host por sus filas **si las ofrece**. Sin filas no hay
+          //    efecto observable, y decir «no ocurrió» sin haber podido mirar es lo que fallaba.
+          let observado = null;
+          try {
+            observado = await esperarA(async () => {
+              const ahora = await pendientesAhora();
+              return ahora.medible && idsPedidos.every((id) => !ahora.ids.includes(id));
+            });
+          } catch {
+            observado = false;
+          }
+          if (observado === true) {
+            return { ok: true, forma, motivo: '', hechos: new Set(idsPedidos), fallos: new Map() };
+          }
+          motivos.push(`${forma.nombre}: ${NO_RESULT}`);
         }
-        return { ok: false, forma: null, motivo: motivos.length > 0 ? motivos.join(' · ') : NO_RESULT };
+        return { ok: false, forma: null, motivo: motivos.join(' · '), hechos: new Set(), fallos: new Map() };
       };
 
       const ejecutar = (id, conocida) => ejecutarOrden(
-        `/${linea(id)}`, target, linea(id).slice(target.length).trim(),
-        async () => !(await pendientesAhora()).includes(id), conocida,
+        `/${linea(id)}`, target, linea(id).slice(target.length).trim(), [id], conocida,
       );
 
       /** La orden del LOTE: un comando, N ids. Es la forma plural que el servidor entiende. */
@@ -727,8 +806,7 @@ window.__ModuleLoader__.load({
         const comando = verb === 'globalizar' ? 'skill-aprobar' : target;
         const ambito = verb === 'aprobar' ? ' --local' : verb === 'globalizar' ? ' --global' : '';
         const argumentos = `${ids.join(',')}${ambito}`;
-        return ejecutarOrden(`/${comando} ${argumentos}`, comando, argumentos,
-          async () => { const p = await pendientesAhora(); return !ids.some((id) => p.includes(id)); }, conocida);
+        return ejecutarOrden(`/${comando} ${argumentos}`, comando, argumentos, ids, conocida);
       };
 
       const run = async () => {
@@ -748,24 +826,33 @@ window.__ModuleLoader__.load({
             forma = salida.forma;
             setFormaUsada(salida.forma?.nombre ?? null);
           } else {
-            // No se pudo el lote: se intenta id a id —el camino singular—, y se dice qué forma sirvió.
-            pendientes = [...picked];
+            // El lote contestó por id: se cuenta lo que dijo y sólo se reintenta lo que quedó sin veredicto.
+            // Antes, un `FALLO` en uno tiraba el resultado de todos y se volvía a intentar lo ya hecho.
+            pendientes = [];
+            for (const id of picked) {
+              if (salida.hechos.has(id)) done.push(id);
+              else if (salida.fallos.has(id)) failed.push({ id, reason: salida.fallos.get(id) });
+              else pendientes.push(id);
+            }
+            if (salida.forma) { forma = salida.forma; setFormaUsada(salida.forma.nombre); }
           }
         }
         // 2) Lo que quede, id a id (y también todo si el verbo no admite lote: apartar, retirar, encender).
         for (const id of pendientes) {
           const salida = await ejecutar(id, forma);
-          if (salida.ok) {
+          if (salida.ok || salida.hechos.has(id)) {
             done.push(id);
             if (forma === null && salida.forma) { forma = salida.forma; setFormaUsada(salida.forma.nombre); }
-          } else failed.push({ id, reason: salida.motivo });
+          } else failed.push({ id, reason: salida.fallos.get(id) ?? salida.motivo });
         }
         // El informe se comprueba contra el EFECTO: se vuelve a leer la lista del host. Si dice que se
         // aprobaron diez y el host sigue devolviendo diez, lo que se pinta es lo que el host dice.
         let restantes = null;
         try {
-          const despues = await listCommands(sessionId);
-          restantes = rowIds(despues, listVerbFor(node?.name)).filter((id) => !done.includes(id));
+          const despues = await pendientesAhora();
+          // Sólo se afirma una cifra si el host ofreció filas que mirar. Si no, se declara que no se pudo:
+          // pintar el número de la tarjeta como si fuera el del almacén es exactamente la mentira anterior.
+          restantes = despues.medible ? despues.ids.filter((id) => !done.includes(id)) : null;
         } catch { restantes = null; }
         setReport({ done, failed, restantes, lineas: picked.map((id) => `/${linea(id)}`), forma: forma?.nombre ?? null });
         setIds(restantes ?? rows.filter((id) => !done.includes(id)));
@@ -864,7 +951,10 @@ window.__ModuleLoader__.load({
               className: 'skc-bulk-note',
               'data-tone': report.failed.length === 0 ? 'ok' : (report.done.length === 0 ? 'error' : 'warn'),
             }, `${report.done.length} ${say(texts.ok)} · ${report.failed.length} ${say('bulk_failed')}`),
-            h('div', { className: 'skc-bulk-note', 'data-tone': 'muted' }, `${say('bulk_remaining')}: ${report.restantes === null ? (ids === null ? '' : ids.length) : report.restantes.length}`),
+            h('div', { className: 'skc-bulk-note', 'data-tone': 'muted' },
+              report.restantes === null
+                ? `${say('bulk_remaining')}: ${say('bulk_remaining_unknown')}`
+                : `${say('bulk_remaining')}: ${report.restantes.length}`),
             // Si no se ejecutó nada, el panel da la salida: las líneas exactas que el humano puede pegar.
             report.done.length > 0 && report.forma
               ? h('div', { className: 'skc-bulk-note', 'data-tone': 'ok' }, `${say('bulk_host_form')}: ${report.forma}`)

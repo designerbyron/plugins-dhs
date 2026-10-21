@@ -313,3 +313,12 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
 - `/skill-propuestas` imprime la orden exacta (`Una orden para todas: /skill-aprobar a,b,c --local`) — esa vía,
   el panel y la CLI no dependen del menú.
 - El aviso ya no dice «conviene reportarlo»: está medido, y lo que hay que hacer está en la línea de arriba.
+
+## v3.8.6 — la evidencia del panel es el veredicto del comando (2026-10-21)
+
+- Defecto medido: el panel aprobó dos propuestas y reportó «0 approved · 2 failed» porque **sólo** aceptaba como
+  prueba que la fila desapareciera del menú — y este anfitrión no anuncia filas. El comando sí contestó
+  («Ya estaba activa» al reintentar).
+- Ahora se lee el veredicto por id del texto del comando (`Activa:`, `Ya estaba activa:`, `ok <id> —`), las
+  filas son respaldo con `medible:false`, el lote admite parciales y un error semántico no se reintenta.
+- La forma que funciona en este host es la **primera**: `runCommand(sessionId, '/comando args')`.

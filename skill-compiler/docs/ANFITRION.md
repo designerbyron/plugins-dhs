@@ -36,8 +36,10 @@ un defecto del plugin y no hay variante de llamada que lo arregle.
 2. **La orden exacta, siempre.** `/skill-propuestas` imprime, junto a las pendientes, una línea que las decide
    todas (`/skill-aprobar a,b,c --local`) y las variantes por id, por ámbito y con `--force`. No hay que
    recordar ningún identificador ni depende del menú.
-3. **El panel verifica por efecto.** Una aprobación cuenta si el id **deja** de estar pendiente en la lista del
-   anfitrión, no si la respuesta parece un éxito. El lote va en **una** orden del servidor.
+3. **El panel verifica con el veredicto del comando**, que es la frase que ve el humano (`Activa: <id>`,
+   `Ya estaba activa: <id>`, `ok <id> — …`). La lista de filas del anfitrión se usa como comprobación de
+   respaldo **cuando existe**; si no, se declara «no medible» y no se inventa una cifra. Un `kind: 'success'`
+   sin veredicto no cuenta. El lote va en **una** orden del servidor y admite resultados parciales.
 4. **El aviso calla cuando no hay nada que anunciar.** Sólo aparece si el montaje falló **y** hay pendientes.
 5. **Integridad y rastro.** Se aprueba el contenido que se validó (huella de `SKILL.md` + `references/`), con
    rollback a `proposed` si no casa, y cada decisión queda en el diario encadenado
