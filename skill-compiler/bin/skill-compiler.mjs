@@ -9,6 +9,7 @@
  * Comparte implementación con el plugin (`lib/compiler.mjs`), así que las reglas no pueden divergir
  * entre lo que el modelo puede proponer y lo que tú puedes aprobar.
  *
+ *   /skill-pendientes                                    # los ids que esperan decisión, en una línea
  *   node bin/skill-compiler.mjs where                     # qué ámbito tiene este directorio
  *   node bin/skill-compiler.mjs list                      # qué hay propuesto y aprobado
  *   node bin/skill-compiler.mjs show <id>                 # leer una propuesta entera

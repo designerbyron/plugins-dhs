@@ -83,6 +83,7 @@ describe('gestión · el aviso al catálogo coincide con lo que cambió en disco
     { nombre: 'skill-habilitar', estado: 'disabled', sufijo: '', muta: true },
     { nombre: 'skill-eliminar', estado: 'disabled', sufijo: ' --yes', muta: true },
     { nombre: 'skill-propuestas', estado: 'approved', sufijo: null, muta: false },
+    { nombre: 'skill-pendientes', estado: 'approved', sufijo: null, muta: false },
     { nombre: 'skill-ver', estado: 'approved', sufijo: '', muta: false },
     { nombre: 'skill-retiradas', estado: 'disabled', sufijo: null, muta: false },
   ];
@@ -116,7 +117,7 @@ describe('comandos · descriptor', () => {
     assert.deepEqual(list.map((c) => c.name).sort(),
       [
         'skill-ambito', 'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar', 'skill-habilitar',
-        'skill-propiedad', 'skill-propiedad-dsh-only', 'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar',
+        'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only', 'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar',
         'skill-retiradas', 'skill-sistemas', 'skill-ver',
       ]);
     for (const command of list) {
@@ -651,5 +652,27 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const { byName } = commands(s.root);
     const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]},${ids[0]} --local` });
     assert.match(r.text, /Lote de 1: 1 aprobada\(s\)/);
+  });
+});
+
+describe('comandos · /skill-pendientes', () => {
+  it('devuelve los ids en una línea, sin descripciones: lo que la tarjeta consulta', () => {
+    const s = sandbox();
+    const { byName } = commands(s.root, fakeCatalog());
+    const uno = 'pendiente-uno';
+    const hecho = propose(goodInput({ id: uno }), { root: s.root, curated: s.curated, cwd: 'C:\\xampp\\htdocs\\saas-corporative' });
+    assert.equal(hecho.status, 'proposed', JSON.stringify(hecho.errors ?? hecho.conflicts));
+    const r = byName['skill-pendientes'].handler({ agent, rawInput: '' });
+    assert.equal(r.kind, 'success', r.text);
+    assert.match(r.text, /^pendientes: 1$/m);
+    assert.match(r.text, new RegExp(`^ids: ${uno}$`, 'm'));
+  });
+
+  it('sin nada pendiente dice cero y una lista vacía, no una línea inventada', () => {
+    const s = sandbox();
+    const { byName } = commands(s.root, fakeCatalog());
+    const r = byName['skill-pendientes'].handler({ agent, rawInput: '' });
+    assert.match(r.text, /^pendientes: 0$/m);
+    assert.match(r.text, /^ids:\s*$/m);
   });
 });

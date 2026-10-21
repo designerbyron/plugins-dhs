@@ -153,3 +153,36 @@ describe('CLI real (subproceso, arena) · el motor dice la verdad', () => {
     assert.match(r.salida, /no hay ninguna skill viva/);
   });
 });
+
+describe('CLI real (subproceso, arena) · una propuesta con avisos', () => {
+  it('publicar sin `--force` se niega y lo dice; con `--force` publica (lo que hace la tarjeta al confirmar)', () => {
+    const arena = sandbox();
+    const id = 'con-avisos-sin-decidir';
+    const hecho = propose({
+      id,
+      description: 'Procedimiento largo que dispara el aviso de presupuesto para probar la decisión humana.',
+      whenToUse: 'Cuando haya que probar que una propuesta con avisos no se publica sin decirlo.',
+      body: cuerpoLargo('Detalle que no cabe'),
+    }, { root: arena.root, curated: arena.curated, cwd: CWD });
+    assert.equal(hecho.status, 'proposed', JSON.stringify(hecho.errors ?? hecho.conflicts));
+
+    const sin = cli(arena, 'approve', id, '--global', '--project-key', KEY);
+    assert.notEqual(sin.code, 0, 'sin --force no se publica');
+    assert.match(sin.salida, /tiene avisos/);
+    assert.equal(existsSync(join(arena.curated, id)), false, 'no se publicó nada');
+
+    const con = cli(arena, 'approve', id, '--global', '--force', '--project-key', KEY);
+    assert.equal(con.code, 0, con.salida);
+    assert.equal(existsSync(join(arena.curated, id)), true, 'con --force sí');
+  });
+
+  it('`/skill-pendientes` en la CLI: la orden existe y el comando base la declara', () => {
+    const arena = sandbox();
+    sembrar(arena, 'pendiente-para-consultar', { corta: true });
+    // El comando es del plugin (no de la CLI): se comprueba que la CLI lo anuncia en su ayuda.
+    const r = cli(arena, 'where');
+    assert.equal(r.code, 0, r.salida);
+    const ayuda = readFileSync(CLI, 'utf8');
+    assert.match(ayuda, /skill-pendientes/);
+  });
+});

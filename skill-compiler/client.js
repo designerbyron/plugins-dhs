@@ -201,6 +201,8 @@ window.__ModuleLoader__.load({
         bulk_failed: 'con fallo',
         bulk_remaining: 'Pendientes ahora',
         bulk_remaining_unknown: 'no medible en este anfitrión (no anuncia filas)',
+        bulk_warnings_title: 'La puerta pide una decisión: la propuesta tiene avisos. Léelos y decide.',
+        bulk_warnings_accept: 'Acepto los avisos y continúo',
         bulk_again: 'Volver a marcar',
         bulk_nothing_ran: 'No se ejecutó ningún comando: pégalos en el compositor, uno por línea, y son la misma puerta.',
         bulk_host_form: 'Forma del host que funcionó',
@@ -279,6 +281,8 @@ window.__ModuleLoader__.load({
         bulk_failed: 'failed',
         bulk_remaining: 'Pending now',
         bulk_remaining_unknown: 'not measurable on this host (it announces no rows)',
+        bulk_warnings_title: 'The gate asks for a decision: this proposal has warnings. Read them and decide.',
+        bulk_warnings_accept: 'I accept the warnings and continue',
         bulk_again: 'Select again',
         bulk_nothing_ran: 'No command was executed: paste them in the composer, one per line — same gate.',
         bulk_host_form: 'Host call shape that worked',
@@ -703,6 +707,7 @@ window.__ModuleLoader__.load({
       ];
       const FORMA_DE = Object.fromEntries(FORMAS.map((f) => [f.nombre, f]));
       const [formaUsada, setFormaUsada] = React.useState(null);
+      const [avisos, setAvisos] = React.useState(null);
 
       /**
        * Las pendientes **según el host**, ahora mismo, y si el host ofrece filas.
@@ -711,6 +716,19 @@ window.__ModuleLoader__.load({
        * «sigue pendiente» cuando no se ha podido mirar es la mentira que hacía fallar aprobaciones correctas.
        */
       const pendientesAhora = async () => {
+        // 1) La fuente que **siempre** existe: el propio plugin dice qué ids esperan decisión.
+        try {
+          const r = await runCommand(sessionId, '/skill-pendientes');
+          const texto = String(r?.text ?? '');
+          const linea = /^ids:\s*(.*)$/m.exec(texto);
+          if (linea !== null) {
+            const ids = linea[1].trim() === '' ? [] : linea[1].split(',').map((x) => x.trim()).filter(Boolean);
+            return { ids, medible: true };
+          }
+        } catch {
+          /* sin el comando se sigue por las filas */
+        }
+        // 2) Respaldo: las filas del menú, si el anfitrión las ofrece.
         const filas = rowIds(await listCommands(sessionId), listVerbFor(node?.name));
         return { ids: filas, medible: filas.length > 0 };
       };
@@ -738,13 +756,17 @@ window.__ModuleLoader__.load({
        * @param resto - sus argumentos.
        * @param efecto - `() => Promise<boolean>`: ¿ocurrió? Se le pregunta al almacén, no a la llamada.
        */
-      const ejecutarOrden = async (texto, nombre, resto, idsPedidos, conocida) => {
+      const ejecutarOrden = async (texto, nombre, resto, idsPedidos, conocida, forzar = false) => {
+        // `--force` no se adivina: lo pone esta función sólo cuando el humano lo ha dicho en la pantalla de
+        // avisos. La orden que se ejecuta es entonces la misma que escribiría él, con su flag.
+        const restoFinal = forzar ? `${resto} --force`.trim() : resto;
+        const textoFinal = `/${nombre}${restoFinal ? ` ${restoFinal}` : ''}`;
         const orden = conocida === null ? FORMAS : [conocida];
         const motivos = [];
         for (const forma of orden) {
           let resultado;
           try {
-            resultado = await runCommand(...forma.args(texto, nombre, resto));
+            resultado = await runCommand(...forma.args(textoFinal, nombre, restoFinal));
           } catch (error) {
             motivos.push(`${forma.nombre}: ${String(error?.message ?? error)}`);
             continue;
@@ -774,6 +796,11 @@ window.__ModuleLoader__.load({
           //    produce el mismo error tres veces y ensucia el motivo.
           if (resultado?.kind === 'error') {
             motivos.push(`${forma.nombre}: ${salida.split('\n')[0]}`);
+            // «tiene avisos» no es un fallo de la llamada: la puerta pide una decisión humana explícita. Se
+            // devuelve el texto entero para que la tarjeta la pida, en vez de dejar al humano sin salida.
+            if (/tiene avisos/i.test(salida)) {
+              return { ok: false, forma, motivo: salida, avisos: salida, hechos: new Set(), fallos: new Map() };
+            }
             if (!esDeTransporte(salida)) break;
             continue;
           }
@@ -797,29 +824,50 @@ window.__ModuleLoader__.load({
         return { ok: false, forma: null, motivo: motivos.join(' · '), hechos: new Set(), fallos: new Map() };
       };
 
-      const ejecutar = (id, conocida) => ejecutarOrden(
-        `/${linea(id)}`, target, linea(id).slice(target.length).trim(), [id], conocida,
+      const ejecutar = (id, conocida, forzar = false) => ejecutarOrden(
+        `/${linea(id)}`, target, linea(id).slice(target.length).trim(), [id], conocida, forzar,
       );
 
       /** La orden del LOTE: un comando, N ids. Es la forma plural que el servidor entiende. */
-      const ejecutarLote = (ids, conocida) => {
+      const ejecutarLote = (ids, conocida, forzar = false) => {
         const comando = verb === 'globalizar' ? 'skill-aprobar' : target;
         const ambito = verb === 'aprobar' ? ' --local' : verb === 'globalizar' ? ' --global' : '';
         const argumentos = `${ids.join(',')}${ambito}`;
-        return ejecutarOrden(`/${comando} ${argumentos}`, comando, argumentos, ids, conocida);
+        return ejecutarOrden(`/${comando} ${argumentos}`, comando, argumentos, ids, conocida, forzar);
       };
 
-      const run = async () => {
+      const run = async ({ forzar = false } = {}) => {
         setBusy(true);
         setStage('running');
+        setAvisos(null);
         const done = [];
         const failed = [];
         // La forma que funcione se descubre con la primera orden y se reutiliza: una vez por lote.
         let forma = null;
         let pendientes = [...picked];
+        // Lo que la tarjeta muestra puede ser viejo (otra sesión, otra decisión). Antes de mandar una orden
+        // se pregunta al almacén; lo que ya no está pendiente se dice como tal —no como un fallo del comando,
+        // que era un callejón sin salida—.
+        try {
+          const ahora = await pendientesAhora();
+          const vivos = pendientes.filter((id) => ahora.ids.includes(id));
+          for (const id of pendientes) {
+            if (!vivos.includes(id)) failed.push({ id, reason: 'ya no está pendiente en el almacén: la tarjeta estaba desactualizada' });
+          }
+          pendientes = vivos;
+          if (pendientes.length === 0) {
+            setReport({ done, failed, restantes: ahora.ids, lineas: [], forma: null });
+            setIds(ahora.ids);
+            setPicked([]);
+            setBusy(false);
+            setStage('done');
+            return;
+          }
+        } catch { /* sin lectura fiable se intenta igual: el comando dirá lo suyo */ }
         // 1) El LOTE como UNA orden: una llamada al host, N aprobaciones dentro, un solo efecto que medir.
         if ((verb === 'aprobar' || verb === 'globalizar') && picked.length > 1) {
-          const salida = await ejecutarLote(picked, forma);
+          const salida = await ejecutarLote(picked, forma, forzar);
+          if (salida.avisos) { setAvisos({ texto: salida.avisos, ids: [...picked] }); setBusy(false); setStage('avisos'); return; }
           if (salida.ok) {
             pendientes = [];
             done.push(...picked);
@@ -839,7 +887,8 @@ window.__ModuleLoader__.load({
         }
         // 2) Lo que quede, id a id (y también todo si el verbo no admite lote: apartar, retirar, encender).
         for (const id of pendientes) {
-          const salida = await ejecutar(id, forma);
+          const salida = await ejecutar(id, forma, forzar);
+          if (salida.avisos) { setAvisos({ texto: salida.avisos, ids: [id] }); setBusy(false); setStage('avisos'); return; }
           if (salida.ok || salida.hechos.has(id)) {
             done.push(id);
             if (forma === null && salida.forma) { forma = salida.forma; setFormaUsada(salida.forma.nombre); }
@@ -882,8 +931,12 @@ window.__ModuleLoader__.load({
           addButton('all', say('bulk_select_all'), () => setPicked(rows.slice()));
         }
       } else if (stage === 'confirm') {
-        addButton('yes', say(texts.confirm), run);
+        addButton('yes', say(texts.confirm), () => run());
         addButton('no', say('bulk_cancel'), () => setStage('pick'), { quiet: true });
+      } else if (stage === 'avisos' && avisos !== null) {
+        // El humano acepta **habiendo leído** los avisos: eso es exactamente lo que significa `--force`.
+        addButton('force', say('bulk_warnings_accept'), () => run({ forzar: true }));
+        addButton('no', say('bulk_cancel'), () => { setAvisos(null); setStage('pick'); }, { quiet: true });
       } else if (stage === 'done' && report !== null) {
         addButton('again', say('bulk_again'), () => { setReport(null); setStage('pick'); }, { quiet: true });
       }
@@ -943,6 +996,11 @@ window.__ModuleLoader__.load({
             // El alcance se dice **en la confirmación** de las que lo tienen: es la última pantalla antes de
             // publicar, y «para todos» no es lo mismo que «en este proyecto».
             texts.note ? h('div', { className: 'skc-bulk-note' }, say(texts.note)) : null)
+          : null,
+        stage === 'avisos' && avisos !== null
+          ? h('div', null,
+            h('div', { className: 'skc-bulk-note', 'data-tone': 'warn' }, say('bulk_warnings_title')),
+            h('pre', { className: 'skc-bulk-body' }, avisos.texto))
           : null,
         stage === 'running' ? h('div', { className: 'skc-bulk-note' }, say('bulk_running')) : null,
         stage === 'done' && report !== null

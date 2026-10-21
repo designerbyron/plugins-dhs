@@ -473,6 +473,20 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
     },
 
     {
+      // Sólo los ids, en una línea estable: es la fuente que consulta la tarjeta para saber si lo que
+      // muestra sigue pendiente. Sin esto, una tarjeta vieja ofrece decidir algo que el almacén ya no tiene
+      // y la orden falla con «no hay ninguna propuesta» —un fallo que el humano no puede arreglar—.
+      name: 'skill-pendientes',
+      description: 'Los ids que esperan decisión, en una línea: lo que la tarjeta consulta antes de decidir.',
+      handler: guarded(({ agent }) => {
+        const { key } = scopeOfAgent(agent);
+        if (key === null) return bad(NO_SCOPE);
+        const waiting = pending({ root, key });
+        return ok([`pendientes: ${waiting.length}`, `ids: ${waiting.map((fila) => fila.id).join(',')}`].join('\n'));
+      }),
+    },
+
+    {
       name: 'skill-ver',
       description: 'Lee una skill aprendida de este proyecto: la propuesta pendiente o la ya activa.',
       input: { hint: '<id>' },

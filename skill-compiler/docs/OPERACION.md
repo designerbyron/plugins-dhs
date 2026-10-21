@@ -543,3 +543,12 @@ Qué garantiza cada puerta: `check` valida la propuesta contra la puerta de cali
 tamaño; `audit` mide el almacén (sin tocar nada); `security` revisa ids, contenido, árboles y la cadena del
 diario; `doctor` comprueba dependencias, comandos y propiedad. Preparar una propuesta no la activa; aprobarla la
 activa en su ámbito; publicarla la pone en la biblioteca compartida; y `--preserve-state` la deja apagada.
+
+### Decidir desde la tarjeta: avisos y tarjetas desactualizadas
+
+- **La puerta pide decisión, no un reintento.** Si la propuesta tiene avisos, `approve`/`approve --global` se
+  niegan y dicen cuáles. La tarjeta muestra el texto íntegro y ofrece **«Acepto los avisos y continúo»**, que
+  ejecuta la misma orden con `--force`: la aceptación es del humano que acaba de leerlos.
+- **Antes de ejecutar, se pregunta al almacén.** La tarjeta consulta `/skill-pendientes` (ids en una línea, sólo
+  lectura) y descarta lo que ya no espera decisión, con el motivo «la tarjeta estaba desactualizada». Sin esa
+  comprobación, una tarjeta vieja producía un fallo del comando que el humano no podía resolver.

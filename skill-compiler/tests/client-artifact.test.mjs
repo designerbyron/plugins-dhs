@@ -385,7 +385,7 @@ describe('artefacto de interfaz · el informe del lote se comprueba contra el ef
     }
     assert.match(client, /const FORMA_DE = Object\.fromEntries\(FORMAS\.map/);
     assert.match(client, /let forma = null;/, 'la forma descubierta se guarda en el bucle');
-    assert.match(client, /const salida = await ejecutar\(id, forma\)/);
+    assert.match(client, /const salida = await ejecutar\(id, forma, forzar\)/);
     assert.match(client, /setFormaUsada\(salida\.forma\.nombre\)/);
   });
 
@@ -419,7 +419,7 @@ describe('artefacto de interfaz · el informe del lote se comprueba contra el ef
 
 describe('artefacto de interfaz · el lote va en UNA orden', () => {
   it('con más de una marcada, aprobar y publicar mandan UN comando con los ids', () => {
-    assert.match(client, /const ejecutarLote = \(ids, conocida\)/);
+    assert.match(client, /const ejecutarLote = \(ids, conocida, forzar = false\)/);
     assert.match(client, /if \(\(verb === 'aprobar' \|\| verb === 'globalizar'\) && picked\.length > 1\)/);
     assert.match(client, /const argumentos = `\$\{ids\.join\(','\)\}\$\{ambito\}`/);
   });
@@ -461,5 +461,30 @@ describe('artefacto de interfaz · el estado se lee por color, y se mueve poco',
     assert.match(client, /@keyframes skc-llega/);
     assert.match(client, /animation: skc-llega 170ms ease-out both/);
     assert.match(client, /@media \(prefers-reduced-motion: reduce\) \{\s*\.skc-bulk-note, \.skc-bulk-done, \.skc-bulk-body \{ animation: none; \}/);
+  });
+});
+
+describe('artefacto de interfaz · la puerta pide decisión, la tarjeta la ofrece', () => {
+  it('un «tiene avisos» no se queda en fallo: abre la pantalla de avisos con su texto', () => {
+    // La negativa por avisos es semántica (no se reintenta con otra forma) y vuelve con el texto entero.
+    assert.match(client, /if \(\/tiene avisos\/i\.test\(salida\)\)/);
+    assert.match(client, /avisos: salida/);
+    assert.match(client, /setStage\('avisos'\)/);
+    assert.match(client, /\{ className: 'skc-bulk-body' \}, avisos\.texto\)/, 'los avisos se leen en la tarjeta');
+  });
+
+  it('aceptar los avisos ejecuta la MISMA orden con `--force`, y sólo al pulsarlo', () => {
+    assert.match(client, /const restoFinal = forzar \? `\$\{resto\} --force`\.trim\(\) : resto;/);
+    assert.match(client, /addButton\('force', say\('bulk_warnings_accept'\), \(\) => run\(\{ forzar: true \}\)\)/);
+    assert.equal(/run\(\{ forzar: true \}\);\s*\n.*run\(\{ forzar: true \}\)/.test(client), false, 'una sola acción');
+    // Sin la confirmación, ninguna llamada lleva `--force`: el panel no fuerza por su cuenta.
+    assert.match(client, /const orden = conocida === null \? FORMAS : \[conocida\];/);
+  });
+
+  it('los textos de la pantalla existen en los dos idiomas', () => {
+    assert.match(client, /bulk_warnings_title: 'La puerta pide una decisión/);
+    assert.match(client, /bulk_warnings_accept: 'Acepto los avisos/);
+    assert.match(client, /bulk_warnings_title: 'The gate asks for a decision/);
+    assert.match(client, /bulk_warnings_accept: 'I accept the warnings/);
   });
 });

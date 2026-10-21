@@ -35,6 +35,31 @@ que faltaba no era ejecutar, era **creer la evidencia correcta**.
   `kind: 'success'` sin veredicto **no** es éxito, y que sin filas no se pinta una cifra. **48/48** en ese
   fichero; **593/593** en la suite, hermética verde.
 
+## [3.9.1] — 2026-10-21
+
+**Decidir desde la tarjeta ya no termina en un callejón: los avisos se leen y se aceptan, y lo que ya no está
+pendiente se dice.** Dos defectos medidos al pulsar «publicar para todos mis proyectos» en una propuesta real.
+
+### Corregido
+
+- **Una propuesta con avisos sólo ofrecía un error.** La puerta pedía una decisión explícita (`--force`) y el
+  panel no tenía forma de darla: el humano veía «1 failed» con la primera línea del aviso cortada. Ahora la
+  negativa por avisos se reconoce como **semántica** (no se reintenta con otras firmas), la tarjeta muestra el
+  texto entero de los avisos y ofrece **«Acepto los avisos y continúo»**, que ejecuta la **misma** orden con
+  `--force`. Sólo al pulsarlo: el panel no fuerza por su cuenta.
+- **Una tarjeta desactualizada ofrecía decidir algo que el almacén ya no tiene.** El panel confiaba en los ids de
+  la tarjeta; si la propuesta ya se había aprobado o vivía en otro proyecto, la orden fallaba con «no hay ninguna
+  propuesta» —un error que el humano no podía arreglar—. Ahora, antes de ejecutar, se pregunta al plugin con el
+  comando nuevo **`/skill-pendientes`** (ids en una línea, sólo lectura) y lo que ya no espera decisión se
+  informa como tal: «ya no está pendiente en el almacén: la tarjeta estaba desactualizada».
+
+### Añadido
+
+- `/skill-pendientes`: los ids pendientes en una línea estable (`pendientes: N` · `ids: a,b,c`). Es la fuente que
+  consulta la tarjeta y no depende de que el anfitrión anuncie filas del menú.
+
+**611/611** en verde y hermética verde.
+
 ## [3.9.0] — 2026-10-21
 
 **El cuerpo de una skill es también el índice de su material: mover una sección ya no deja referencias a la vista
