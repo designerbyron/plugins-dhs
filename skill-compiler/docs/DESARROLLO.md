@@ -173,9 +173,10 @@ Dos garantías que conviene no romper:
   `menor` cuando se añade capacidad; `parche` cuando se corrige un defecto.
 - Antes de publicar: `npm run test:hermetic` en verde, `CHANGELOG.md` al día, y ningún secreto en el
   árbol (`git diff --check` no comprueba eso: míralo tú).
-- **Una versión publicada se etiqueta**, y la etiqueta no se mueve nunca: se crea en el commit que declara
-  la versión (`package.json` + su entrada del CHANGELOG, ya escritos), con mensaje que resuma el alcance y
-  `git push origin <etiqueta>`. Si una versión se publicó sin etiqueta, la etiqueta **no se inventa después**:
+- **Una versión publicada se etiqueta**, y la etiqueta no se mueve nunca: se crea en el commit donde la versión
+  queda **cerrada y coherente** —`package.json`, su entrada del CHANGELOG y las docs sin afirmaciones
+  desfasadas—, con mensaje que resuma el alcance, y se empuja (`git push origin <etiqueta>`). Etiquetar un
+  commit cuya documentación describe el comportamiento anterior deja un release que se contradice a sí mismo. Si una versión se publicó sin etiqueta, la etiqueta **no se inventa después**:
   se declara el hueco y se etiqueta desde la siguiente. (`v3.4.0`–`v3.7.0` se publicaron sin etiqueta: es un
   hueco declarado, no una serie de releases retroactivas.)
 - **Los recuentos de pruebas que citan los README y esta documentación se actualizan al cerrar la
