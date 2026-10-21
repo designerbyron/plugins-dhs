@@ -50,6 +50,8 @@ diario seguía diciendo «publicada · global» mientras el almacén decía «lo
 - El ámbito lo decide el **origen de la operación** —el proyecto desde el que se dirigía el trabajo—, no el sitio
   donde acaba el artefacto. La propuesta guarda `project`/`projectKey` desde que nace; publicar es una decisión
   aparte.
+- Cómo se repara un asiento que falta: con el escritor único, declarando el cierre en `nota`; nunca a mano. El
+  hueco de la localización ejecutada antes de este arreglo quedó cerrado así (15 entradas, cadena válida).
 
 **614/614** en verde y hermética verde.
 

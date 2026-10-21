@@ -567,3 +567,11 @@ acabe en otro sitio: publicarla o localizarla es una decisión aparte, posterior
 conocimiento. Por eso la propuesta guarda `project` y `projectKey` desde que nace, y por eso el cambio de ámbito
 (`ambito`, `/skill-ambito`, `scope`) deja asiento en el diario con las dos huellas: sin él, el diario diría
 «publicada» mientras el almacén dice «local», y la evidencia mentiría.
+
+### Un asiento que falta se repara con el escritor, nunca a mano
+
+Si una operación cambió el almacén sin dejar asiento —un defecto del motor, como el de `ambito` antes de la
+3.9.3—, la reparación tiene tres pasos: leer la última entrada del diario, calcular la huella del contenido
+actual y escribir **una** entrada con `anotarEntradaEnDiario`, que encadena sola, declarando en `nota` que es un
+cierre. Nunca se edita el `.jsonl` a mano: `security` verifica la cadena y una línea retocada la rompe. Después,
+`security` debe decir `cadena válida` y el recuento de entradas sube exactamente en uno.
