@@ -552,3 +552,10 @@ activa en su ámbito; publicarla la pone en la biblioteca compartida; y `--prese
 - **Antes de ejecutar, se pregunta al almacén.** La tarjeta consulta `/skill-pendientes` (ids en una línea, sólo
   lectura) y descarta lo que ya no espera decisión, con el motivo «la tarjeta estaba desactualizada». Sin esa
   comprobación, una tarjeta vieja producía un fallo del comando que el humano no podía resolver.
+
+### Avisos: valen para los dos ámbitos, y se preguntan antes
+
+`approve` (local) y `approve --global` comparten la misma puerta: una propuesta con avisos se niega en **ambos**
+sin `--force`. La tarjeta no espera a la negativa: `/skill-pendientes` publica `avisos: <id>=<n>` y las líneas
+`aviso:` leídas del `meta.json`, y si alguno de los ids marcados los tiene, abre la pantalla de avisos antes de
+mandar la orden. Aceptar ejecuta la misma orden con `--force`; cancelar no ejecuta nada.

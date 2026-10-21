@@ -35,6 +35,23 @@ que faltaba no era ejecutar, era **creer la evidencia correcta**.
   `kind: 'success'` sin veredicto **no** es éxito, y que sin filas no se pinta una cifra. **48/48** en ese
   fichero; **593/593** en la suite, hermética verde.
 
+## [3.9.2] — 2026-10-21
+
+**La tarjeta pregunta antes de ejecutar, no después del fallo.** Los avisos de una propuesta valen para
+**los dos ámbitos** —local y global—, y hasta ahora el panel los descubría mandando la orden y recibiendo una
+negativa que el anfitrión pintaba como `failed`, un fallo que el humano no había provocado.
+
+### Corregido
+
+- **Los avisos se conocen de antemano.** `/skill-pendientes` añade `avisos: <id>=<n>` y una línea `aviso:` por
+  cada uno, leídos del `meta.json` de la propuesta (sin ejecutar la puerta dos veces). Si alguno de los ids
+  marcados tiene avisos, la tarjeta abre la pantalla de avisos **sin mandar nada**; al aceptar, la orden sale
+  ya con `--force`. Ni una orden rechazada por el camino.
+- `join(fila.path, 'meta.json')` apuntaba a `SKILL.md` (la fila trae el fichero, no el directorio): los avisos
+  se leían vacíos. Corregido con `dirname`.
+
+**613/613** en verde y hermética verde.
+
 ## [3.9.1] — 2026-10-21
 
 **Decidir desde la tarjeta ya no termina en un callejón: los avisos se leen y se aceptan, y lo que ya no está

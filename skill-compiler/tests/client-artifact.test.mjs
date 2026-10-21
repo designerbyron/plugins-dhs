@@ -488,3 +488,12 @@ describe('artefacto de interfaz · la puerta pide decisión, la tarjeta la ofrec
     assert.match(client, /bulk_warnings_accept: 'I accept the warnings/);
   });
 });
+
+describe('artefacto de interfaz · preguntar antes, no después del fallo', () => {
+  it('los avisos se leen del almacén y la pantalla se abre SIN haber mandado la orden', () => {
+    assert.match(client, /for \(const m of texto\.matchAll\(\/\^aviso:/);
+    assert.match(client, /if \(!forzar\) \{/);
+    assert.match(client, /const conAvisos = \[\.\.\.picked\]\.filter\(\(id\) => \(previo\.avisos\?\.get\(id\)\?\.length \?\? 0\) > 0\)/);
+    assert.match(client, /setStage\('avisos'\);\s*\n\s*return;/, 'se detiene antes de ejecutar');
+  });
+});

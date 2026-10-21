@@ -676,3 +676,32 @@ describe('comandos · /skill-pendientes', () => {
     assert.match(r.text, /^ids:\s*$/m);
   });
 });
+
+describe('comandos · /skill-pendientes con avisos', () => {
+  it('dice cuántos avisos tiene cada id y los escribe: la tarjeta pregunta antes de mandar la orden', () => {
+    const s = sandbox();
+    const { byName } = commands(s.root, fakeCatalog());
+    const id = 'con-ruta-absoluta';
+    const hecho = propose({
+      id,
+      description: 'Procedimiento que ejecuta comandos desde una ruta absoluta y anota el resultado medido.',
+      whenToUse: 'Cuando haya que ejecutar un comando desde una ruta absoluta y registrar lo que devuelve.',
+      body: [
+        '## Procedimiento', '',
+        'Se ejecuta desde /mnt/c/Users/BYRON y se anota el resultado del comando antes de decidir nada.',
+        'La ruta se comprueba contra el mapa de unidades y, si no cuadra, se para y se avisa al responsable.',
+        'El parte recoge la ruta usada, la hora y la persona que lo hizo, para que la decisión tenga dueño.',
+        'Si el comando devuelve un error de montaje, no se reintenta a ciegas: se documenta y se escala.', '',
+        '## Cierre', '',
+        'Se firma el parte con la hora y la persona que lo hizo.', '',
+      ].join('\n'),
+    }, { root: s.root, curated: s.curated, cwd: 'C:\\xampp\\htdocs\\saas-corporative' });
+    assert.equal(hecho.status, 'proposed', JSON.stringify(hecho.errors ?? hecho.conflicts));
+    assert.equal(hecho.warnings.length > 0, true, 'la propuesta trae aviso');
+
+    const r = byName['skill-pendientes'].handler({ agent, rawInput: '' });
+    assert.equal(r.kind, 'success', r.text);
+    assert.match(r.text, new RegExp(`^avisos: ${id}=1$`, 'm'));
+    assert.match(r.text, new RegExp(`^aviso: ${id} · .*ruta absoluta`, 'm'));
+  });
+});

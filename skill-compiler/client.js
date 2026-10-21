@@ -723,7 +723,12 @@ window.__ModuleLoader__.load({
           const linea = /^ids:\s*(.*)$/m.exec(texto);
           if (linea !== null) {
             const ids = linea[1].trim() === '' ? [] : linea[1].split(',').map((x) => x.trim()).filter(Boolean);
-            return { ids, medible: true };
+            const avisos = new Map();
+            for (const m of texto.matchAll(/^aviso:\s*(\S+)\s*·\s*(.*)$/gm)) {
+              if (!avisos.has(m[1])) avisos.set(m[1], []);
+              avisos.get(m[1]).push(m[2]);
+            }
+            return { ids, medible: true, avisos };
           }
         } catch {
           /* sin el comando se sigue por las filas */
@@ -844,6 +849,23 @@ window.__ModuleLoader__.load({
         const failed = [];
         // La forma que funcione se descubre con la primera orden y se reutiliza: una vez por lote.
         let forma = null;
+        // Avisos conocidos de antemano: se pregunta **antes** de mandar nada. Así el humano decide sin que el
+        // anfitrión pinte un «failed» por una negativa que el propio panel provocó.
+        if (!forzar) {
+          try {
+            const previo = await pendientesAhora();
+            const conAvisos = [...picked].filter((id) => (previo.avisos?.get(id)?.length ?? 0) > 0);
+            if (conAvisos.length > 0) {
+              const texto = conAvisos
+                .map((id) => [`${id}:`, ...previo.avisos.get(id).map((a) => `  aviso  ${a}`)].join('\n'))
+                .join('\n\n');
+              setAvisos({ texto, ids: conAvisos });
+              setBusy(false);
+              setStage('avisos');
+              return;
+            }
+          } catch { /* si no se puede saber, se intenta y la puerta dirá lo suyo */ }
+        }
         let pendientes = [...picked];
         // Lo que la tarjeta muestra puede ser viejo (otra sesión, otra decisión). Antes de mandar una orden
         // se pregunta al almacén; lo que ya no está pendiente se dice como tal —no como un fallo del comando,

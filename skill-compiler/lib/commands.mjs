@@ -28,7 +28,7 @@
  * que hace cierta la promesa de «usable sin reiniciar».
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { AUTO_COMMAND, autoApproveFromEvents, parseAutoCommand } from './auto-approve.mjs';
 import {
@@ -482,7 +482,23 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const { key } = scopeOfAgent(agent);
         if (key === null) return bad(NO_SCOPE);
         const waiting = pending({ root, key });
-        return ok([`pendientes: ${waiting.length}`, `ids: ${waiting.map((fila) => fila.id).join(',')}`].join('\n'));
+        // Los avisos viajan con los ids para que la tarjeta pueda **preguntar antes** de mandar la orden: si
+        // no, la primera orden se niega y el anfitrión pinta un «failed» que el humano no ha provocado.
+        const lineas = [`pendientes: ${waiting.length}`, `ids: ${waiting.map((fila) => fila.id).join(',')}`];
+        const porId = new Map();
+        for (const fila of waiting) {
+          let avisos = [];
+          try {
+            const meta = JSON.parse(readFileSync(join(dirname(fila.path), 'meta.json'), 'utf8'));
+            avisos = Array.isArray(meta?.warnings) ? meta.warnings.map(String) : [];
+          } catch { avisos = []; }
+          porId.set(fila.id, avisos);
+        }
+        if (porId.size > 0) {
+          lineas.push(`avisos: ${[...porId].map(([id, a]) => `${id}=${a.length}`).join(',')}`);
+          for (const [id, avisos] of porId) for (const aviso of avisos) lineas.push(`aviso: ${id} · ${aviso}`);
+        }
+        return ok(lineas.join('\n'));
       }),
     },
 
