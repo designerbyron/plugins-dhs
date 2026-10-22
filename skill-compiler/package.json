@@ -8,12 +8,12 @@
   "author": "designerbyron",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/designerbyron/plugins-dhs.git",
+    "url": "git+https://github.com/designerbyron/plugins-dsh.git",
     "directory": "skill-compiler"
   },
-  "homepage": "https://github.com/designerbyron/plugins-dhs/tree/main/skill-compiler#readme",
+  "homepage": "https://github.com/designerbyron/plugins-dsh/tree/main/skill-compiler#readme",
   "bugs": {
-    "url": "https://github.com/designerbyron/plugins-dhs/issues"
+    "url": "https://github.com/designerbyron/plugins-dsh/issues"
   },
   "icon": "./icon.png",
   "exports": {

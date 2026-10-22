@@ -105,7 +105,7 @@ GitHub y las herramientas de cumplimiento dejan de reconocerla.
 Si este código te sirve, **te pedimos** que referencies el repositorio original:
 
 ```
-https://github.com/designerbyron/plugins-dhs
+https://github.com/designerbyron/plugins-dsh
 ```
 
 Y decimos «petición» con precisión: MIT **no** obliga a ello, y por eso esta línea vive aquí y no en el
@@ -150,7 +150,7 @@ versión pase a 1.0.0. La numeración es la que es; esto declara una garantía, 
 - Licencia **MIT** (ver arriba), con la referencia al repositorio como petición destacada.
 - Identidad de autor configurada **solo en este repositorio** (`git config user.name/user.email`), no en
   el global de la máquina: así no condiciona otros proyectos.
-- **Publicado** en `https://github.com/designerbyron/plugins-dhs` (rama `main`), con el remoto y el local
+- **Publicado** en `https://github.com/designerbyron/plugins-dsh` (rama `main`), con el remoto y el local
   sincronizados. El push sigue siendo un acto declarado: un commit se decide, y el envío se dice.
 
 ## Publicar en GitHub
@@ -163,7 +163,7 @@ git remote -v                 # comprobar a dónde apunta
 git push -u origin main       # el primer envío; después basta `git push`
 ```
 
-Si el repositorio se llama distinto de `plugins-dhs`, corrige el remoto antes:
+Si el repositorio se llama distinto de `plugins-dsh`, corrige el remoto antes:
 
 ```sh
 git remote set-url origin https://github.com/designerbyron/<nombre>.git
