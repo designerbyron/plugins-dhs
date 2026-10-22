@@ -167,13 +167,22 @@ El modelo propone; tú decides.
 ### Desde el harness, sin salir de la sesión
 
 ```
-/skill-propuestas                 qué espera tu decisión y qué está activo, en este proyecto
-/skill-ver <id>                   leer una propuesta entera antes de decidir
-/skill-aprobar [<id>] [--force]   activarla (misma puerta que el terminal); sin id, enseña lo que hay
-/skill-rechazar <id>              apartarla sin borrarla
-/skill-auto activar|desactivar    aprobar automáticamente en ESTA sesión
-/skill-propiedad [dsh-only|machine]  de quién es el proceso de creación de skills en este puesto
-/skill-sistemas                   los sistemas del puesto y los ids que viven en más de uno
+/skill-propuestas                   qué espera tu decisión y qué está activo, en este proyecto
+/skill-pendientes                   los ids pendientes en una línea (lo que consulta la tarjeta)
+/skill-ver <id>                     leer una propuesta entera antes de decidir
+/skill-aprobar <id> [--global|--local] [--force] [--preserve-state]
+                                    activarla donde digas; con avisos exige --force explícito, y
+                                    --preserve-state corrige una apagada sin encenderla
+/skill-globalizar <id> [--force]    publicarla para todos tus proyectos
+/skill-ambito <id> --global|--local cambiarla de sitio una vez aprobada
+/skill-deshabilitar <id>            apagarla (deja de servirse; se conserva entera)
+/skill-habilitar <id>               volver a servirla
+/skill-eliminar <id>                retirarla a un respaldo con fecha (nunca borra)
+/skill-retiradas                    qué hay retirado y cómo volver
+/skill-rechazar <id>                apartar una propuesta sin borrarla
+/skill-auto activar|desactivar      aprobar automáticamente en ESTA sesión
+/skill-propiedad [dsh-only|machine] de quién es el proceso de creación de skills en este puesto
+/skill-sistemas                     los sistemas del puesto y los ids que viven en más de uno
 ```
 
 Y cada pendiente aparece además en el menú `/` como **tres filas elegibles** —leer, activar, apartar—, sin
@@ -244,7 +253,23 @@ node ".../bin/skill-compiler.mjs" reject <id>
 
 # qué se está sirviendo de verdad en este proyecto
 node ".../bin/skill-compiler.mjs" active
+
+# cambiar de ámbito una ya aprobada (publicar o traer al proyecto)
+node ".../bin/skill-compiler.mjs" scope <id> --global|--local
+
+# reparar el cuerpo de una skill viva: deja propuesta, no cambia estado ni ámbito
+node ".../bin/skill-compiler.mjs" repair <id>
+
+# el almacén, sin tocarlo: salud, seguridad, propiedad y sistemas
+node ".../bin/skill-compiler.mjs" audit
+node ".../bin/skill-compiler.mjs" security
+node ".../bin/skill-compiler.mjs" ownership
+node ".../bin/skill-compiler.mjs" systems
+node ".../bin/skill-compiler.mjs" doctor
 ```
+
+El resto de la CLI —`disable`, `enable`, `delete`, `retired`, `restore`, `promote`, `history`, `auto`,
+`review`— está descrito en [`docs/OPERACION.md`](docs/OPERACION.md).
 
 `--project-key <clave>` actúa sobre otro proyecto sin cambiar de directorio.
 
@@ -280,11 +305,11 @@ y vendorizas una versión limpia, o no se vendoriza.
 
 ```sh
 cd "<donde-clonaste-el-repo>/skill-compiler"   # donde lo hayas clonado
-npm test              # las 209 pruebas
-npm run test:hermetic # las 209 pruebas + huella del store real antes y después
+npm test              # las 614 pruebas
+npm run test:hermetic # las 614 pruebas + huella del store real antes y después
 ```
 
-209 pruebas, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la máquina.
+614 pruebas, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la máquina.
 
 - `tests/compiler.test.mjs` — validación, composición del `SKILL.md`, solapamiento, idempotencia,
   aislamiento por proyecto, aprobación/rechazo/supersesión, inventario.
@@ -298,6 +323,16 @@ npm run test:hermetic # las 209 pruebas + huella del store real antes y después
   guiones que se usaron **contra la red real** (una URL pública) para comprobar la cadena entera:
   resolver, descargar, adaptar, proponer, aprobar, servir, y que el origen no se movió. El segundo mide
   además la huella del store real antes y después.
+- `tests/repair.test.mjs` — el índice del material: se reemplaza solo su bloque delimitado, una sección del
+  autor con el mismo título sobrevive, la migración del formato anterior exige procedencia inequívoca y el
+  presupuesto se mide sobre el cuerpo final.
+- `tests/security.test.mjs` y `tests/journal-aprobaciones.test.mjs` — ids y contenido, árboles de los sistemas
+  del puesto, y el rastro encadenado de **toda** decisión (aprobación, publicación, cambio de ámbito,
+  auto-aprobación y promoción del motor), con la cadena verificada.
+- `tests/commands.test.mjs` y `tests/client-artifact.test.mjs` — los comandos y la pieza de interfaz como
+  artefacto: veredictos que el panel reconoce, lote como una orden, avisos que se preguntan antes de ejecutar.
+- `tests/cli-integracion.test.mjs` — la CLI **de verdad**, por subproceso sobre una arena: reparar y seguir
+  apagada, negarse a `--preserve-state` en una activa, y corregir una global sin moverla de ámbito.
 - `tests/check-hermetic.mjs` — la puerta de hermetismo. **Existe porque el error ya se cometió**: dos
   pruebas con `root: undefined` cayeron al store real y escribieron dos fixtures sin que nada se pusiera
   rojo. Ahora `sandbox()` redirige `DSH_HOME`, y esta puerta **mide** que el store real no cambió.

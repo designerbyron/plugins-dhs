@@ -12,7 +12,7 @@ absoluta** con el gestor de plugins del harness.
 
 | Plugin | Qué hace | Estado |
 |---|---|---|
-| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con **ámbito** —de un proyecto o de todos, lo eliges tú al aprobar—; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Estable · v1.8.0 · 276 pruebas en verde |
+| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con **ámbito** —de un proyecto o de todos, lo eliges tú al aprobar—; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Estable · v3.9.3 · 614 pruebas en verde |
 
 ## Por qué está en `htdocs`
 
@@ -117,32 +117,40 @@ los cambios.
 Es la misma regla que aplica el propio plugin con las skills que vendoriza: guarda de dónde vinieron, con
 su hash y su fecha, para que nadie tenga que creerse nada de memoria.
 
-## Estado: primera versión estable (1.7.1)
+## Estado: versión estable actual (**3.9.3**)
 
-La **1.7.1** es la primera versión que este repositorio declara **estable**. No es un adjetivo: son criterios
-y un compromiso.
+La estable hoy es la **3.9.3** (etiqueta `v3.9.3`, release publicada). «Estable» no es un adjetivo: son
+criterios y un compromiso.
 
 **Lo que lo sostiene**
 
-- 276 pruebas en verde, con la suite **hermética** que mide la huella del almacén real antes y después.
+- **614 pruebas en verde**, con la suite **hermética** que mide la huella del almacén real antes y después.
 - Los contratos se comprueban contra los **paquetes reales** del harness (registro de skills, de comandos y de
   proyecciones), no contra dobles escritos a mano.
 - `doctor` verde: cada comprobación **ejecuta** el camino que vigila, no lo reimplementa.
-- El flujo completo **probado en vivo**: proponer, aprobar, apagar, encender, retirar y recuperar.
-- Sin defectos abiertos en el flujo. Lo que sigue abierto son **decisiones** (qué debe hacer el modelo ante un
-  objetivo pausado) y **límites declarados**, no fallos.
+- `audit` mide el almacén sin tocarlo y `security` verifica ids, contenido, árboles y la cadena del diario
+  (0 bloqueos, 0 avisos, cadena válida). Lo único que puede quedar en `WARN` es una propuesta esperando
+  decisión humana: eso es estado, no un defecto.
+- El flujo completo **probado en vivo**: proponer, aprobar, reparar, apagar, encender, publicar, localizar,
+  retirar y recuperar.
 
 **El compromiso**: no cambian de forma incompatible sin subir de versión *major*:
 
 | Qué | Se mantiene |
 |---|---|
 | Comandos de la sesión | Los nombres `skill-*` y su forma (`input` opcional, resultado `{kind, text}`) |
-| CLI | `where`, `list`, `show`, `check`, `approve`, `reject`, `disable`, `enable`, `delete`, `retired`, `restore`, `vendor`, `upstream`, `provenance`, `doctor`, `review` |
-| Almacén | `projects/<clave>/{proposed,approved,disabled,rejected,superseded}` y el `SKILL.md` con su frontmatter |
-| Ámbito | El proyecto sale del `cwd` de la sesión; nunca lo declara el modelo |
+| CLI | `where`, `list`, `show`, `check`, `approve`, `scope`, `disable`, `enable`, `delete`, `retired`, `restore`, `reject`, `active`, `vendor`, `upstream`, `provenance`, `ownership`, `systems`, `security`, `auto`, `doctor`, `audit`, `repair`, `promote`, `history`, `review` |
+| Almacén | `projects/<clave>/{proposed,approved,published,disabled,rejected,superseded}`, `global/superseded` y el `SKILL.md` con su frontmatter |
+| Ámbito | El proyecto sale del `cwd` de la sesión; nunca lo declara el modelo. Publicar o localizar es una decisión aparte, y deja asiento en el diario |
 
 **Lo que «estable» no significa**: que no haya límites —los hay, y están declarados uno a uno— ni que la
 versión pase a 1.0.0. La numeración es la que es; esto declara una garantía, no renombra nada.
+
+### Historia: la primera declaración (1.7.1)
+
+La **1.7.1** fue la primera versión que este repositorio declaró estable, con 276 pruebas y el mismo
+compromiso. Se conserva como historia de lo que se declaró entonces, no como estado de hoy; el registro de
+versiones y sus motivos está en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Estado del repositorio
 
