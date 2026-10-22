@@ -123,6 +123,19 @@ experiencia humana y dobla el mantenimiento; en un producto pensado para viajar,
 superficie esté **en inglés fijo**. Es un cambio de comportamiento (tokens, forma de razonar del modelo) y no
 pertenece a esta versión: se declara como decisión abierta y se mide aparte.
 
+### F-9 · Los identificadores están partidos en dos idiomas — severidad media, la raíz de la asimetría
+
+Medido: la **CLI** tiene 26 subórdenes con nombre inglés (`where`, `check`, `approve`, `scope`, `audit`,
+`security`…), los **flags** son ingleses (`--global`, `--local`, `--force`, `--preserve-state`,
+`--project-key`) y las **herramientas** del modelo también. Pero los **comandos de sesión** están en español:
+`skill-propuestas`, `skill-aprobar`, `skill-globalizar`, `skill-rechazar`, `skill-deshabilitar`…
+
+Hay 596 apariciones de esos 16 nombres en 41 ficheros (de los que ~10 son código y documentación viva; el resto,
+planes y registro histórico). Un plugin que se presenta en inglés y se opera con verbos en español obliga a
+memorizar dos vocabularios. **Consecuencia:** la normalización de identificadores al inglés no es cosmética, es
+la condición para que la opción de idioma hable sólo de presentación y no de contrato.
+
+
 ---
 
 ## 3 · Lo que **no** se toca, y por qué
