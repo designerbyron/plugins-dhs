@@ -312,11 +312,11 @@ y vendorizas una versión limpia, o no se vendoriza.
 
 ```sh
 cd "<donde-clonaste-el-repo>/skill-compiler"   # donde lo hayas clonado
-npm test              # las 777 pruebas (con las puertas i18n y ASCII antes)
-npm run test:hermetic # las 777 pruebas + huella del store real antes y después
+npm test              # las 805 pruebas (con las puertas i18n y ASCII antes)
+npm run test:hermetic # las 805 pruebas + huella del store real antes y después
 ```
 
-777 pruebas en 192 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
+805 pruebas en 196 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
 máquina. `pretest` corre las puertas de idioma y ASCII: con una en rojo, no se ejecuta ni una prueba.
 
 - `tests/compiler.test.mjs` — validación, composición del `SKILL.md`, solapamiento, idempotencia,
@@ -327,10 +327,11 @@ máquina. `pretest` corre las puertas de idioma y ASCII: con una en rojo, no se 
 - `tests/vendor.test.mjs` — vendorizado con un `fetch` **falso inyectado**: formas de enlace, descarga,
   referencias, 404 y límite de peticiones, techo de tamaño, bloqueo por secreto/inyección/texto
   invisible, adaptación, procedencia, snapshot verbatim, y que un bloqueo no deja rastro en disco.
-- `tests/propose-real.e2e.mjs` y `tests/vendor-real.e2e.mjs` — no son pruebas automáticas: son los
-  guiones que se usaron **contra la red real** (una URL pública) para comprobar la cadena entera:
-  resolver, descargar, adaptar, proponer, aprobar, servir, y que el origen no se movió. El segundo mide
-  además la huella del store real antes y después.
+- `tests/propose-real.e2e.test.mjs` y `tests/vendor-real.e2e.test.mjs` — la cadena entera, **en la suite**:
+  proponer el cuerpo real que se escribió ese día (guardado en `tests/fixtures/propose-real-body.md`) y
+  aprobarlo, y vendorizar con un `fetch` inyectado que responde con la forma de GitHub —descarga, adaptación,
+  procedencia, snapshot verbatim, aprobación, servicio y comprobación del origen—. Antes eran guiones sin una
+  sola aserción que `node --test` no recogía; cada uno se demuestra ahora con una mutación controlada.
 - `tests/repair.test.mjs` — el índice del material: se reemplaza solo su bloque delimitado, una sección del
   autor con el mismo título sobrevive, la migración del formato anterior exige procedencia inequívoca y el
   presupuesto se mide sobre el cuerpo final.

@@ -94,7 +94,7 @@ hace improbable.
 
 ```sh
 npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
-npm test              # las puertas (i18n + ASCII) y, si pasan, las 768 pruebas
+npm test              # las puertas (i18n + ASCII) y, si pasan, las 805 pruebas
 npm run test:hermetic # lo mismo + huella del almacén real antes y después
 npm run gate          # solo las puertas: para un cambio de texto o de catálogo
 ```
@@ -178,8 +178,11 @@ mengua).
   navegador: identidad igual al paquete, misma clave de proyección que el Host, el texto hereda el color y
   el acento pinta solo la marca, una sola región viva, movimiento reducido, sin emoji y sin tocar el
   documento. Un cambio que rompa cualquiera de esos contratos se pone rojo aquí, no en la interfaz.
-- `tests/propose-real.e2e.mjs`, `tests/vendor-real.e2e.mjs` — guiones contra la red real. No los recoge
-  `node --test` (necesitan un tercero), se ejecutan a mano.
+- `tests/propose-real.e2e.test.mjs`, `tests/vendor-real.e2e.test.mjs` — la cadena entera **dentro de la
+  suite**: proponer el cuerpo real (guardado en `tests/fixtures/propose-real-body.md`), aprobarlo y servirlo;
+  y vendorizar con un `fetch` **inyectado con la forma de GitHub** (descarga, adaptación, procedencia,
+  snapshot verbatim, aprobación, servicio y comprobación del origen). Los dos se comprobaron rojos con una
+  mutación del código antes de darlos por buenos, y la mutación está descrita en su cabecera.
 - `tests/check-hermetic.mjs` — la puerta que mide que la suite no tocó el almacén real.
 
 ### Escribir una prueba hermética
