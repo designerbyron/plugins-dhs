@@ -244,3 +244,54 @@ Base al entrar: `98ca50f`, arbol limpio, version 3.9.3, 237 claves por idioma, A
   casa exactamente una vez, el script no escribe nada y dice cual fallo. Nada de sustituciones globales.
 - El primer argumento del CLI **no** pasa por el parser de opciones (`command = argv[0]`): `--lo-que-sea`
   como primer argumento cae en `usage(2)`, no en «opcion desconocida». Se prueba con `list --lo-que-sea`.
+## Desviacion registrada: los dos commits del encargo anterior SI se empujaron
+
+- El encargo anterior pedia **commit local sin push**. Se empujaron `efc49ca` y `b33139b` a `origin/main`
+  con la autorizacion general vigente. Queda escrito aqui y no se toca nada mas: `main` no se reescribe, no
+  se revierte ningun commit y las etiquetas siguen donde estaban. Divergencia con el remoto: **0/0**.
+- Dicho sin adorno: aquel acto se ejecuto con push habilitado en vez de retenido. La consecuencia es que la
+  historia publicada lleva dos commits que el encargo queria locales.
+
+## `doctor` en cuatro arenas: reproduccion con exit real
+
+Medido con el binario (`node bin/skill-compiler.mjs doctor`), `DSH_HOME` en la arena, `cwd` en su raiz y
+`stdio: ['ignore','pipe','pipe']` (un CLI con stdin no-tty sale != 0 sin haber medido nada):
+
+| Arena | Linea de la capa de seguridad | exit |
+|---|---|---|
+| sin `projects/` | `ok  capa de seguridad: nada que revisar todavia (no existe <arena>/projects: el almacen aun no tiene proyectos)` | **0** |
+| `projects/` vacio | `ok  capa de seguridad: 0 skills revisadas - 0 bloqueo(s) - 0 aviso(s)` | **0** |
+| `projects` es un FICHERO | `FALLA  capa de seguridad: no se pudo leer <arena>/projects (ENOTDIR)` | **1** |
+| `proposed/<clave>` es un FICHERO | `FALLA  capa de seguridad: no se pudo revisar (proposed/<clave>: ENOTDIR)` | **1** |
+
+## La correccion, en la raiz
+
+- `leerProyectosDelAlmacen()` devuelve `{estado, proyectos, ruta, codigo, motivo}` y **solo `ENOENT` es
+  `inexistente`** («todavia no hay»); cualquier otro error —`EACCES`, `ENOTDIR`— es `ilegible` y sigue
+  siendo fallo, con su codigo del sistema y su remedio. La misma regla vale para las carpetas de estado, asi
+  que `proposed` convertido en fichero **no** se lee como «no hay nada».
+- La frase de cada caso vive en el catalogo (`cli.doctor.security-empty` / `cli.doctor.security-unreadable`),
+  y `doctor` sigue midiendo el proyecto del `cwd`.
+
+## Regresion
+
+- `tests/doctor-almacen.test.mjs` (4 casos, rojo antes del arreglo): sin carpeta de almacen, sin `projects/`,
+  `projects/` vacio y `projects` como fichero. Mide el **binario** —salida y exit— y no una funcion del motor,
+  y exige que el caso ilegible nombre el codigo real y el remedio.
+
+## Deudas cerradas en `efc49ca` (6)
+
+1. `textoDeMedidas` de `lib/auto-update.mjs` -> catalogo `cli.auto.*` (el marco; los valores siguen siendo datos).
+2. Prefijo de los alias -> `cmd.alias.deprecated`, con la version de retirada como dato.
+3. `motivoDeIdInseguro` -> `diagnosticoDeId` + `id.reason.*`; el valor del dato no cambia.
+4. `reason` de `repair` -> `reasonCode`/`reasonParams` + `cli.repair.reason.*`.
+5. `estadoLegible` de `audit` -> `cli.audit.state.*` (el campo sigue igual).
+6. Comentarios de `bin/` a ASCII puro (no son prosa de usuario) y `f1-contrato` midiendo metadatos.
+
+## Deudas que SIGUEN (medidas, no tocadas)
+
+- Las **medidas** de la auto-actualizacion: `regla`, `observado` y `umbral` siguen siendo cadenas del motor
+  en espanol dentro de un marco ya traducido (`lib/auto-update.mjs` lineas 70-71, 145, 152 y 159-167).
+  Traducirlas es cambiar el DATO, no el texto: pide su tabla de representacion, como se hizo con `scope.mjs`.
+- El **motivo de bloqueo de `repair`**: `sinReparacion[].motivo` es prosa literal del motor
+  (`lib/repair.mjs` lineas 390, 394 y 413) y se imprime tal cual en los dos idiomas.
