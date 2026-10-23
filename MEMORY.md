@@ -322,3 +322,23 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
 - Ahora se lee el veredicto por id del texto del comando (`Activa:`, `Ya estaba activa:`, `ok <id> —`), las
   filas son respaldo con `medible:false`, el lote admite parciales y un error semántico no se reintenta.
 - La forma que funciona en este host es la **primera**: `runCommand(sessionId, '/comando args')`.
+
+## v4.0.0 (en curso) — i18n ES/EN: contrato congelado y grupo 1 migrado (2026-10-23)
+
+- **F1.3 cerrada.** El inventario medido son cuatro capas, no cuatro nombres: 4 herramientas
+  (`ctx.tools.register` leídas de `index.js`), 16 comandos, 15 alias, el proveedor (rango 150) y la sección
+  estática del prompt (orden 9000). Todo eso se congela en `tests/fixtures/definitions-contract.json`
+  (`superficie` + por herramienta: `params`, `params_arbol`, `output_estructura` sin texto,
+  `texto_obligatorio` y `contrato` con permisos/efectos/seguridad).
+- El manifiesto **no guarda texto**: el esquema de salida se congela sin cadenas, así que traducir no obliga a
+  reescribir la expectativa y una traducción no puede tapar un cambio de esquema. El texto se protege por sus
+  propiedades: ASCII puro, inglés y ninguna ruta obligatoria vacía (`tests/definitions-schema.test.mjs`, 18 casos).
+- Las herramientas de solo lectura se prueban **por huella del almacén** (SHA-256 antes y después), no por su
+  descripción; y ningún parámetro se llama force/skip/bypass/override.
+- Texto visible al modelo: 10 caracteres no ASCII (9 U+2014, 1 U+2026) en 8 rutas de `skill_propose` → ASCII.
+  Las otras tres herramientas ya estaban limpias. Línea base ASCII 8.624 → 8.614.
+- **F1.2 grupo 1 hecho** (proposals/pending/show + ayudantes compartidos): catálogo 34 → 74 claves por idioma.
+  El inglés nuevo es ASCII. Las aserciones de prosa existentes se conservan fijando `DSH_LANG=es` en sus seis
+  ficheros: así cada una prueba también la traducción española.
+- Pendiente de F1.2: grupos 2 a 5 (approve/publish/scope · reject/disable/enable/retire/retired ·
+  ownership/systems/auto · `bin/`).
