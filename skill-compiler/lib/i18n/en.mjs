@@ -484,7 +484,7 @@ export default Object.freeze({
   'cli.doctor.rows-pending': 'pending rows: {n} pending in {key} (rows are not composed without the project cwd)',
   'cli.doctor.rows-ok': 'pending rows: {n} pending -> {rows} menu rows, with a valid name',
   'cli.doctor.rows-remedy': 'a row with a name outside the grammar is not registered, and disappears from the menu without warning',
-  'cli.doctor.rows-verbs': 'each pending one offers its three verbs (read - activate - set aside)',
+  'cli.doctor.rows-verbs': 'each pending one offers its {n} verbs (read - activate - publish - set aside)',
   'cli.doctor.rows-verbs-remedy': 'review ROW_VERBS in lib/pending-rows.mjs',
   'cli.doctor.rows-failed': 'the pending rows could not be composed: {message}',
   'cli.doctor.rows-failed-remedy': 'review lib/pending-rows.mjs',

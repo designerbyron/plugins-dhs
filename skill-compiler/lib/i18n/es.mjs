@@ -484,7 +484,7 @@ export default Object.freeze({
   'cli.doctor.rows-pending': 'filas de pendientes: {n} pendientes en {key} (no se componen filas sin el cwd del proyecto)',
   'cli.doctor.rows-ok': 'filas de pendientes: {n} pendientes -> {rows} filas del menu, con nombre valido',
   'cli.doctor.rows-remedy': 'una fila con un nombre fuera de la gramatica no se registra, y desaparece del menu sin avisar',
-  'cli.doctor.rows-verbs': 'cada pendiente ofrece sus tres verbos (leer - activar - apartar)',
+  'cli.doctor.rows-verbs': 'cada pendiente ofrece sus {n} verbos (leer - activar - publicar - apartar)',
   'cli.doctor.rows-verbs-remedy': 'revisa ROW_VERBS en lib/pending-rows.mjs',
   'cli.doctor.rows-failed': 'no se pudieron componer las filas de pendientes: {message}',
   'cli.doctor.rows-failed-remedy': 'revisa lib/pending-rows.mjs',

@@ -762,7 +762,7 @@ switch (command) {
     // comandos sin argumentos que el menu `/` ofrece; si su composicion se rompe, autorizar vuelve a ser
     // una sintaxis que hay que recordar.
     try {
-      const { pendingRowsFor } = await import(pathToFileURL(join(packageRoot, 'lib', 'pending-rows.mjs')).href);
+      const { pendingRowsFor, ROW_VERBS } = await import(pathToFileURL(join(packageRoot, 'lib', 'pending-rows.mjs')).href);
       const { pending: pendingOf, projectKey: keyOf } = await import(pathToFileURL(join(packageRoot, 'lib', 'compiler.mjs')).href);
       const cwd = process.cwd();
       const key = typeof flags.projectKey === 'string' ? flags.projectKey : keyOf(cwd);
@@ -774,7 +774,12 @@ switch (command) {
         : tr('cli.doctor.rows-ok', { n: waiting.length, rows: rows.length }),
         tr('cli.doctor.rows-remedy'));
       if (rows !== null) {
-        line(rows.length === waiting.length * 3, tr('cli.doctor.rows-verbs'), tr('cli.doctor.rows-verbs-remedy'));
+        // El numero de verbos sale del propio artefacto. Estaba escrito a mano como `* 3` desde que los
+        // verbos eran tres, y con `publish` (cuatro) el diagnostico se contradecia con la linea de arriba
+        // ("1 pendientes -> 4 filas del menu" y acto seguido "ofrece sus tres verbos") y cerraba en rojo
+        // un almacen sano. Un recuento clavado no mide el menu: mide la memoria de quien lo escribio.
+        const verbos = ROW_VERBS.length;
+        line(rows.length === waiting.length * verbos, tr('cli.doctor.rows-verbs', { n: verbos }), tr('cli.doctor.rows-verbs-remedy'));
       }
     } catch (error) {
       line(false, tr('cli.doctor.rows-failed', { message: error.message }), tr('cli.doctor.rows-failed-remedy'));
