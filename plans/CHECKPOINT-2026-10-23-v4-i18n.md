@@ -337,3 +337,37 @@ recuento, en los dos idiomas. Suite **730 -> 739**.
 - **Las filas visibles del menu**: en este entorno no hay navegador ni sesion interactiva, asi que no se vio el
   menu pintado. Lo comprobado es el registro (descriptores reales), el despacho (`execute` sobre la linea), los
   metadatos y la invocabilidad por handler; lo no comprobado es el pixel. No se afirma.
+## F1.4 · cobertura ES/EN: cerrada por comando y por CLI
+
+Los grupos 1-5 migraron el texto. F1.4 cierra la **cobertura**: que no quede un camino sin medir en los dos
+idiomas. Todo lo que sigue se ejecuta, comando a comando y binario a binario.
+
+### Lo que se midio
+
+- **Idioma base sin `DSH_LANG`**: `resolveLang({fresh:true})` -> `{lang: 'en', source: 'default'}`, y el binario
+  contesta `No learned skills yet (...)`. Con `DSH_LANG=es` el mismo `list` contesta `Sin skills aprendidas
+  todavia (...)` y el ingles no aparece. Los dos con exit 0.
+- **Los 31 comandos** (16 canonicos + 15 alias): mismo `kind`, mismo `code` y mismos `params` en los dos idiomas,
+  cada idioma en su arena. El texto cambia en **20 o mas** de los 31 (los que devuelven solo datos, como la
+  linea de ids, no cambian de texto y eso tambien es correcto).
+- **Avisos**: cuerpo por encima del umbral -> `with-warnings` con `params.id` igual en los dos, y el texto
+  traducido de verdad (`warnings` / `avisos`).
+- **Lote parcial**: mismo `kind: error` y los marcadores `ok    <id>` / `FALLO <id>` intactos en los dos
+  idiomas —son protocolo que el panel parsea, no prosa— y el bueno del lote sale de `proposed` en los dos casos.
+- **Neutros**: `scope-ask` en singular y en lote sin ambito, `pending-list` en la linea de ids. `/skill-proposals`
+  **no** emite `code` a proposito (es una lista, no un veredicto): queda fijado en la prueba para que no cambie
+  sin decidirlo.
+- **Id inseguro**: `unsafe-id` con el mismo `params.id` y un `params.motivo` no vacio en los dos idiomas.
+- **Sin claves crudas ni placeholders**: los 31 comandos, con y sin argumento, en los dos idiomas: cero
+  resultados con forma de clave de catalogo y cero `{param}` sin sustituir.
+- **Catalogos completos**: `clavesFaltantes('en')` y `clavesFaltantes('es')` vacios.
+
+### Pruebas nuevas
+
+`tests/i18n-cobertura.test.mjs` (9 casos). Suite **739 -> 748**.
+
+### Lo que sigue abierto en idioma (declarado, no arreglado)
+
+- `regla`/`observado`/`umbral` de la auto-actualizacion y el motivo de bloqueo de `repair`: siguen siendo datos
+  del motor en espanol (ver la seccion de deudas). No es cobertura de comandos: es representacion de un dato, y
+  pide su propia tabla.
