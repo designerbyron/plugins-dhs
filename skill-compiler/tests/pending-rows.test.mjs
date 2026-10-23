@@ -47,10 +47,10 @@ describe('filas de pendientes · composición', () => {
 
     const rows = pendingRowsFor({ root: s.root, cwd: CWD });
     assert.deepEqual(rows.map((row) => row.name), [
-      'skill-ver-measured-decision-check',
-      'skill-aprobar-measured-decision-check',
-      'skill-globalizar-measured-decision-check',
-      'skill-rechazar-measured-decision-check',
+      'skill-show-measured-decision-check',
+      'skill-approve-measured-decision-check',
+      'skill-publish-measured-decision-check',
+      'skill-reject-measured-decision-check',
     ]);
     for (const row of rows) {
       assert.match(row.name, COMMAND_NAME, `${row.name} no cumple la gramática del harness`);
@@ -61,7 +61,7 @@ describe('filas de pendientes · composición', () => {
       assert.equal(row.id, 'measured-decision-check');
     }
     // Los verbos, en el orden en que se usan: leer, decidir (aquí o para todos), apartar.
-    assert.deepEqual(rows.map((row) => row.verb), ['ver', 'aprobar', 'globalizar', 'rechazar']);
+    assert.deepEqual(rows.map((row) => row.verb), ['show', 'approve', 'publish', 'reject']);
   });
 
   it('sin pendientes no anuncia nada, y sin ámbito tampoco (no se inventa un proyecto)', () => {
@@ -95,7 +95,7 @@ describe('filas de pendientes · composición', () => {
     const names = rows.map((row) => row.name);
     for (const name of names) assert.match(name, COMMAND_NAME, `${name} no cumple la gramática`);
     // `2FA Setup!` → `2fa-setup`, y el prefijo `skill-` mantiene la letra inicial que exige el registro.
-    assert.equal(names.includes('skill-aprobar-2fa-setup'), true);
+    assert.equal(names.includes('skill-approve-2fa-setup'), true);
     // `---` no expresa nada: antes que registrar un nombre inválido, no hay fila para esa propuesta.
     assert.equal(names.some((name) => name.includes('roto')), false);
     assert.equal(commandSlug('---'), null);

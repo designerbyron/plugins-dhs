@@ -109,12 +109,26 @@ describe('activación', () => {
     apply(ctx, { root: s.root });
     disposeAll();
 
-    assert.deepEqual(registered.map((c) => c.name).sort(),
+    // Canónicos ingleses, y los 15 alias españoles declarados con metadatos (sin duplicar el canónico).
+    assert.deepEqual(registered.filter((c) => c.aliasOf === undefined).map((c) => c.name).sort(),
       [
-        'skill-ambito', 'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar', 'skill-habilitar',
-        'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only', 'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar',
-        'skill-retiradas', 'skill-sistemas', 'skill-ver',
+        'skill-approve', 'skill-auto', 'skill-disable', 'skill-enable', 'skill-ownership',
+        'skill-ownership-dsh-only', 'skill-ownership-machine', 'skill-pending', 'skill-proposals',
+        'skill-publish', 'skill-reject', 'skill-retire', 'skill-retired', 'skill-scope', 'skill-show',
+        'skill-systems',
       ]);
+    assert.deepEqual(registered.filter((c) => c.aliasOf !== undefined).map((c) => c.name).sort(),
+      [
+        'skill-ambito', 'skill-aprobar', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar',
+        'skill-habilitar', 'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only',
+        'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar', 'skill-retiradas',
+        'skill-sistemas', 'skill-ver',
+      ]);
+    for (const alias of registered.filter((c) => c.aliasOf !== undefined)) {
+      assert.equal(alias.deprecatedIn, '4.0.0', `${alias.name} sin versión de retirada`);
+      assert.equal(typeof alias.description, 'string');
+      assert.match(alias.description, /^Alias obsoleto/);
+    }
     for (const command of registered) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/);
       assert.equal(command.description.trim().length > 0, true);
@@ -140,7 +154,7 @@ describe('activación', () => {
 
     // Y aprobar desde el harness avisa a esa misma capacidad: es lo que hace usable la skill al instante.
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
-    const aprobar = registered.find((c) => c.name === 'skill-aprobar');
+    const aprobar = registered.find((c) => c.name === 'skill-approve');
     const result = aprobar.handler({ agent: { session: { header: { cwd: CWD } } }, rawInput: 'measured-decision-check --local' });
     assert.equal(result.kind, 'success', JSON.stringify(result));
     assert.equal(invalidations, 2, 'aprobar tiene que avisar al catálogo');
@@ -173,7 +187,7 @@ describe('activación', () => {
       { root: s.root, curated: s.curated, cwd: OTRO });
 
     // Nadie ha montado todavía: sin sesión no hay filas, ni en el global ni por agente.
-    assert.equal(global.map.size, 16, 'el global tiene los comandos base y ninguna fila');
+    assert.equal(global.map.size, 31, 'el global tiene los comandos base y ninguna fila');
 
     // El montaje entra por el provider, que el registro llama con `{ cwd, agent }`: es la vía medida
     // contra el registro real, y no depende de que un evento alcance el contexto raíz.
@@ -181,17 +195,17 @@ describe('activación', () => {
     await provider.list({ cwd: CWD, agent: agentFor(CWD) });
     await provider.list({ cwd: OTRO, agent: agentFor(OTRO) });
 
-    const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-aprobar-'));
-    assert.deepEqual(filasDe(CWD), ['skill-aprobar-measured-decision-check'], 'la sesión ve lo suyo');
-    assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
-    assert.equal(global.map.size, 16, 'las filas no se registran en el global: ahí se ofrecerían a todos');
+    const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-approve-'));
+    assert.deepEqual(filasDe(CWD), ['skill-approve-measured-decision-check'], 'la sesión ve lo suyo');
+    assert.deepEqual(filasDe(OTRO), ['skill-approve-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
+    assert.equal(global.map.size, 31, 'las filas no se registran en el global: ahí se ofrecerían a todos');
 
     // Decidir en una sesión no toca las filas de la otra.
-    const fila = perAgent.get(CWD).map.get('skill-aprobar-measured-decision-check');
+    const fila = perAgent.get(CWD).map.get('skill-approve-measured-decision-check');
     assert.equal(fila.input, undefined, 'la fila se ejecuta al elegirla: no reclama argumentos');
     assert.equal(fila.handler({ agent: { session: { header: { cwd: CWD } } } }).kind, 'success');
     assert.deepEqual(filasDe(CWD), [], 'las suyas se retiran al decidir');
-    assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'las del otro proyecto siguen intactas');
+    assert.deepEqual(filasDe(OTRO), ['skill-approve-pendiente-del-otro-proyecto'], 'las del otro proyecto siguen intactas');
 
     disposeAll();
     assert.equal(global.map.size, 0, 'descargar el plugin no deja comandos colgando');
@@ -218,20 +232,20 @@ describe('activación', () => {
     // El ámbito entra por el provider, que recibe la sesión con su agente: quien decide qué filas hay
     // es la sesión que pide el catálogo, no el proceso entero.
     await seen.providers[0]().list({ cwd: CWD, agent: { session: { header: { cwd: CWD } }, ctx: agentCtx } });
-    assert.equal(registry.has('skill-aprobar-measured-decision-check'), true, 'el agente ve su pendiente');
+    assert.equal(registry.has('skill-approve-measured-decision-check'), true, 'el agente ve su pendiente');
 
     const afterArming = registrations;
     // Un cambio del almacén sin efecto sobre las pendientes (aquí: la misma lista) no vuelve a registrar.
     signal.notify();
     assert.equal(registrations, afterArming, 'no se re-registra una fila idéntica');
-    assert.equal(registry.has('skill-aprobar-measured-decision-check'), true);
+    assert.equal(registry.has('skill-approve-measured-decision-check'), true);
     disposeAll();
     assert.equal(registry.size, 0, 'ni al descargar el plugin quedan filas colgando');
   });
 
   // ── El montaje no puede rendirse en silencio ────────────────────────────────────────────────────
   //
-  // El caso real: la sesión era válida, las pendientes estaban en el almacén y `/skill-propuestas` las
+  // El caso real: la sesión era válida, las pendientes estaban en el almacén y `/skill-proposals` las
   // listaba… pero el catálogo de esa sesión no tenía ninguna fila, así que el menú no ofrecía nada y la
   // tarjeta sólo decía «no hay filas que decidir en el catálogo de esta sesión». El montaje se caía sin
   // decirlo y el agente quedaba cacheado, de modo que ningún intento posterior podía arreglarlo.
@@ -260,13 +274,13 @@ describe('activación', () => {
     const { ctx, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
 
-    const propuestas = global.map.get('skill-propuestas');
+    const propuestas = global.map.get('skill-proposals');
     assert.ok(propuestas, 'el comando tiene que estar registrado');
     assert.equal(deLaSesion.map.size, 0, 'nadie ha montado todavía las filas de esta sesión');
 
     const r = propuestas.handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
-    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-del-comando']);
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-del-comando']);
     assert.equal(r.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'montadas: no hay nada que avisar');
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
@@ -289,13 +303,13 @@ describe('activación', () => {
     };
     const { ctx, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
-    const propuestas = global.map.get('skill-propuestas');
+    const propuestas = global.map.get('skill-proposals');
 
     const roto = propuestas.handler({ agent, rawInput: '' });
     assert.equal(roto.kind, 'success', 'el comando funciona aunque el montaje falle: hay vía manual');
     assert.match(roto.text, /Aviso: este anfitrión no anuncia filas por propuesta/);
     // Y la orden exacta, aunque no haya filas: lo que decide no depende del menú.
-    assert.match(roto.text, /Una orden para todas: \/skill-aprobar pendiente-con-montaje-roto --local/);
+    assert.match(roto.text, /Una orden para todas: \/skill-approve pendiente-con-montaje-roto --local/);
     assert.equal(deLaSesion.map.size, 0, 'sin inject no hay filas');
 
     // El inject empieza a funcionar: el siguiente comando vuelve a intentar el montaje y esta vez sí monta.
@@ -303,10 +317,10 @@ describe('activación', () => {
     const sano = propuestas.handler({ agent, rawInput: '' });
     assert.equal(sano.kind, 'success');
     assert.equal(sano.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'ya no hay nada que avisar');
-    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-con-montaje-roto']);
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-con-montaje-roto']);
 
     // Con la lista vacía el aviso sobra: no hay nada que anunciar. Se aparta la pendiente y se vuelve a mirar.
-    assert.equal(global.map.get('skill-rechazar').handler({ agent, rawInput: 'pendiente-con-montaje-roto' }).kind, 'success');
+    assert.equal(global.map.get('skill-reject').handler({ agent, rawInput: 'pendiente-con-montaje-roto' }).kind, 'success');
     const vacia = propuestas.handler({ agent, rawInput: '' });
     assert.equal(vacia.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'sin pendientes no se avisa');
     disposeAll();
@@ -332,10 +346,10 @@ describe('activación', () => {
     const { ctx, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
 
-    const r = global.map.get('skill-propuestas').handler({ agent, rawInput: '' });
+    const r = global.map.get('skill-proposals').handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
     assert.equal(r.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'montadas por la vía directa: no hay aviso');
-    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-sin-inject']);
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-sin-inject']);
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
   });
@@ -365,10 +379,10 @@ describe('activación', () => {
     const { ctx, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
 
-    const r = global.map.get('skill-propuestas').handler({ agent, rawInput: '' });
+    const r = global.map.get('skill-proposals').handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
     assert.equal(r.text.includes('Aviso: este anfitrión no anuncia filas'), false, 'montadas por el hijo: no hay aviso');
-    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-del-hijo']);
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-del-hijo']);
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
     assert.equal(montado, null, 'el hijo también se desmonta');

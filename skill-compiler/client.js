@@ -9,7 +9,7 @@
  *     bloqueada, con el nombre de la skill. El resultado se lee del estado, no de que una animación
  *     acabe: si la transición se interrumpe, el estado semántico ya es el correcto.
  *   · **Cada resultado de nuestros comandos, con una X para cerrarlo.** Medido con el usuario delante:
- *     `/skill-propuestas` deja bloques largos en el flujo y sólo se podían colapsar. Se registra una
+ *     `/skill-proposals` deja bloques largos en el flujo y sólo se podían colapsar. Se registra una
  *     entrada keyed en `conversation.chat.commandview` —el slot que el nodo `command` del chat declara
  *     por nombre de comando—, así que la tarjeta es nuestra: se lee igual y se cierra. Lo cerrado se
  *     recuerda en la sesión de la página: es una preferencia de vista, no un dato del plugin.
@@ -57,12 +57,13 @@ window.__ModuleLoader__.load({
     const COMMAND_VIEW_SLOT = 'conversation.chat.commandview';
     /**
      * Los comandos nuestros que dejan un bloque en el flujo. Se registra una entrada por nombre porque el
-     * despacho del slot es por nombre exacto; las filas de pendientes (`skill-aprobar-<id>`) escriben una
+     * despacho del slot es por nombre exacto; las filas de pendientes (`skill-approve-<id>`) escriben una
      * línea y usan la tarjeta del host, que para eso basta.
      */
     const COMMAND_NAMES = [
-      'skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-globalizar', 'skill-ambito', 'skill-auto',
-      'skill-rechazar', 'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar', 'skill-retiradas',
+      'skill-proposals', 'skill-pending', 'skill-show', 'skill-approve', 'skill-publish', 'skill-scope',
+      'skill-auto', 'skill-reject', 'skill-disable', 'skill-enable', 'skill-retire', 'skill-retired',
+      'skill-ownership', 'skill-systems',
     ];
     /** Todos los comandos del plugin empiezan así: es lo que distingue los suyos en el catálogo del host. */
     const COMMAND_PREFIX = 'skill-';
@@ -75,7 +76,7 @@ window.__ModuleLoader__.load({
     // Los comandos cuyos resultados traen una lista que decidir. Los dos nuevos entran aquí porque su
     // resultado deja pendientes que decidir igual: publicar y cambiar de ámbito son decisiones, y tras una
     // decisión lo que queda se ofrece en el propio bloque, sin volver a pedir la lista.
-    const LIST_COMMANDS = ['skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito'];
+    const LIST_COMMANDS = ['skill-proposals', 'skill-show', 'skill-retired', 'skill-publish', 'skill-scope'];
     /**
      * Con qué empieza la respuesta de `skill-aprobar` cuando **no** ha aprobado: pregunta el ámbito. Es texto
      * del comando (siempre en español), no de la interfaz, y se comprueba aquí porque el resultado sólo trae
@@ -159,8 +160,8 @@ window.__ModuleLoader__.load({
         card_error: 'falló',
         card_title: 'comando',
         card_unreadable: 'No se pudo leer el resultado: esta versión del anfitrión no entrega el comando a la tarjeta',
-        card_stale_approved: 'Aprobaste algo después de esta lista: vuelve a ejecutar /skill-propuestas para verla al día',
-        card_stale_rejected: 'Apartaste algo después de esta lista: vuelve a ejecutar /skill-propuestas para verla al día',
+        card_stale_approved: 'Aprobaste algo después de esta lista: vuelve a ejecutar /skill-proposals para verla al día',
+        card_stale_rejected: 'Apartaste algo después de esta lista: vuelve a ejecutar /skill-proposals para verla al día',
         bulk_title: 'Decidir aquí mismo',
         bulk_single: 'Esta propuesta',
         bulk_reading: 'Leyendo las pendientes…',
@@ -238,8 +239,8 @@ window.__ModuleLoader__.load({
         card_error: 'failed',
         card_title: 'command',
         card_unreadable: 'Could not read the result: this host version does not hand the command to the card',
-        card_stale_approved: 'You approved something after this list: run /skill-propuestas again to see it current',
-        card_stale_rejected: 'You set something aside after this list: run /skill-propuestas again to see it current',
+        card_stale_approved: 'You approved something after this list: run /skill-proposals again to see it current',
+        card_stale_rejected: 'You set something aside after this list: run /skill-proposals again to see it current',
         bulk_title: 'Decide right here',
         bulk_single: 'This proposal',
         bulk_reading: 'Reading the pending ones…',
@@ -573,7 +574,7 @@ window.__ModuleLoader__.load({
 
     /**
      * El prefijo de una fila del menú es `skill-<verbo>-`: es la gramática que lee el panel, y vale igual
-     * para las pendientes (`skill-aprobar-<id>`) que para lo apagado (`skill-eliminar-<id>`).
+     * para las pendientes (`skill-approve-<id>`) que para lo apagado (`skill-retire-<id>`).
      */
     const rowPrefix = (verb) => `skill-${verb}-`;
 
@@ -603,7 +604,7 @@ window.__ModuleLoader__.load({
     };
 
     /**
-     * En `/skill-retiradas` también se decide en lote: reencender o retirar del todo lo que está apagado.
+     * En `/skill-retired` también se decide en lote: reencender o retirar del todo lo que está apagado.
      * Retirar exige `--yes` —lo añade el panel, y por eso el paso de confirmación no es decorativo—: es el
      * único gesto irreversible, y siempre deja respaldo fechado.
      */
@@ -611,12 +612,12 @@ window.__ModuleLoader__.load({
       // Orden = orden de los botones; el primero es además el verbo por defecto. Aprobar (este proyecto),
       // publicar (todos) y apartar: las tres decisiones que existen, sin sintaxis que recordar. Lo apagado
       // no publica —ya estuvo activo— así que allí sólo se reenciende o se retira.
-      return String(nodeName ?? '') === 'skill-retiradas' ? ['habilitar', 'eliminar'] : ['aprobar', 'globalizar', 'rechazar'];
+      return String(nodeName ?? '') === 'skill-retired' ? ['habilitar', 'eliminar'] : ['aprobar', 'globalizar', 'rechazar'];
     }
-    const listVerbFor = (nodeName) => (String(nodeName ?? '') === 'skill-retiradas' ? 'eliminar' : 'aprobar');
+    const listVerbFor = (nodeName) => (String(nodeName ?? '') === 'skill-retired' ? 'retire' : 'approve');
 
     /**
-     * El panel de decisiones de una lista de pendientes —y de una propuesta leída con `/skill-ver`—.
+     * El panel de decisiones de una lista de pendientes —y de una propuesta leída con `/skill-show`—.
      *
      * Lo que pidió el usuario, y cómo se resuelve sin inventarse nada:
      *
@@ -637,7 +638,7 @@ window.__ModuleLoader__.load({
         const tipos = Object.fromEntries(Object.keys(props).sort().map((k) => [k, typeof props[k]]));
         return `host · ${Object.entries(tipos).map(([k, v]) => `${k}=${v}`).join(' · ')}`;
       }, [props]);
-      const bulk = node?.name === 'skill-propuestas';
+      const bulk = node?.name === 'skill-proposals';
       const reading = typeof node?.args === 'string' ? node.args.trim() : '';
 
       const [ids, setIds] = React.useState(null);
@@ -718,7 +719,7 @@ window.__ModuleLoader__.load({
       const pendientesAhora = async () => {
         // 1) La fuente que **siempre** existe: el propio plugin dice qué ids esperan decisión.
         try {
-          const r = await runCommand(sessionId, '/skill-pendientes');
+          const r = await runCommand(sessionId, '/skill-pending');
           const texto = String(r?.text ?? '');
           const linea = /^ids:\s*(.*)$/m.exec(texto);
           if (linea !== null) {
@@ -756,7 +757,7 @@ window.__ModuleLoader__.load({
       /**
        * Ejecuta UNA orden y comprueba que ocurrió, probando las formas conocidas.
        *
-       * @param texto - la orden como la escribiría el humano (`/skill-aprobar …`).
+       * @param texto - la orden como la escribiría el humano (`/skill-approve …`).
        * @param nombre - el comando.
        * @param resto - sus argumentos.
        * @param efecto - `() => Promise<boolean>`: ¿ocurrió? Se le pregunta al almacén, no a la llamada.
@@ -835,7 +836,7 @@ window.__ModuleLoader__.load({
 
       /** La orden del LOTE: un comando, N ids. Es la forma plural que el servidor entiende. */
       const ejecutarLote = (ids, conocida, forzar = false) => {
-        const comando = verb === 'globalizar' ? 'skill-aprobar' : target;
+        const comando = verb === 'globalizar' ? 'skill-approve' : target;
         const ambito = verb === 'aprobar' ? ' --local' : verb === 'globalizar' ? ' --global' : '';
         const argumentos = `${ids.join(',')}${ambito}`;
         return ejecutarOrden(`/${comando} ${argumentos}`, comando, argumentos, ids, conocida, forzar);

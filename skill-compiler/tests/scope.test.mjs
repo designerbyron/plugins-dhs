@@ -414,27 +414,27 @@ describe('la puerta: la política decide, y nada se escribe fuera', () => {
 });
 
 describe('los comandos y el CLI dicen lo mismo', () => {
-  it('/skill-propiedad pregunta, declara y rechaza lo que no es respuesta', () => {
+  it('/skill-ownership pregunta, declara y rechaza lo que no es respuesta', () => {
     const s = sandbox();
     const comandos = skillCommands({ root: s.root });
     const byName = Object.fromEntries(comandos.map((c) => [c.name, c]));
     const agente = { agent: { session: { header: { cwd: CWD } } } };
 
-    const pregunta = byName['skill-propiedad'].handler(agente);
+    const pregunta = byName['skill-ownership'].handler(agente);
     assert.equal(pregunta.kind, 'success');
     assert.match(pregunta.text, /sin declarar/);
     assert.match(pregunta.text, /dsh-only/);
     assert.match(pregunta.text, /machine/);
 
-    assert.equal(byName['skill-propiedad'].handler({ ...agente, rawInput: MAQUINA }).kind, 'success');
+    assert.equal(byName['skill-ownership'].handler({ ...agente, rawInput: MAQUINA }).kind, 'success');
     assert.equal(leerPropiedad({ root: s.root }).ownership, MAQUINA);
-    const declarado = byName['skill-propiedad'].handler(agente);
+    const declarado = byName['skill-ownership'].handler(agente);
     assert.match(declarado.text, /huella/);
-    assert.equal(byName['skill-propiedad'].handler({ ...agente, rawInput: 'verde' }).kind, 'error');
+    assert.equal(byName['skill-ownership'].handler({ ...agente, rawInput: 'verde' }).kind, 'error');
 
     // Con la declaración rota, el comando no dice «sin declarar»: dice que existe y no sirve.
     escribirDeclaracion(s.root, '{ roto');
-    const roto = byName['skill-propiedad'].handler(agente);
+    const roto = byName['skill-ownership'].handler(agente);
     assert.match(roto.text, /EXISTE y no dice una respuesta válida/);
     assert.match(roto.text, /estado: invalida/);
   });
@@ -448,12 +448,12 @@ describe('los comandos y el CLI dicen lo mismo', () => {
     assert.equal(leerPropiedad({ root: s.root }).ownership, MAQUINA);
   });
 
-  it('/skill-sistemas lista los sistemas, su estado real y los choques', () => {
+  it('/skill-systems lista los sistemas, su estado real y los choques', () => {
     const s = sandbox();
     const ajeno = almacenAjeno(join(s.base, 'ajeno'), ['medida-ocupada'], { cuerpo: 'Otra cosa distinta.' });
     almacenAjeno(join(s.root, 'projects', 'saas-corporative-a3c393fa', 'approved'), ['medida-ocupada'], { cuerpo: 'Nuestra cosa.' });
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
-    const r = conAlmacenDeclarado(ajeno, () => byName['skill-sistemas'].handler({}));
+    const r = conAlmacenDeclarado(ajeno, () => byName['skill-systems'].handler({}));
     assert.equal(r.kind, 'success');
     assert.match(r.text, /Sistemas de skills del puesto/);
     assert.match(r.text, /medida-ocupada — contenido distinto/);

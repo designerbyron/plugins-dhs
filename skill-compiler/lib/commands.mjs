@@ -11,7 +11,7 @@
  *
  * ── Dos formas de llegar a la misma decisión ─────────────────────────────────────────────────────
  *
- *   1. Los comandos con argumentos (`/skill-aprobar <id>`), para quien ya sabe el id.
+ *   1. Los comandos con argumentos (`/skill-approve <id>`), para quien ya sabe el id.
  *   2. Las **filas de pendientes** (`lib/pending-rows.mjs`), que se anuncian en el menú `/` y se eligen
  *      con el ratón o las flechas. Un comando del host sin argumentos declarados se ejecuta en el acto
  *      al elegirlo, así que seleccionar en el menú **es** la decisión: sin recordar ninguna sintaxis.
@@ -44,8 +44,8 @@ import {
   textoDelEstado,
 } from './scope.mjs';
 
-const ok = (text) => ({ kind: 'success', text });
-const bad = (text) => ({ kind: 'error', text });
+const ok = (text, extra = {}) => ({ kind: 'success', text, ...extra });
+const bad = (text, extra = {}) => ({ kind: 'error', text, ...extra });
 
 /** Los comandos son superficie humana: un fallo se cuenta como texto, nunca se lanza hacia el harness. */
 const guarded = (run) => (invocation, ...rest) => {
@@ -64,7 +64,7 @@ const NO_SCOPE = 'Sin ámbito: esta sesión no tiene un directorio de trabajo ut
 
 /**
  * El estado de la lista, pegado al resultado de decidir: así el humano ve el efecto de lo que acaba de
- * hacer sin volver a ejecutar `/skill-propuestas`. Medido con el usuario delante: aprobó una skill, su
+ * hacer sin volver a ejecutar `/skill-proposals`. Medido con el usuario delante: aprobó una skill, su
  * bloque de propuestas siguió enseñándola como pendiente y volvió a intentarlo.
  */
 const remaining = (root, key) => {
@@ -95,7 +95,7 @@ export function scopeOfAgent(agent) {
 export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
-  if (wanted === '') return bad('Falta el id. Uso: /skill-ver <id>');
+  if (wanted === '') return bad('Falta el id. Uso: /skill-show <id>');
 
   const proposal = pending({ root, key }).find((row) => row.id === wanted);
   const active = listForProject(cwd, { root }).find((row) => row.id === wanted);
@@ -114,7 +114,7 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
     check.ok ? 'Puerta de validación: pasa.' : 'Puerta de validación: NO pasa todavía.',
     ...check.errors.map((e) => `  FALLO  ${e}`),
     ...check.warnings.map((w) => `  aviso  ${w}`),
-    ...(check.warnings.length > 0 ? ['', `Aprobarla con estos avisos exige decirlo: /skill-aprobar ${wanted} --force`] : []),
+    ...(check.warnings.length > 0 ? ['', `Aprobarla con estos avisos exige decirlo: /skill-approve ${wanted} --force`] : []),
     '',
     readFileSync(chose.path, 'utf8'),
   ].join('\n'));
@@ -178,8 +178,8 @@ function noEstáElId(wanted, key, root, { que = 'propuesta' } = {}) {
   return bad([
     `No hay ninguna ${que} «${wanted}» en ${key}.`,
     ...(cerca
-      ? [`¿Querías decir «${cerca}»? Con ese id sí hay algo: repite el comando con él.`, 'Y para verlo todo: /skill-propuestas.']
-      : ['Míralas con /skill-propuestas.']),
+      ? [`¿Querías decir «${cerca}»? Con ese id sí hay algo: repite el comando con él.`, 'Y para verlo todo: /skill-proposals.']
+      : ['Míralas con /skill-proposals.']),
   ].join('\n'));
 }
 
@@ -189,7 +189,7 @@ const diarioDelProyecto = (root, key) => join(root, 'projects', key, 'journal.js
 export function approveProposal({ root = defaultRoot(), key, id, force = false, scope = 'project', catalog, preservarEstado = false } = {}) {
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
-  if (wanted === '') return bad('Falta el id. Uso: /skill-aprobar <id> [--force]');
+  if (wanted === '') return bad('Falta el id. Uso: /skill-approve <id> [--force]');
   const noEsId = idNoUtilizable(wanted);
   if (noEsId !== null) return noEsId;
 
@@ -201,14 +201,14 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
       `Ya estaba publicada: ${wanted} en la biblioteca de usuario`,
       'No se ha cambiado nada.',
       ...remaining(root, key),
-    ].join('\n'));
+    ].join('\n'), { code: 'already-published', params: { id: wanted } });
   }
   if (where === 'approved') {
     return ok([
       `Ya estaba activa: ${wanted} [${key}]`,
       'No se ha cambiado nada.',
       ...remaining(root, key),
-    ].join('\n'));
+    ].join('\n'), { code: 'already-active', params: { id: wanted } });
   }
   if (where === 'rejected') {
     return bad([
@@ -225,15 +225,15 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
       `Aprobación RECHAZADA: la propuesta ${wanted} no pasa la puerta.`,
       ...check.errors.map((e) => `  FALLO  ${e}`),
       'No se ha movido nada. Corrige la propuesta y repite.',
-    ].join('\n'));
+    ].join('\n'), { code: 'gate-failed', params: { id: wanted, errors: check.errors } });
   }
   if (check.warnings.length > 0 && !force) {
     return bad([
       `La propuesta ${wanted} tiene avisos:`,
       ...check.warnings.map((w) => `  aviso  ${w}`),
       '',
-      `Si los aceptas: /skill-aprobar ${wanted} --force`,
-    ].join('\n'));
+      `Si los aceptas: /skill-approve ${wanted} --force`,
+    ].join('\n'), { code: 'with-warnings', params: { id: wanted, warnings: check.warnings } });
   }
 
   // Lo que se validó es lo que se mueve. Se mide la huella del **contenido** —`SKILL.md` y su material, sin
@@ -246,7 +246,7 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   // importa es dónde se sirve —o se dejaría de servir—.
   const estadoOrigen = ['approved', 'disabled'].find((estado) => existsSync(join(root, 'projects', key, estado, wanted))) ?? locate(wanted, key, { root });
   if (preservarEstado && estadoOrigen !== 'disabled') {
-    return bad(`--preserve-state sólo tiene sentido con una skill apagada: «${wanted}» está en ${estadoOrigen ?? 'ningún estado vivo'}.`);
+    return bad(`--preserve-state sólo tiene sentido con una skill apagada: «${wanted}» está en ${estadoOrigen ?? 'ningún estado vivo'}.`, { code: 'invalid-flag', params: { flag: '--preserve-state', id: wanted } });
   }
   const moved = approve(wanted, key, { root, scope, esperada: huellaAntes, ...(preservarEstado ? { estado: 'disabled' } : {}) });
   if (!moved.ok) return bad(`No se pudo aprobar ${wanted}: ${moved.reason}`);
@@ -280,7 +280,7 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     return bad([
       `NO se aprobó ${wanted}: el contenido activado no es el que validaste (${huellaAntes.slice(0, 12)} → ${huellaDespues.slice(0, 12)}).`,
       ...(ficheros.length ? [`  difiere: ${ficheros.join(', ')}`] : []),
-      vuelta.ok ? '  Se devolvió a propuestas: no queda activa. Vuelve a validarla con /skill-ver y decide otra vez.' : `  No se pudo devolver a propuestas (${vuelta.reason}): revísala a mano antes de usarla.`,
+      vuelta.ok ? '  Se devolvió a propuestas: no queda activa. Vuelve a validarla con /skill-show y decide otra vez.' : `  No se pudo devolver a propuestas (${vuelta.reason}): revísala a mano antes de usarla.`,
       '  La versión anterior, si la había, sigue apartada en superseded/ y se recupera a mano.',
     ].join('\n'));
   }
@@ -292,24 +292,29 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     ...(check.warnings.length > 0 ? ['', 'Aprobada con avisos:', ...check.warnings.map((w) => `  · ${w}`)] : []),
     '',
     preservarEstado
-      ? 'Sigue apagada: no se sirve al modelo. Se enciende con /skill-habilitar cuando lo decidas.'
+      ? 'Sigue apagada: no se sirve al modelo. Se enciende con /skill-enable cuando lo decidas.'
       : 'Ya la sirve el catálogo de este proyecto: el agente la ve en su siguiente paso, sin reiniciar.',
     `Invocarla tú: /${wanted}`,
     ...remaining(root, key),
-  ].join('\n'));
+  ].join('\n'), scope === 'global'
+    ? { code: 'published', params: { id: wanted, key } }
+    : preservarEstado
+      ? { code: 'updated-disabled', params: { id: wanted, key } }
+      : { code: 'activated', params: { id: wanted, key } });
 }
 
 /** Aparta una propuesta sin borrarla: queda en `rejected/`, recuperable. */
 export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) {
   if (key === null) return bad(NO_SCOPE);
   const wanted = String(id ?? '').trim();
-  if (wanted === '') return bad('Falta el id. Uso: /skill-rechazar <id>');
+  if (wanted === '') return bad('Falta el id. Uso: /skill-reject <id>');
   const noEsId = idNoUtilizable(wanted);
   if (noEsId !== null) return noEsId;
 
   const where = locate(wanted, key, { root });
   if (where === 'rejected') {
-    return ok([`Ya estaba apartada: ${wanted} [${key}]`, 'No se ha cambiado nada.', ...remaining(root, key)].join('\n'));
+    return ok([`Ya estaba apartada: ${wanted} [${key}]`, 'No se ha cambiado nada.', ...remaining(root, key)].join('\n'),
+      { code: 'already-set-aside', params: { id: wanted } });
   }
   if (where === 'approved') {
     return bad([
@@ -335,7 +340,7 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
     '',
     'No se ha borrado nada: sigue en el almacén por si quieres recuperarla.',
     ...remaining(root, key),
-  ].join('\n'));
+  ].join('\n'), { code: 'set-aside', params: { id: wanted } });
 }
 
 /**
@@ -367,7 +372,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
   /**
    * El listado que ve el humano: qué espera su aprobación, qué está activo y qué está apagado. Vive en una
-   * función porque lo usan **dos** comandos —`/skill-propuestas` y `/skill-aprobar` sin id—: pedir a un
+   * función porque lo usan **dos** comandos —`/skill-proposals` y `/skill-approve` sin id—: pedir a un
    * humano que recuerde un identificador para decidir es la nota al pie que este plugin viene evitando
    * desde su primera versión.
    */
@@ -412,8 +417,8 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           ...(waiting.length > 0
             ? [
               '',
-              `Una orden para todas: /skill-aprobar ${waiting.map((fila) => fila.id).join(',')} --local`,
-              'Una a una: /skill-aprobar <id> --local · para todos tus proyectos: --global · aceptando avisos: --force',
+              `Una orden para todas: /skill-approve ${waiting.map((fila) => fila.id).join(',')} --local`,
+              'Una a una: /skill-approve <id> --local · para todos tus proyectos: --global · aceptando avisos: --force',
             ]
             : []),
           ...(rows.length > 0 ? ['', 'Sin teclear: escribe «/» y elige la fila; es la misma orden.'] : []),
@@ -423,7 +428,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           '',
           `Apagadas (${fueraDeServicio.length}) — no se sirven al modelo, se conservan enteras:`,
           fueraDeServicio.length ? bullet(fueraDeServicio) : '  · ninguna',
-          ...(fueraDeServicio.length > 0 ? [`  Para devolver una: /skill-habilitar <id>, o elige su fila en el menú «/». Para retirarla del todo: /skill-eliminar <id> --yes`] : []),
+          ...(fueraDeServicio.length > 0 ? [`  Para devolver una: /skill-enable <id>, o elige su fila en el menú «/». Para retirarla del todo: /skill-retire <id> --yes`] : []),
           '',
           `Aprobación automática en esta sesión: ${auto ? 'ACTIVA' : 'desactivada'}`,
           auto ? '  (las propuestas que pasen la validación se activan solas; /skill-auto desactivar para pararlo)' : '  (actívala con /skill-auto activar)',
@@ -434,7 +439,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
             `Aviso: este anfitrión no anuncia filas por propuesta en el menú «/» (${montaje.motivo}).`,
             '  No hay nada que corregir por tu parte: la orden de arriba las decide todas, y el panel de esta tarjeta también.',
           ]),
-          'Con un id a mano: /skill-ver <id> · /skill-aprobar <id> [--force] · /skill-rechazar <id>',
+          'Con un id a mano: /skill-show <id> · /skill-approve <id> [--force] · /skill-reject <id>',
         ].join('\n'));
   };
 
@@ -467,7 +472,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
   const definiciones = [
     {
-      name: 'skill-propuestas',
+      name: 'skill-proposals',
       description: 'Qué skills aprendidas esperan tu aprobación en este proyecto y cuáles están activas.',
       handler: guarded(({ agent }, montaje) => listar({ agent, montaje })),
     },
@@ -476,7 +481,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       // Sólo los ids, en una línea estable: es la fuente que consulta la tarjeta para saber si lo que
       // muestra sigue pendiente. Sin esto, una tarjeta vieja ofrece decidir algo que el almacén ya no tiene
       // y la orden falla con «no hay ninguna propuesta» —un fallo que el humano no puede arreglar—.
-      name: 'skill-pendientes',
+      name: 'skill-pending',
       description: 'Los ids que esperan decisión, en una línea: lo que la tarjeta consulta antes de decidir.',
       handler: guarded(({ agent }) => {
         const { key } = scopeOfAgent(agent);
@@ -498,12 +503,15 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           lineas.push(`avisos: ${[...porId].map(([id, a]) => `${id}=${a.length}`).join(',')}`);
           for (const [id, avisos] of porId) for (const aviso of avisos) lineas.push(`aviso: ${id} · ${aviso}`);
         }
-        return ok(lineas.join('\n'));
+        return ok(lineas.join('\n'), {
+          code: 'pending-list',
+          params: { ids: waiting.map((fila) => fila.id) },
+        });
       }),
     },
 
     {
-      name: 'skill-ver',
+      name: 'skill-show',
       description: 'Lee una skill aprendida de este proyecto: la propuesta pendiente o la ya activa.',
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
@@ -513,7 +521,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
     },
 
     {
-      name: 'skill-aprobar',
+      name: 'skill-approve',
       description: 'Activa una skill propuesta, si pasa la puerta de validación: en este proyecto, o para todos los tuyos si lo dices. Sin decir dónde, pregunta. Aprobar es tuyo: el modelo no puede.',
       input: { hint: '<id> [--global|--local] [--force]' },
       handler: guarded(({ agent, rawInput }, montaje) => {
@@ -532,8 +540,8 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
             return ok([
               `¿Dónde quieres que vivan estas ${ids.length}?`,
               '',
-              `  · En ESTE proyecto (${key}): /skill-aprobar ${ids.join(',')} --local`,
-              `  · Para TODOS tus proyectos: /skill-aprobar ${ids.join(',')} --global`,
+              `  · En ESTE proyecto (${key}): /skill-approve ${ids.join(',')} --local`,
+              `  · Para TODOS tus proyectos: /skill-approve ${ids.join(',')} --global`,
               '',
               'Es un lote: cada una pasa por la misma puerta y el informe dice cuál falló.',
             ].join('\n'));
@@ -547,28 +555,28 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           return ok([
             `¿Dónde quieres que viva «${id}»?`,
             '',
-            `  · En ESTE proyecto (${key}): /skill-aprobar ${id} --local`,
+            `  · En ESTE proyecto (${key}): /skill-approve ${id} --local`,
             '      la sirve el plugin sólo en las sesiones de este proyecto.',
-            `  · Para TODOS tus proyectos: /skill-aprobar ${id} --global`,
+            `  · Para TODOS tus proyectos: /skill-approve ${id} --global`,
             '      se publica en la biblioteca de usuario y la sirve el harness en cualquier sesión.',
             '',
-            'También valen sus filas del menú «/»: «skill-aprobar-<id>» y «skill-globalizar-<id>».',
+            'También valen sus filas del menú «/»: «skill-approve-<id>» y «skill-publish-<id>».',
             'Con «--force» si la propuesta viene con avisos.',
-          ].join('\n'));
+          ].join('\n'), { code: 'scope-ask', params: { id } });
         }
 
         const scope = global ? 'global' : 'project';
         const result = approveProposal({ root, key, id, force, scope, catalog });
         if (result?.kind !== 'ok') return result;
         const nota = scope === 'global'
-          ? `Se sirve en toda sesión de esta máquina (biblioteca de usuario). Para dejarla sólo en este proyecto: /skill-ambito ${id} --local`
-          : `Se sirve al modelo sólo en este proyecto. Para que la vean todos: /skill-aprobar ${id} --global`;
+          ? `Se sirve en toda sesión de esta máquina (biblioteca de usuario). Para dejarla sólo en este proyecto: /skill-scope ${id} --local`
+          : `Se sirve al modelo sólo en este proyecto. Para que la vean todos: /skill-approve ${id} --global`;
         return ok([result.text, '', nota].join('\n'));
       }),
     },
 
     {
-      name: 'skill-globalizar',
+      name: 'skill-publish',
       description: 'Activa una skill propuesta para TODOS tus proyectos: la publica en la biblioteca de usuario, que el harness sirve en cualquier sesión.',
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
@@ -580,12 +588,12 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const id = bruto.replace(/(?:\s+--force)+$/, '').trim();
         const result = approveProposal({ root, key, id, force, scope: 'global', catalog });
         if (result?.kind !== 'ok') return result;
-        return ok([result.text, '', `Para dejarla sólo en este proyecto: /skill-ambito ${id} --local`].join('\n'));
+        return ok([result.text, '', `Para dejarla sólo en este proyecto: /skill-scope ${id} --local`].join('\n'));
       }),
     },
 
     {
-      name: 'skill-ambito',
+      name: 'skill-scope',
       description: 'Cambia dónde vive una skill ya aprobada: en este proyecto o en la biblioteca de usuario, en las dos direcciones.',
       input: { hint: '<id> --global | --local' },
       handler: guarded(({ agent, rawInput }) => {
@@ -593,7 +601,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const input = String(rawInput ?? '').trim();
         const to = /(?:^|\s)--global(?:\s|$)/.test(input) ? 'global' : /(?:^|\s)--local(?:\s|$)/.test(input) ? 'project' : null;
         const id = input.replace(/(?:\s+--(?:global|local))+$/, '').trim();
-        if (id === '') return bad('Falta el id. Uso: /skill-ambito <id> --global|--local');
+        if (id === '') return bad('Falta el id. Uso: /skill-scope <id> --global|--local');
         const moved = ambito(id, key, { root, to });
         if (!moved.ok) return bad(`No se pudo cambiar el ámbito: ${moved.reason}`);
         catalog?.notify();
@@ -604,8 +612,8 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           `  ${moved.path}`,
           `  huella: ${moved.sha256}`,
           moved.scope === 'global'
-            ? `Volver a este proyecto: /skill-ambito ${id} --local`
-            : `Publicarla para todos: /skill-ambito ${id} --global`,
+            ? `Volver a este proyecto: /skill-scope ${id} --local`
+            : `Publicarla para todos: /skill-scope ${id} --global`,
         ].join('\n'));
       }),
     },
@@ -647,7 +655,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           : [
             'Aprobación automática desactivada.',
             '',
-            'Desde ahora nada se activa sin tu decisión: las propuestas esperan en /skill-propuestas.',
+            'Desde ahora nada se activa sin tu decisión: las propuestas esperan en /skill-proposals.',
           ].join('\n'));
       }),
     },
@@ -657,14 +665,14 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
     // plugin, así que **exige un `--yes` explícito** y dice antes dónde queda el respaldo: un clic, o una
     // línea, no pueden borrar el trabajo de nadie.
     {
-      name: 'skill-deshabilitar',
+      name: 'skill-disable',
       description: 'Apaga una skill activa de este proyecto: deja de servirse al modelo y se conserva entera. Reversible.',
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
         if (key === null) return bad(NO_SCOPE);
         const id = String(rawInput ?? '').trim();
-        if (id === '') return bad('Dime cuál: /skill-deshabilitar <id>. Las activas están en /skill-propuestas.');
+        if (id === '') return bad('Dime cuál: /skill-disable <id>. Las activas están en /skill-proposals.');
         if (!existsSync(join(root, 'projects', key, 'approved', id))) {
           const donde = locate(id, key, { root });
           return bad(donde === null
@@ -673,27 +681,27 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         }
         const moved = disableSkill(id, key, { root });
         if (!moved.ok) return bad(`No se pudo apagar: ${moved.reason}`);
-        return ok(`${id} apagada en ${key}.\n  deja de servirse al modelo, y se conserva entera: /skill-habilitar ${id} la devuelve.`);
+        return ok(`${id} apagada en ${key}.\n  deja de servir al modelo, y se conserva entera: /skill-enable ${id} la devuelve.`, { code: 'disabled', params: { id } });
       }),
     },
 
     {
-      name: 'skill-habilitar',
+      name: 'skill-enable',
       description: 'Vuelve a encender una skill que estaba apagada en este proyecto.',
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
         if (key === null) return bad(NO_SCOPE);
         const id = String(rawInput ?? '').trim();
-        if (id === '') return bad('Dime cuál: /skill-habilitar <id>. Lo apagado está en /skill-retiradas.');
+        if (id === '') return bad('Dime cuál: /skill-enable <id>. Lo apagado está en /skill-retired.');
         const moved = enableSkill(id, key, { root });
         if (!moved.ok) return bad(`No se pudo encender: ${moved.reason}`);
-        return ok(`${id} vuelve a estar activa en ${key}: se sirve al modelo sólo en este proyecto.`);
+        return ok(`${id} vuelve a estar activa en ${key}: se sirve al modelo sólo en este proyecto.`, { code: 'enabled', params: { id } });
       }),
     },
 
     {
-      name: 'skill-eliminar',
+      name: 'skill-retire',
       description: 'Retira una skill de este proyecto: se mueve a un respaldo fechado, nunca se borra. Exige --yes.',
       input: { hint: '<id> [--yes]' },
       handler: guarded(({ agent, rawInput }) => {
@@ -702,18 +710,18 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const input = String(rawInput ?? '').trim();
         const yes = /(?:^|\s)--yes$/.test(input);
         const id = input.replace(/(?:\s+--yes)?$/, '').trim();
-        if (id === '') return bad('Dime cuál: /skill-eliminar <id> [--yes].');
+        if (id === '') return bad('Dime cuál: /skill-retire <id> [--yes].');
         if (!yes) {
-          return ok(`Se va a RETIRAR «${id}» del proyecto ${key}.\n  Nada se borra: la carpeta se mueve a un respaldo con fecha, y vuelve con \`restore\` desde el terminal.\n  Repite así para hacerlo: /skill-eliminar ${id} --yes`);
+          return ok(`Se va a RETIRAR «${id}» del proyecto ${key}.\n  Nada se borra: la carpeta se mueve a un respaldo con fecha, y vuelve con \`restore\` desde el terminal.\n  Repite así para hacerlo: /skill-retire ${id} --yes`);
         }
         const moved = retireSkill(id, key, { root });
         if (!moved.ok) return bad(`No se pudo retirar: ${moved.reason}`);
-        return ok(`Retirada «${id}» de ${key}.\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: restore ${id} (CLI)\n`);
+        return ok(`Retirada «${id}» de ${key}.\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: restore ${id} (CLI)\n`, { code: 'retired', params: { id } });
       }),
     },
 
     {
-      name: 'skill-retiradas',
+      name: 'skill-retired',
       description: 'Qué está apagado en este proyecto y qué se retiró ya, con su fecha.',
       handler: guarded(({ agent }) => {
         const { cwd, key } = scopeOfAgent(agent);
@@ -725,13 +733,13 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           '',
           ...lista.map((skill) => `  · ${skill.id} — ${skill.state === 'disabled' ? 'apagada (reversible)' : `retirada el ${skill.retiredAt} (en el respaldo)`}`),
           '',
-          'Con un id a mano: /skill-habilitar <id> lo devuelve · /skill-eliminar <id> --yes lo retira del todo.',
+          'Con un id a mano: /skill-enable <id> lo devuelve · /skill-retire <id> --yes lo retira del todo.',
         ].join('\n'));
       }),
     },
 
     {
-      name: 'skill-propiedad',
+      name: 'skill-ownership',
       description: 'Quién manda en el proceso de creación de skills de este puesto: sólo DSH o todo el PC. Sin argumento, dice lo declarado.',
       input: { hint: `${SOLO_DSH}|${MAQUINA}` },
       handler: guarded(({ rawInput }) => {
@@ -741,25 +749,25 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
     },
 
     {
-      name: `skill-propiedad-${SOLO_DSH}`,
+      name: `skill-ownership-${SOLO_DSH}`,
       description: 'Declara que este plugin escribe skills SÓLO mientras se trabaja con DSH: no compite con los demás sistemas del puesto.',
       handler: guarded(() => declararLaPropiedad(SOLO_DSH)),
     },
 
     {
-      name: `skill-propiedad-${MAQUINA}`,
+      name: `skill-ownership-${MAQUINA}`,
       description: 'Declara que este plugin se hace cargo del proceso de creación de skills en TODO el PC: mira los demás sistemas, avisa de cada choque de id y no sobrescribe lo ajeno.',
       handler: guarded(() => declararLaPropiedad(MAQUINA)),
     },
 
     {
-      name: 'skill-sistemas',
+      name: 'skill-systems',
       description: 'Los sistemas de skills de este puesto, sus almacenes, su estado real y los identificadores que viven en más de uno.',
       handler: guarded(() => ok(textoDelInventario())),
     },
 
     {
-      name: 'skill-rechazar',
+      name: 'skill-reject',
       description: 'Aparta una skill propuesta de este proyecto sin borrarla: queda guardada en rejected/.',
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
@@ -774,6 +782,39 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
   // Si el provider no llegó a montar las filas de esta sesión, ejecutar un comando es la ocasión de
   // intentarlo otra vez —y de saber si no se pudo—: sin esto, la sesión se quedaba sin superficie de
   // decisión y el único aviso era «no hay filas que decidir en el catálogo de esta sesión».
+  // Los nombres españoles siguen funcionando **hasta 5.0.0** como alias del canónico: mismo handler, mismos
+  // argumentos, misma puerta y mismos efectos. El alias se declara con metadatos (`aliasOf`, `deprecatedIn`),
+  // no por el texto: así el menú puede ocultarlo por dato y `doctor` puede contarlos.
+  const ALIASES = {
+    'skill-propuestas': 'skill-proposals',
+    'skill-pendientes': 'skill-pending',
+    'skill-ver': 'skill-show',
+    'skill-aprobar': 'skill-approve',
+    'skill-globalizar': 'skill-publish',
+    'skill-ambito': 'skill-scope',
+    'skill-deshabilitar': 'skill-disable',
+    'skill-habilitar': 'skill-enable',
+    'skill-eliminar': 'skill-retire',
+    'skill-retiradas': 'skill-retired',
+    'skill-propiedad': 'skill-ownership',
+    'skill-propiedad-dsh-only': 'skill-ownership-dsh-only',
+    'skill-propiedad-machine': 'skill-ownership-machine',
+    'skill-sistemas': 'skill-systems',
+    'skill-rechazar': 'skill-reject',
+  };
+  const porNombre = new Map(definiciones.map((c) => [c.name, c]));
+  for (const [viejo, nuevo] of Object.entries(ALIASES)) {
+    const canonico = porNombre.get(nuevo);
+    if (canonico === undefined) continue;
+    definiciones.push({
+      ...canonico,
+      name: viejo,
+      aliasOf: nuevo,
+      deprecatedIn: '4.0.0',
+      description: `Alias obsoleto de /${nuevo}: se retira en 5.0.0. ${canonico.description}`,
+    });
+  }
+
   const montar = (invocation) => {
     try {
       return onMount?.(invocation?.agent) ?? { ok: true };
@@ -811,10 +852,10 @@ export function targetCommands({ root = defaultRoot(), catalog, rows = [] } = {}
           'Ábrela desde el proyecto que le corresponde: el ámbito no se elige a mano.',
         ].join('\n'));
       }
-      if (row.verb === 'ver') return viewProposal({ root, cwd, key, id: row.id });
-      if (row.verb === 'aprobar') return approveProposal({ root, key, id: row.id, force: false, catalog });
-      if (row.verb === 'globalizar') return approveProposal({ root, key, id: row.id, force: false, scope: 'global', catalog });
-      if (row.verb === 'rechazar') return rejectProposal({ root, key, id: row.id, catalog });
+      if (row.verb === 'show') return viewProposal({ root, cwd, key, id: row.id });
+      if (row.verb === 'approve') return approveProposal({ root, key, id: row.id, force: false, catalog });
+      if (row.verb === 'publish') return approveProposal({ root, key, id: row.id, force: false, scope: 'global', catalog });
+      if (row.verb === 'reject') return rejectProposal({ root, key, id: row.id, catalog });
       return bad(`Fila desconocida: ${row.verb}`);
     }),
   }));

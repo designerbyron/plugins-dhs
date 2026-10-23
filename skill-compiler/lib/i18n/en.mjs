@@ -35,6 +35,14 @@ export default Object.freeze({
   'code.batch-empty': 'Nothing was selected',
   'code.batch-nothing': 'Nothing pending',
 
+  'code.already-published': 'Already published: {id} (user library)',
+  'code.already-set-aside': 'Already set aside: {id}',
+  'code.scope-changed': 'Scope changed: {id} now lives in {scope}',
+  'code.gate-failed': 'Approval REJECTED: proposal {id} does not pass the gate.',
+  'code.invalid-flag': '{flag} only makes sense with a disabled skill: «{id}» is not.',
+  'code.internal-error': 'Could not complete: {message}',
+  'code.pending-list': 'Pending: {ids}',
+
   // doctor
   'doctor.language': 'language: {lang} (source: {source})',
 });

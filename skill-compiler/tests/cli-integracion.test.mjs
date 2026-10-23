@@ -176,14 +176,14 @@ describe('CLI real (subproceso, arena) · una propuesta con avisos', () => {
     assert.equal(existsSync(join(arena.curated, id)), true, 'con --force sí');
   });
 
-  it('`/skill-pendientes` en la CLI: la orden existe y el comando base la declara', () => {
+  it('`/skill-pending` en la CLI: la orden existe y el comando base la declara', () => {
     const arena = sandbox();
     sembrar(arena, 'pendiente-para-consultar', { corta: true });
     // El comando es del plugin (no de la CLI): se comprueba que la CLI lo anuncia en su ayuda.
     const r = cli(arena, 'where');
     assert.equal(r.code, 0, r.salida);
     const ayuda = readFileSync(CLI, 'utf8');
-    assert.match(ayuda, /skill-pendientes/);
+    assert.match(ayuda, /skill-pending/);
   });
 });
 

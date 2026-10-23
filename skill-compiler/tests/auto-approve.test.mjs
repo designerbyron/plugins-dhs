@@ -60,7 +60,7 @@ describe('modo automático · el estado vive en el log', () => {
   });
 
   it('lo que no cambia nada no lo cambia: otro comando, o /skill-auto sin argumento', () => {
-    assert.equal(autoApproveFromEvents([commandRun('skill-propuestas', '')]), false);
+    assert.equal(autoApproveFromEvents([commandRun('skill-proposals', '')]), false);
     assert.equal(autoApproveFromEvents([...WITH_MODE_ON, commandRun(AUTO_COMMAND, '')]), true, 'preguntar el estado no lo apaga');
     assert.equal(autoApproveFromEvents([...WITH_MODE_ON, commandRun(AUTO_COMMAND, '   ')]), true);
     assert.equal(autoApproveFromEvents([...WITH_MODE_ON, commandRun(AUTO_COMMAND, ' no-se-que')]), true, 'una palabra rara no decide');

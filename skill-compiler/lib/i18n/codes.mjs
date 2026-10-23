@@ -20,6 +20,9 @@ export const CODES = Object.freeze({
   disabled: ['id'],
   retired: ['id'],
   rejected: ['id'],
+  'already-published': ['id'],
+  'already-set-aside': ['id'],
+  'scope-changed': ['id', 'scope'],
 
   // preguntas
   'scope-ask': ['id', 'idList'],
@@ -32,11 +35,15 @@ export const CODES = Object.freeze({
   'no-scope': [],
   'topic-conflict': ['id', 'tema'],
   'id-conflict': ['id', 'donde'],
+  'gate-failed': ['id', 'errors'],
+  'invalid-flag': ['flag', 'id'],
+  'internal-error': ['message'],
 
   // lote y estado
   'batch-partial': ['done', 'failed'],
   'batch-empty': [],
   'batch-nothing': [],
+  'pending-list': ['ids'],
 });
 
 /** ¿Es un código declarado? */

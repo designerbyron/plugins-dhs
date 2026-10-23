@@ -124,8 +124,8 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
   it('cubre los comandos que dejan un bloque en el flujo, incluidos los del ciclo de vida', () => {
     const declared = /COMMAND_NAMES = \[([^\]]+)\]/.exec(client)?.[1] ?? '';
     for (const name of [
-      'skill-propuestas', 'skill-ver', 'skill-aprobar', 'skill-globalizar', 'skill-ambito', 'skill-auto', 'skill-rechazar',
-      'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar', 'skill-retiradas',
+      'skill-proposals', 'skill-show', 'skill-approve', 'skill-publish', 'skill-scope', 'skill-auto', 'skill-reject',
+      'skill-disable', 'skill-enable', 'skill-retire', 'skill-retired',
     ]) {
       assert.equal(declared.includes(`'${name}'`), true, `falta ${name} en COMMAND_NAMES`);
     }
@@ -149,7 +149,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     assert.equal(/window\.sessionStorage/.test(client), false, 'el almacén de sesión no sobrevive al cierre de la app');
     assert.match(client, /ids\.slice\(-CLOSED_MAX\)/);
     assert.equal(client.includes("'skc-closed'"), true);
-    // Cerrar es por ejecución, no por comando: dos `/skill-propuestas` son dos bloques distintos.
+    // Cerrar es por ejecución, no por comando: dos `/skill-proposals` son dos bloques distintos.
     assert.match(client, /if \(!ids\.includes\(commandId\)\) writeClosed\(\[\.\.\.ids, commandId\]\)/);
   });
 
@@ -180,7 +180,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     // Medido con el usuario delante: aprobó una skill y el bloque que tenía debajo siguió enseñándola
     // como pendiente. El texto de un resultado es el registro de lo que pasó, así que lo que se puede
     // decir es que hubo una decisión POSTERIOR, y eso viaja en la proyección (plegada del log).
-    assert.match(client, /const LIST_COMMANDS = \['skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito'\]/);
+    assert.match(client, /const LIST_COMMANDS = \['skill-proposals', 'skill-show', 'skill-retired', 'skill-publish', 'skill-scope'\]/);
     assert.match(client, /view\.decisionSeq/, 'el dato viene de la proyección, no de inventarlo');
     assert.match(client, /decision\.seq > seq/, 'la comparación es contra el seq del propio bloque');
     assert.match(client, /Number\.isFinite\(node\?\.seq\)/, 'sin seq en el nodo no se compara');
@@ -217,7 +217,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
   });
 
   it('las pendientes salen del catálogo del host, no de parsear el texto del resultado', () => {
-    // La única fuente estructurada: cada pendiente ya tiene su fila `skill-aprobar-<id>` en el catálogo,
+    // La única fuente estructurada: cada pendiente ya tiene su fila `skill-approve-<id>` en el catálogo,
     // que es también la que alimenta el menú `/`. Parsear el texto duplicaría el formato en dos sitios.
     assert.match(client, /function rowIds\(commands, verb\)/);
     assert.match(client, /const rowPrefix = \(verb\) => `skill-\$\{verb\}-`/);
@@ -246,7 +246,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
   });
 
   it('la tarjeta de una propuesta leída ofrece decidir sobre ella', () => {
-    assert.match(client, /const bulk = node\?\.name === 'skill-propuestas'/);
+    assert.match(client, /const bulk = node\?\.name === 'skill-proposals'/);
     assert.match(client, /const reading = typeof node\?\.args === 'string' \? node\.args\.trim\(\) : ''/);
     assert.match(client, /bulk_approve_one|bulk_reject_one/);
   });
@@ -258,7 +258,7 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
    * mensaje que negaba el trabajo del humano.
    */
   /**
-   * Defecto reportado en vivo: al elegir del menú una **fila** (`skill-aprobar-<id>`) el resultado salía
+   * Defecto reportado en vivo: al elegir del menú una **fila** (`skill-approve-<id>`) el resultado salía
    * con la tarjeta del anfitrión, **sin X**, y el bloque quedaba fijo en la conversación. La causa: el
    * slot keyed se registraba sólo para los cinco nombres fijos, y el de una fila lleva el id dentro.
    */
@@ -333,7 +333,7 @@ describe('artefacto de interfaz · decidir no puede contar una pregunta como hec
     const s = sandbox();
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: s.base });
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
-    const r = byName['skill-aprobar'].handler({ agent: { session: { header: { cwd: s.base } } }, rawInput: 'measured-decision-check' });
+    const r = byName['skill-approve'].handler({ agent: { session: { header: { cwd: s.base } } }, rawInput: 'measured-decision-check' });
     assert.equal(r.kind, 'success', 'para el humano sigue siendo una respuesta, no un fallo');
     assert.ok(r.text.startsWith('¿Dónde quieres que viva'), `el marcador del panel no casa con el comando: «${r.text.slice(0, 40)}»`);
     assert.equal(projectKey(s.base).length > 0, true);
@@ -426,7 +426,7 @@ describe('artefacto de interfaz · el lote va en UNA orden', () => {
 
   it('el ámbito del lote: aprobar va a --local, publicar a --global', () => {
     assert.match(client, /const ambito = verb === 'aprobar' \? ' --local' : verb === 'globalizar' \? ' --global' : ''/);
-    assert.match(client, /const comando = verb === 'globalizar' \? 'skill-aprobar' : target/, 'publicar usa skill-aprobar … --global');
+    assert.match(client, /const comando = verb === 'globalizar' \? 'skill-approve' : target/, 'publicar usa skill-aprobar … --global');
   });
 
   it('si el lote no obra, se cae a id a id: el singular sigue disponible', () => {

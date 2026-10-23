@@ -9,7 +9,7 @@
  * Comparte implementación con el plugin (`lib/compiler.mjs`), así que las reglas no pueden divergir
  * entre lo que el modelo puede proponer y lo que tú puedes aprobar.
  *
- *   /skill-pendientes                                    # los ids que esperan decisión, en una línea
+ *   /skill-pending                                    # los ids que esperan decisión, en una línea
  *   node bin/skill-compiler.mjs lang [en|es]           # idioma del plugin (sin argumento: efectivo y fuente)
  *   node bin/skill-compiler.mjs where                     # qué ámbito tiene este directorio
  *   node bin/skill-compiler.mjs list                      # qué hay propuesto y aprobado
@@ -681,7 +681,7 @@ switch (command) {
       const declared = skillCommands({ root });
       const names = declared.map((c) => c.name);
       const malformed = declared.filter((c) => !/^[a-z][a-z0-9_-]*$/.test(c.name) || !c.description?.trim() || typeof c.handler !== 'function');
-      line(malformed.length === 0 && names.includes('skill-aprobar') && names.includes('skill-auto'),
+      line(malformed.length === 0 && names.includes('skill-approve') && names.includes('skill-auto'),
         `los comandos humanos se declaran (${names.join(', ')})`,
         'un descriptor inválido no se registra en el harness y la superficie desaparece en silencio');
     } catch (error) {

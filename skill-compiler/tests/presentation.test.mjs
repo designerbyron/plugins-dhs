@@ -251,7 +251,7 @@ describe('plegado del estado', () => {
 
     // El nombre del comando se reconoce en sus DOS formas: el comando con argumento y la fila del menú,
     // que lleva el id detrás. Son el mismo acto y tienen que dejar la misma marca.
-    for (const name of ['skill-aprobar', 'skill-aprobar-shell-and-source-editing-traps', 'skill-rechazar-x']) {
+    for (const name of ['skill-approve', 'skill-approve-shell-and-source-editing-traps', 'skill-reject-x']) {
       const marked = applyLearning(applyLearning(initialLearning(), run(name)), done('success'));
       assert.equal(Number.isFinite(marked.decisionSeq), true);
       assert.equal(marked.decisionSeq, 11, 'la marca es el seq del `command/done`: cualquier listado anterior es menor');
@@ -259,13 +259,13 @@ describe('plegado del estado', () => {
     }
 
     // Un `command/done` con error significa que NO se movió nada: marcar ahí sería mentir.
-    const failed = applyLearning(applyLearning(initialLearning(), run('skill-aprobar')), done('error'));
+    const failed = applyLearning(applyLearning(initialLearning(), run('skill-approve')), done('error'));
     assert.equal(failed.decisionSeq, -1);
     assert.equal(failed.decisionCommand, '', 'el emparejamiento se suelta también cuando falla');
 
     // Y un comando que no decide nada no toca el estado: la misma referencia, que es el contrato del registro.
     const state = initialLearning();
-    assert.equal(applyLearning(state, run('skill-propuestas')), state);
+    assert.equal(applyLearning(state, run('skill-proposals')), state);
     assert.equal(applyLearning(state, done('success')), state);
     assert.equal(applyLearning(state, { type: 'tool/call', data: { name: 'otra', callId: 'x' } }), state);
   });

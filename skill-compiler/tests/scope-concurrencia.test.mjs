@@ -130,17 +130,17 @@ describe('el CLI y el comando dicen lo mismo', () => {
     encoding: 'utf8',
   });
 
-  it('`systems` imprime exactamente el mismo inventario que `/skill-sistemas`', () => {
+  it('`systems` imprime exactamente el mismo inventario que `/skill-systems`', () => {
     const s = sandbox();
     declararPropiedad('machine', { root: s.root, por: 'prueba' });
-    const delComando = skillCommands({ root: s.root }).find((c) => c.name === 'skill-sistemas').handler({}).text;
+    const delComando = skillCommands({ root: s.root }).find((c) => c.name === 'skill-systems').handler({}).text;
     const delCli = cli('systems', s.base).replace(/\r\n/g, '\n').trimEnd();
     assert.equal(delCli, delComando, 'son la misma implementación: si divergen, es un defecto');
   });
 
-  it('`ownership` sin argumento imprime lo mismo que `/skill-propiedad`', () => {
+  it('`ownership` sin argumento imprime lo mismo que `/skill-ownership`', () => {
     const s = sandbox();
-    const comando = skillCommands({ root: s.root }).find((c) => c.name === 'skill-propiedad').handler({}).text;
+    const comando = skillCommands({ root: s.root }).find((c) => c.name === 'skill-ownership').handler({}).text;
     const salida = cli('ownership', s.base).replace(/\r\n/g, '\n').trimEnd();
     assert.equal(salida, comando);
     assert.match(salida, /sin declarar/);
@@ -152,7 +152,7 @@ describe('el CLI y el comando dicen lo mismo', () => {
     assert.match(salida, /Declarada la propiedad: «dsh-only»/);
     assert.match(salida, /huella/);
     assert.equal(leerPropiedad({ root: s.root }).ownership, 'dsh-only');
-    assert.match(skillCommands({ root: s.root }).find((c) => c.name === 'skill-propiedad').handler({}).text, /«dsh-only»/);
+    assert.match(skillCommands({ root: s.root }).find((c) => c.name === 'skill-ownership').handler({}).text, /«dsh-only»/);
   });
 
   it('el estado del inventario y su texto salen de la misma función que usa el CLI', () => {

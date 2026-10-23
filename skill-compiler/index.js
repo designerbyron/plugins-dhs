@@ -166,7 +166,7 @@ export function apply(ctx, config = {}) {
        * mismo emitiría `commands/change` en vano y haría parpadear el menú.
        *
        * Dos defectos reales lo obligan. El primero: si el `inject` del hijo no llegaba a correr, la sesión
-       * quedaba sin filas y nadie lo decía —`/skill-propuestas` anunciaba «no hay filas que decidir en el
+       * quedaba sin filas y nadie lo decía —`/skill-proposals` anunciaba «no hay filas que decidir en el
        * catálogo de esta sesión»—, mientras la documentación prometía que el plugin «lo deja dicho en vez de
        * fingir». El segundo: el agente quedaba cacheado aunque el montaje hubiera quedado a medias, así que
        * ningún intento posterior podía arreglarlo.
@@ -318,7 +318,7 @@ export function apply(ctx, config = {}) {
 
       try {
         // `onMount` entra aquí porque el humano es el otro camino que conoce al agente: si el provider no
-        // llegó a montar sus filas, ejecutar `/skill-propuestas` las monta antes de listar.
+        // llegó a montar sus filas, ejecutar `/skill-proposals` las monta antes de listar.
         for (const command of skillCommands({ root, catalog, onListed: refreshPendingRows, onMount: (agent) => mountSession(agent) })) base.push(registry.register(command));
       } catch {
         // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.

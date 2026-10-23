@@ -36,15 +36,15 @@ export const TOOLS = { skill_propose: 'propose', skill_vendor: 'vendor' };
 
 /**
  * Los comandos humanos que **cambian el almacén**, por prefijo de nombre. El prefijo cubre las dos
- * formas de invocarlos, porque son el mismo acto: `skill-aprobar` (con argumento) y `skill-aprobar-<id>`
+ * formas de invocarlos, porque son el mismo acto: `skill-aprobar` (con argumento) y `skill-approve-<id>`
  * (la fila del menú, sin argumentos).
  */
 export const DECISION_COMMANDS = Object.freeze([
-  Object.freeze({ prefix: 'skill-aprobar', kind: 'aprobar' }),
+  Object.freeze({ prefix: 'skill-approve', kind: 'aprobar' }),
   // Publicar es una aprobación más: cuenta como decisión propia, y el feedback lo dice así.
-  Object.freeze({ prefix: 'skill-globalizar', kind: 'aprobar' }),
-  Object.freeze({ prefix: 'skill-ambito', kind: 'aprobar' }),
-  Object.freeze({ prefix: 'skill-rechazar', kind: 'rechazar' }),
+  Object.freeze({ prefix: 'skill-publish', kind: 'aprobar' }),
+  Object.freeze({ prefix: 'skill-scope', kind: 'aprobar' }),
+  Object.freeze({ prefix: 'skill-reject', kind: 'rechazar' }),
 ]);
 
 /** El verbo de decisión de un comando: `aprobar`, `rechazar`, o `''` si ese comando no decide nada. */

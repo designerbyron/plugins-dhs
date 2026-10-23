@@ -17,7 +17,7 @@
  * nada — una prueba que nunca vio el defecto no distingue el arreglo de la casualidad.
  *
  * Después, las dos vías que tiene que cubrir el aviso:
- *   · la explícita: el comando `/skill-aprobar`, que muta dentro de este proceso;
+ *   · la explícita: el comando `/skill-approve`, que muta dentro de este proceso;
  *   · la observada: la CLI (o una edición a mano) que muta fuera, detectada por la vigilancia del almacén.
  */
 import assert from 'node:assert/strict';
@@ -99,7 +99,7 @@ describe('frescura del catálogo de skills', () => {
       propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
       await skills.list({ cwd: CWD }); // deja el catálogo cacheado ANTES de aprobar
 
-      const aprobar = skillCommands({ root: s.root, catalog }).find((c) => c.name === 'skill-aprobar');
+      const aprobar = skillCommands({ root: s.root, catalog }).find((c) => c.name === 'skill-approve');
       const result = aprobar.handler({ agent: AGENT, rawInput: 'measured-decision-check --local' });
 
       assert.equal(result.kind, 'success', JSON.stringify(result));

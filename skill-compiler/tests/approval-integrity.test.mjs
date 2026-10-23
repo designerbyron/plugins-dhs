@@ -112,7 +112,7 @@ describe('aprobación · integridad del contenido', () => {
     ids.forEach((id, i) => otra(s, id, temas[i]));
 
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
-    const resultados = ids.map((id) => byName['skill-aprobar'].handler({ agent: agente(s), rawInput: `${id} --local` }));
+    const resultados = ids.map((id) => byName['skill-approve'].handler({ agent: agente(s), rawInput: `${id} --local` }));
     assert.deepEqual(resultados.map((r) => r.kind), ['success', 'success', 'success'], resultados.map((r) => r.text).join('\n---\n'));
     for (const r of resultados) assert.doesNotMatch(r.text, /AVISO/);
     for (const id of ids) assert.equal(existsSync(join(s.root, 'projects', k, 'approved', id, 'SKILL.md')), true);
@@ -125,8 +125,8 @@ describe('aprobación · integridad del contenido', () => {
     otra(s, 'turno-de-limpieza', 'Repartir el turno de limpieza del local');
 
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
-    const buena = byName['skill-aprobar'].handler({ agent: agente(s), rawInput: 'cuadre-del-inventario --local' });
-    const inexistente = byName['skill-aprobar'].handler({ agent: agente(s), rawInput: 'no-existe-esta-propuesta --local' });
+    const buena = byName['skill-approve'].handler({ agent: agente(s), rawInput: 'cuadre-del-inventario --local' });
+    const inexistente = byName['skill-approve'].handler({ agent: agente(s), rawInput: 'no-existe-esta-propuesta --local' });
     assert.equal(buena.kind, 'success');
     assert.equal(inexistente.kind, 'error');
     assert.match(inexistente.text, /No hay ninguna propuesta/);

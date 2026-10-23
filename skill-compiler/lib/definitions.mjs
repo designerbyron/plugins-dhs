@@ -51,7 +51,7 @@ export const PROTOCOL = [
   '- **De un repositorio** → `skill_vendor`: nuestra versión; un origen con secretos u órdenes al agente **se bloquea**.',
   '',
   'Si otra skill cubre el tema, se rechaza y dice con cuál choca. **Nada se activa solo**: espera aprobación',
-  'humana; di cómo se aprueba. La **propiedad del puesto** (sólo DSH o todo el PC): `/skill-propiedad`.',
+  'humana; di cómo se aprueba. La **propiedad del puesto** (sólo DSH o todo el PC): `/skill-ownership`.',
 ].join('\n');
 
 /** El cwd de la sesión es el único origen válido del ámbito: el modelo no lo declara. */
@@ -74,7 +74,7 @@ const CLI_PATH = process.env.SKILL_COMPILER_CLI
   ?? fileURLToPath(new URL('../bin/skill-compiler.mjs', import.meta.url));
 
 const approveHint = (id) =>
-  `\`/skill-aprobar ${id}\` en esta sesión (o su fila «skill-aprobar-${id}» en el menú «/»); alternativa desde el terminal: node "${CLI_PATH}" approve ${id}`;
+  `\`/skill-approve ${id}\` en esta sesión (o su fila «skill-approve-${id}» en el menú «/»); alternativa desde el terminal: node "${CLI_PATH}" approve ${id}`;
 
 /**
  * Si el modo «aprobar automáticamente en esta sesión» está activo, activa la propuesta que se acaba de
@@ -318,7 +318,7 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
             ...base.warnings,
             ...(result.updatesApproved ? ['Si se aprueba, reemplazará una skill ya aprobada (la anterior queda apartada, no se borra).'] : []),
             ...(result.updatesProposal ? ['Afina una propuesta que ya estaba pendiente: no crea una skill nueva.'] : []),
-            ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-habilitar` en vez de aprobar esto.'] : []),
+            ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-enable` en vez de aprobar esto.'] : []),
             ...(result.updatesPublished ? ['Afina una skill que YA está publicada para todos tus proyectos: al aprobarla, la versión anterior queda apartada en global/superseded/.'] : []),
             ...(base.relatedElsewhere.length ? [`El mismo tema ya vive en otro proyecto: ${base.relatedElsewhere.map((c) => c.id).join(', ')}.`] : []),
           ];
@@ -338,7 +338,7 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
             path: result.path,
             updatesApproved: result.updatesApproved,
             // Aviso también aquí: reemplazar algo apagado no puede pasar en silencio.
-            ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-habilitar` en vez de aprobar esto.'] : []),
+            ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-enable` en vez de aprobar esto.'] : []),
             ...(result.updatesPublished ? ['Afina una skill que YA está publicada para todos tus proyectos: al aprobarla, la versión anterior queda apartada en global/superseded/.'] : []),
             updatesProposal: result.updatesProposal,
             updatesDisabled: result.updatesDisabled,
@@ -577,7 +577,7 @@ export function skillVendor({ root = defaultRoot(), curated, fetchImpl, timeoutM
             updatesPublished: result.updatesPublished,
             updatesApproved: result.updatesApproved,
             // Aviso también aquí: reemplazar algo apagado no puede pasar en silencio.
-            ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-habilitar` en vez de aprobar esto.'] : []),
+            ...(result.updatesDisabled ? ['Si se aprueba, reemplazará una skill que está APAGADA (queda apartada en superseded/, no se borra): si querías recuperarla, usa `/skill-enable` en vez de aprobar esto.'] : []),
             ...(result.updatesPublished ? ['Afina una skill que YA está publicada para todos tus proyectos: al aprobarla, la versión anterior queda apartada en global/superseded/.'] : []),
             ...(auto.asked ? { autoApproved: auto.approved } : {}),
             summary: [

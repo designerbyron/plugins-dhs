@@ -34,6 +34,14 @@ export default Object.freeze({
   'code.batch-empty': 'No hay nada marcado',
   'code.batch-nothing': 'Nada pendiente',
 
+  'code.already-published': 'Ya estaba publicada: {id} en la biblioteca de usuario',
+  'code.already-set-aside': 'Ya estaba apartada: {id}',
+  'code.scope-changed': 'Ámbito cambiado: {id} vive en {scope}',
+  'code.gate-failed': 'Aprobación RECHAZADA: la propuesta {id} no pasa la puerta.',
+  'code.invalid-flag': '{flag} sólo tiene sentido con una skill apagada: «{id}» no lo está.',
+  'code.internal-error': 'No se pudo completar: {message}',
+  'code.pending-list': 'Pendientes: {ids}',
+
   // doctor
   'doctor.language': 'idioma: {lang} (fuente: {source})',
 });

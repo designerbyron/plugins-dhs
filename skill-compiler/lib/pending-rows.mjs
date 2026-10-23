@@ -19,7 +19,7 @@
  * ── Una fila, una decisión ───────────────────────────────────────────────────────────────────────
  *
  * Tres verbos por pendiente, los mismos que ya existían: leer entera, activar, apartar sin borrar.
- * El nombre lleva el id de la skill (`skill-aprobar-<id>`) para que sea inequívoco cuando haya varias
+ * El nombre lleva el id de la skill (`skill-approve-<id>`) para que sea inequívoco cuando haya varias
  * pendientes, y la descripción lleva el proyecto, para que la fila se lea sola en el menú.
  *
  * ── Lo que este módulo NO decide ─────────────────────────────────────────────────────────────────
@@ -41,19 +41,19 @@ export const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
  */
 export const ROW_VERBS = Object.freeze([
   Object.freeze({
-    verb: 'ver',
+    verb: 'show',
     describe: (id, project) => `Lee entera «${id}», pendiente en ${project}.`,
   }),
   Object.freeze({
-    verb: 'aprobar',
+    verb: 'approve',
     describe: (id, project) => `Activa «${id}» en ${project}, si pasa la puerta de validación. Aprobar es tuyo: el modelo no puede.`,
   }),
   Object.freeze({
-    verb: 'globalizar',
+    verb: 'publish',
     describe: (id, project) => `Activa «${id}» para TODOS tus proyectos: la publica en la biblioteca de usuario. Lo aprendido en ${project} es tuyo, no del proyecto.`,
   }),
   Object.freeze({
-    verb: 'rechazar',
+    verb: 'reject',
     describe: (id, project) => `Aparta «${id}» de ${project} sin borrarla: queda en rejected/.`,
   }),
 ]);
@@ -161,8 +161,8 @@ export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
  * caben en el menú sin llenarlo, y es justo donde se decide volver a encenderla o retirarla del todo.
  */
 const RETIRED_VERBS = [
-  { verb: 'habilitar', describe: (id, proyecto) => `Vuelve a encender «${id}» en ${proyecto}: se conserva entera y no hubo que reinstalarla.` },
-  { verb: 'eliminar', describe: (id, proyecto) => `Retira «${id}» de ${proyecto}: se mueve a un respaldo fechado, nunca se borra, y vuelve con \`restore\`.` },
+  { verb: 'enable', describe: (id, proyecto) => `Vuelve a encender «${id}» en ${proyecto}: se conserva entera y no hubo que reinstalarla.` },
+  { verb: 'retire', describe: (id, proyecto) => `Retira «${id}» de ${proyecto}: se mueve a un respaldo fechado, nunca se borra, y vuelve con \`restore\`.` },
 ];
 
 /** Las filas de lo apagado de un proyecto, con la misma gramática que las de lo pendiente. */

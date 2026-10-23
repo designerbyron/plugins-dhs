@@ -45,7 +45,7 @@ describe('seguridad · el id es una ruta y se juzga como tal', () => {
   it('el comando no mueve nada con un id que es una ruta', () => {
     const s = sandbox();
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
-    for (const comando of ['skill-aprobar', 'skill-rechazar']) {
+    for (const comando of ['skill-approve', 'skill-reject']) {
       const r = byName[comando].handler({ agent: agente, rawInput: '../../etc --local' });
       assert.equal(r.kind, 'error', comando);
       assert.match(r.text, /no es un id utilizable/);

@@ -81,7 +81,7 @@ describe('diario del aprendizaje · toda aprobación deja rastro encadenado', ()
     otra(s, ids[0], 'Cerrar la caja del día en el mostrador');
     otra(s, ids[1], 'Repartir el turno de limpieza del local');
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
-    const r = byName['skill-aprobar'].handler({ agent: agente(s), rawInput: `${ids.join(',')} --local` });
+    const r = byName['skill-approve'].handler({ agent: agente(s), rawInput: `${ids.join(',')} --local` });
     assert.equal(r.kind, 'success', r.text);
 
     const lista = entradas(s);
@@ -137,7 +137,7 @@ describe('diario del aprendizaje · toda aprobación deja rastro encadenado', ()
 });
 
 describe('diario del aprendizaje · publicar no se salta los avisos', () => {
-  it('con avisos, `skill-globalizar` pide `--force` en vez de forzar solo', () => {
+  it('con avisos, `skill-publish` pide `--force` en vez de forzar solo', () => {
     const s = sandbox();
     // Una ruta absoluta en prosa es un aviso de la puerta (no un error): sirve para medir la exigencia.
     const r = propose(goodInput({
@@ -150,12 +150,12 @@ describe('diario del aprendizaje · publicar no se salta los avisos', () => {
     assert.equal(r.status, 'proposed', JSON.stringify(r.errors ?? r.conflicts));
 
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
-    const sinForce = byName['skill-globalizar'].handler({ agent: agente(s), rawInput: 'con-aviso' });
+    const sinForce = byName['skill-publish'].handler({ agent: agente(s), rawInput: 'con-aviso' });
     assert.equal(sinForce.kind, 'error', 'con avisos no puede publicar sin decirlo');
     assert.match(sinForce.text, /--force/);
     assert.equal(existsSync(join(s.curated, 'con-aviso')), false);
 
-    const conForce = byName['skill-globalizar'].handler({ agent: agente(s), rawInput: 'con-aviso --force' });
+    const conForce = byName['skill-publish'].handler({ agent: agente(s), rawInput: 'con-aviso --force' });
     assert.equal(conForce.kind, 'success', conForce.text);
     assert.equal(existsSync(join(s.curated, 'con-aviso', 'SKILL.md')), true);
     assert.equal(entradas(s).at(-1).ambito, 'global');

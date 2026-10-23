@@ -76,16 +76,16 @@ describe('gestión · el aviso al catálogo coincide con lo que cambió en disco
   };
 
   const CASOS = [
-    { nombre: 'skill-aprobar', estado: 'proposed', sufijo: ' --local --force', muta: true },
-    { nombre: 'skill-globalizar', estado: 'proposed', sufijo: '', muta: true },
-    { nombre: 'skill-rechazar', estado: 'proposed', sufijo: '', muta: true },
-    { nombre: 'skill-deshabilitar', estado: 'approved', sufijo: '', muta: true },
-    { nombre: 'skill-habilitar', estado: 'disabled', sufijo: '', muta: true },
-    { nombre: 'skill-eliminar', estado: 'disabled', sufijo: ' --yes', muta: true },
-    { nombre: 'skill-propuestas', estado: 'approved', sufijo: null, muta: false },
-    { nombre: 'skill-pendientes', estado: 'approved', sufijo: null, muta: false },
-    { nombre: 'skill-ver', estado: 'approved', sufijo: '', muta: false },
-    { nombre: 'skill-retiradas', estado: 'disabled', sufijo: null, muta: false },
+    { nombre: 'skill-approve', estado: 'proposed', sufijo: ' --local --force', muta: true },
+    { nombre: 'skill-publish', estado: 'proposed', sufijo: '', muta: true },
+    { nombre: 'skill-reject', estado: 'proposed', sufijo: '', muta: true },
+    { nombre: 'skill-disable', estado: 'approved', sufijo: '', muta: true },
+    { nombre: 'skill-enable', estado: 'disabled', sufijo: '', muta: true },
+    { nombre: 'skill-retire', estado: 'disabled', sufijo: ' --yes', muta: true },
+    { nombre: 'skill-proposals', estado: 'approved', sufijo: null, muta: false },
+    { nombre: 'skill-pending', estado: 'approved', sufijo: null, muta: false },
+    { nombre: 'skill-show', estado: 'approved', sufijo: '', muta: false },
+    { nombre: 'skill-retired', estado: 'disabled', sufijo: null, muta: false },
   ];
 
   for (const caso of CASOS) {
@@ -114,12 +114,26 @@ describe('gestión · el aviso al catálogo coincide con lo que cambió en disco
 describe('comandos · descriptor', () => {
   it('se declaran como el registro del harness los exige', () => {
     const { list } = commands('C:\\tmp');
-    assert.deepEqual(list.map((c) => c.name).sort(),
+    // Canónicos ingleses, y los 15 alias españoles declarados con metadatos (sin duplicar el canónico).
+    assert.deepEqual(list.filter((c) => c.aliasOf === undefined).map((c) => c.name).sort(),
       [
-        'skill-ambito', 'skill-aprobar', 'skill-auto', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar', 'skill-habilitar',
-        'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only', 'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar',
-        'skill-retiradas', 'skill-sistemas', 'skill-ver',
+        'skill-approve', 'skill-auto', 'skill-disable', 'skill-enable', 'skill-ownership',
+        'skill-ownership-dsh-only', 'skill-ownership-machine', 'skill-pending', 'skill-proposals',
+        'skill-publish', 'skill-reject', 'skill-retire', 'skill-retired', 'skill-scope', 'skill-show',
+        'skill-systems',
       ]);
+    assert.deepEqual(list.filter((c) => c.aliasOf !== undefined).map((c) => c.name).sort(),
+      [
+        'skill-ambito', 'skill-aprobar', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar',
+        'skill-habilitar', 'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only',
+        'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar', 'skill-retiradas',
+        'skill-sistemas', 'skill-ver',
+      ]);
+    for (const alias of list.filter((c) => c.aliasOf !== undefined)) {
+      assert.equal(alias.deprecatedIn, '4.0.0', `${alias.name} sin versión de retirada`);
+      assert.equal(typeof alias.description, 'string');
+      assert.match(alias.description, /^Alias obsoleto/);
+    }
     for (const command of list) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/, `${command.name} no cumple la gramática del harness`);
       assert.equal(typeof command.description, 'string');
@@ -128,17 +142,17 @@ describe('comandos · descriptor', () => {
     }
     // Los que toman un id lo anuncian: es lo que el compositor enseña al escribir el comando.
     // Los que toman un id lo anuncian, y también los del ciclo de vida.
-    for (const name of ['skill-ver', 'skill-aprobar', 'skill-globalizar', 'skill-ambito', 'skill-rechazar', 'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar']) {
+    for (const name of ['skill-show', 'skill-approve', 'skill-publish', 'skill-scope', 'skill-reject', 'skill-disable', 'skill-enable', 'skill-retire']) {
       const command = list.find((c) => c.name === name);
       assert.equal(typeof command.input?.hint, 'string');
     }
   });
 });
 
-describe('comandos · /skill-propuestas', () => {
+describe('comandos · /skill-proposals', () => {
   it('sin ámbito lo dice, en vez de inventarse un proyecto', () => {
     const { byName } = commands('C:\\tmp');
-    const result = byName['skill-propuestas'].handler({ agent: {}, rawInput: '' });
+    const result = byName['skill-proposals'].handler({ agent: {}, rawInput: '' });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /Sin ámbito/);
   });
@@ -150,28 +164,28 @@ describe('comandos · /skill-propuestas', () => {
     propose(goodInput({ id: 'otro-tema-distinto', description: 'Otra cosa sin relación con lo anterior, con su propio detalle.', whenToUse: 'Cuando haga falta otra cosa.' }), { root: s.root, curated: s.curated, cwd: CWD });
 
     const { byName } = commands(s.root);
-    const result = byName['skill-propuestas'].handler({ agent, rawInput: '' });
+    const result = byName['skill-proposals'].handler({ agent, rawInput: '' });
     assert.equal(result.kind, 'success');
     assert.match(result.text, /Pendientes de tu aprobación \(1\)/);
     assert.match(result.text, /otro-tema-distinto/);
     assert.match(result.text, /Aprobadas y activas \(1\)/);
     assert.match(result.text, /measured-decision-check/);
-    assert.match(result.text, /\/skill-aprobar <id>/, 'y dice cómo seguir');
+    assert.match(result.text, /\/skill-approve <id>/, 'y dice cómo seguir');
   });
 });
 
-describe('comandos · /skill-ver', () => {
+describe('comandos · /skill-show', () => {
   it('pide el id si falta', () => {
     const { byName } = commands('C:\\tmp');
-    const result = byName['skill-ver'].handler({ agent, rawInput: '   ' });
+    const result = byName['skill-show'].handler({ agent, rawInput: '   ' });
     assert.equal(result.kind, 'error');
-    assert.match(result.text, /Uso: \/skill-ver <id>/);
+    assert.match(result.text, /Uso: \/skill-show <id>/);
   });
 
   it('avisa cuando el id no existe', () => {
     const s = sandbox();
     const { byName } = commands(s.root);
-    const result = byName['skill-ver'].handler({ agent, rawInput: 'no-existe' });
+    const result = byName['skill-show'].handler({ agent, rawInput: 'no-existe' });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /no hay ninguna skill aprendida/i);
   });
@@ -180,7 +194,7 @@ describe('comandos · /skill-ver', () => {
     const s = sandbox();
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     const { byName } = commands(s.root);
-    const result = byName['skill-ver'].handler({ agent, rawInput: 'measured-decision-check' });
+    const result = byName['skill-show'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(result.kind, 'success');
     assert.match(result.text, /Propuesta pendiente de aprobación/);
     assert.match(result.text, /## Procedure/, 'el cuerpo entero, no un resumen');
@@ -191,25 +205,25 @@ describe('comandos · /skill-ver', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     approve('measured-decision-check', KEY, { root: s.root });
     const { byName } = commands(s.root);
-    const result = byName['skill-ver'].handler({ agent, rawInput: 'measured-decision-check' });
+    const result = byName['skill-show'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(result.kind, 'success');
     assert.match(result.text, /Activa en este proyecto/);
   });
 });
 
-describe('comandos · /skill-aprobar', () => {
+describe('comandos · /skill-approve', () => {
   it('sin decir el ámbito pregunta, y no aprueba en ninguna parte', () => {
     const s = sandbox();
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     const catalog = fakeCatalog();
     const { byName } = commands(s.root, catalog);
 
-    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'measured-decision-check' });
+    const result = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(result.kind, 'success', 'preguntar no es un fallo: es la pregunta');
     assert.match(result.text, /¿Dónde quieres que viva/);
     assert.match(result.text, /--local/, 'tiene que ofrecer el proyecto');
     assert.match(result.text, /--global/, 'y tiene que ofrecer la biblioteca de usuario');
-    assert.match(result.text, /skill-globalizar/, 'y el nombre de su fila, para el ratón');
+    assert.match(result.text, /skill-publish/, 'y el nombre de su fila, para el ratón');
 
     // Y no se movió nada, ni en este proyecto ni en la biblioteca.
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false);
@@ -219,7 +233,7 @@ describe('comandos · /skill-aprobar', () => {
   it('sin id no pide sintaxis: enseña lo que hay (y arma las filas)', () => {
     const s = sandbox();
     const { byName } = commands(s.root);
-    const result = byName['skill-aprobar'].handler({ agent, rawInput: '' });
+    const result = byName['skill-approve'].handler({ agent, rawInput: '' });
     assert.equal(result.kind, 'success', 'debe listar, no exigir que el humano recuerde un id');
     assert.match(result.text, /Pendientes de tu aprobación/);
     assert.match(result.text, /Aprobadas y activas/);
@@ -228,10 +242,10 @@ describe('comandos · /skill-aprobar', () => {
   it('no aprueba lo que no existe', () => {
     const s = sandbox();
     const { byName } = commands(s.root);
-    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'no-existe' });
+    const result = byName['skill-approve'].handler({ agent, rawInput: 'no-existe' });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /No hay ninguna propuesta/);
-    assert.match(result.text, /skill-propuestas/, 'dice dónde mirar, en vez de solo que no existe');
+    assert.match(result.text, /skill-proposals/, 'dice dónde mirar, en vez de solo que no existe');
   });
 
   it('respeta la puerta: una propuesta que no la pasa no se aprueba, y nada se mueve', () => {
@@ -242,7 +256,7 @@ describe('comandos · /skill-aprobar', () => {
     writeFileSync(join(dir, 'SKILL.md'), ['---', 'name: tocada-a-mano', 'description: "Una propuesta que alguien editó a mano y rompió."', '---', '', 'Muy corto.'].join('\n'));
 
     const { byName } = commands(s.root);
-    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'tocada-a-mano --local' });
+    const result = byName['skill-approve'].handler({ agent, rawInput: 'tocada-a-mano --local' });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /no pasa la puerta/);
     assert.match(result.text, /body demasiado corto/);
@@ -255,7 +269,7 @@ describe('comandos · /skill-aprobar', () => {
     const catalog = fakeCatalog();
     const { byName } = commands(s.root, catalog);
 
-    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'measured-decision-check --local' });
+    const result = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check --local' });
     assert.equal(result.kind, 'success', JSON.stringify(result));
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check', 'SKILL.md')), true);
     assert.equal(catalog.count(), 1, 'el aviso al catálogo es lo que la hace usable sin reiniciar');
@@ -269,24 +283,24 @@ describe('comandos · /skill-aprobar', () => {
     const catalog = fakeCatalog();
     const { byName } = commands(s.root, catalog);
 
-    const sinForzar = byName['skill-aprobar'].handler({ agent, rawInput: 'measured-decision-check --local' });
+    const sinForzar = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check --local' });
     assert.equal(sinForzar.kind, 'error');
     assert.match(sinForzar.text, /tiene avisos/);
     assert.match(sinForzar.text, /--force/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false, 'con avisos no se aprueba sola');
 
-    const forzado = byName['skill-aprobar'].handler({ agent, rawInput: 'measured-decision-check --local --force' });
+    const forzado = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check --local --force' });
     assert.equal(forzado.kind, 'success', JSON.stringify(forzado));
     assert.equal(catalog.count(), 1);
     assert.match(forzado.text, /Aprobada con avisos/);
   });
 });
 
-describe('comandos · /skill-rechazar', () => {
+describe('comandos · /skill-reject', () => {
   it('no aparta lo que no existe', () => {
     const s = sandbox();
     const { byName } = commands(s.root);
-    const result = byName['skill-rechazar'].handler({ agent, rawInput: 'no-existe' });
+    const result = byName['skill-reject'].handler({ agent, rawInput: 'no-existe' });
     assert.equal(result.kind, 'error');
   });
 
@@ -296,7 +310,7 @@ describe('comandos · /skill-rechazar', () => {
     const catalog = fakeCatalog();
     const { byName } = commands(s.root, catalog);
 
-    const result = byName['skill-rechazar'].handler({ agent, rawInput: 'measured-decision-check' });
+    const result = byName['skill-reject'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(result.kind, 'success');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'measured-decision-check', 'SKILL.md')), true, 'queda guardada');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'proposed', 'measured-decision-check')), false);
@@ -326,7 +340,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     const rows = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const aprobar = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check');
+    const aprobar = rows.find((row) => row.name === 'skill-approve-measured-decision-check');
     const result = aprobar.handler({ agent });
     assert.equal(result.kind, 'success', JSON.stringify(result));
     assert.equal(catalog.count(), 1, 'la fila avisa al catálogo igual que el comando con argumentos');
@@ -346,7 +360,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     const rows = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /no pasa la puerta/);
     assert.equal(catalog.count(), 0, 'nada se movió, así que nada cambió');
@@ -358,7 +372,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(WARNS), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /--force/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false);
@@ -370,7 +384,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: otro });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: otro }) });
 
-    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /no en esta sesión/);
     assert.equal(existsSync(join(s.root, 'projects', projectKey(otro), 'approved', 'measured-decision-check')), false);
@@ -381,7 +395,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(WARNS), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-ver-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-show-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'success');
     assert.match(result.text, /Puerta de validación: pasa\./);
     assert.match(result.text, /aviso/);
@@ -396,7 +410,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     // La fila se captura UNA vez: es la misma acción, y aprobar la retira del conjunto de pendientes.
     const fila = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) })
-      .find((row) => row.name === 'skill-aprobar-measured-decision-check');
+      .find((row) => row.name === 'skill-approve-measured-decision-check');
 
     const primera = fila.handler({ agent });
     assert.equal(primera.kind, 'success');
@@ -417,7 +431,7 @@ describe('comandos · filas de pendientes', () => {
       { root: s.root, curated: s.curated, cwd: CWD });
     const { byName } = commands(s.root);
 
-    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'measured-decision-check --local' });
+    const result = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check --local' });
     assert.equal(result.kind, 'success');
     assert.match(result.text, /Pendientes de tu aprobación \(1\):/);
     assert.match(result.text, /otro-tema-distinto/);
@@ -425,7 +439,7 @@ describe('comandos · filas de pendientes', () => {
       'la recién aprobada no puede seguir apareciendo como pendiente');
 
     // Y cuando no queda nada, se dice sin rodeos.
-    const ultima = byName['skill-aprobar'].handler({ agent, rawInput: 'otro-tema-distinto --local' });
+    const ultima = byName['skill-approve'].handler({ agent, rawInput: 'otro-tema-distinto --local' });
     assert.match(ultima.text, /Pendientes de tu aprobación \(0\):[\s\S]*ninguna/);
   });
 
@@ -433,14 +447,14 @@ describe('comandos · filas de pendientes', () => {
     const s = sandbox();
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     const { byName } = commands(s.root);
-    byName['skill-rechazar'].handler({ agent, rawInput: 'measured-decision-check' });
+    byName['skill-reject'].handler({ agent, rawInput: 'measured-decision-check' });
 
-    const apartada = byName['skill-aprobar'].handler({ agent, rawInput: 'measured-decision-check' });
+    const apartada = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(apartada.kind, 'error');
     assert.match(apartada.text, /está apartada/);
     assert.match(apartada.text, /rejected/);
 
-    const deNuevo = byName['skill-rechazar'].handler({ agent, rawInput: 'measured-decision-check' });
+    const deNuevo = byName['skill-reject'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(deNuevo.kind, 'success', 'apartar algo ya apartado tampoco es un fallo');
     assert.match(deNuevo.text, /Ya estaba apartada/);
   });
@@ -450,7 +464,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-rechazar-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-reject-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'success');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'measured-decision-check', 'SKILL.md')), true);
   });
@@ -471,11 +485,11 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     pendiente(s.root, 'dsh-nexus-protocol');
     const { byName } = commands(s.root);
 
-    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'dhs-nexus-protocol --local' });
+    const result = byName['skill-approve'].handler({ agent, rawInput: 'dhs-nexus-protocol --local' });
     assert.equal(result.kind, 'error', 'no había nada con ese id: se dice');
     assert.match(result.text, /No hay ninguna propuesta «dhs-nexus-protocol»/);
     assert.match(result.text, /¿Querías decir «dsh-nexus-protocol»\?/);
-    assert.match(result.text, /skill-propuestas/);
+    assert.match(result.text, /skill-proposals/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'dsh-nexus-protocol')), false, 'y no se movió nada');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'proposed', 'dsh-nexus-protocol')), true);
   });
@@ -485,10 +499,10 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     pendiente(s.root, 'dsh-nexus-protocol');
     const { byName } = commands(s.root);
 
-    const result = byName['skill-aprobar'].handler({ agent, rawInput: 'otra-cosa-muy-distinta --local' });
+    const result = byName['skill-approve'].handler({ agent, rawInput: 'otra-cosa-muy-distinta --local' });
     assert.equal(result.kind, 'error');
     assert.doesNotMatch(result.text, /¿Querías decir/);
-    assert.match(result.text, /Míralas con \/skill-propuestas/);
+    assert.match(result.text, /Míralas con \/skill-proposals/);
   });
 
   it('con dos candidatos igual de cerca, elige siempre el mismo', () => {
@@ -497,18 +511,18 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     pendiente(s.root, 'medida-uno');
     const { byName } = commands(s.root);
 
-    const primera = byName['skill-aprobar'].handler({ agent, rawInput: 'medida-unz --local' });
-    const segunda = byName['skill-aprobar'].handler({ agent, rawInput: 'medida-unz --local' });
+    const primera = byName['skill-approve'].handler({ agent, rawInput: 'medida-unz --local' });
+    const segunda = byName['skill-approve'].handler({ agent, rawInput: 'medida-unz --local' });
     assert.match(primera.text, /¿Querías decir «medida-una»\?/, 'el empate lo rompe el orden, no el azar');
     assert.equal(primera.text, segunda.text);
   });
 
-  it('la misma ayuda en /skill-ver y /skill-rechazar', () => {
+  it('la misma ayuda en /skill-show y /skill-reject', () => {
     const s = sandbox();
     pendiente(s.root, 'dsh-nexus-protocol');
     const { byName } = commands(s.root);
 
-    for (const comando of ['skill-ver', 'skill-rechazar']) {
+    for (const comando of ['skill-show', 'skill-reject']) {
       const result = byName[comando].handler({ agent, rawInput: 'dsh-nexus-protoocl' });
       assert.equal(result.kind, 'error', comando);
       assert.match(result.text, /¿Querías decir «dsh-nexus-protocol»\?/, comando);
@@ -530,14 +544,14 @@ describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
     assert.equal(fila.updatesActive, true, 'la propuesta sustituye una versión activa y hay que decirlo');
 
     const { byName } = commands(s.root);
-    const listado = byName['skill-propuestas'].handler({ agent, rawInput: '' });
+    const listado = byName['skill-proposals'].handler({ agent, rawInput: '' });
     assert.match(listado.text, /actualización de la versión activa/);
     // Y la etiqueta del medidor: si el import falta, esto era «no se pudo medir» y la suite no se enteraba.
     assert.match(listado.text, /auto-actualizable|exige humano/, listado.text.split('\n').slice(0, 5).join(' | '));
     assert.doesNotMatch(listado.text, /no se pudo medir/);
 
     const filas = pendingRowsFor({ root: s.root, cwd: CWD });
-    const aprobar = filas.find((f) => f.verb === 'aprobar' && f.id === 'measured-decision-check');
+    const aprobar = filas.find((f) => f.verb === 'approve' && f.id === 'measured-decision-check');
     assert.match(aprobar.description, /Actualiza una skill que ya está activa/);
     assert.match(aprobar.description, /la anterior queda apartada/);
   });
@@ -550,7 +564,7 @@ describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
     assert.doesNotMatch(filasTexto(s), /actualización de la versión activa/);
   });
 
-  const filasTexto = (s) => commands(s.root).byName['skill-propuestas'].handler({ agent, rawInput: '' }).text;
+  const filasTexto = (s) => commands(s.root).byName['skill-proposals'].handler({ agent, rawInput: '' }).text;
 });
 
 describe('comandos · aprobar en lote (plural), local y global', () => {
@@ -585,7 +599,7 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const s = sandbox();
     lote(s, ids);
     const { byName } = commands(s.root);
-    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids.join(',')} --local` });
+    const r = byName['skill-approve'].handler({ agent, rawInput: `${ids.join(',')} --local` });
     assert.equal(r.kind, 'success', r.text);
     assert.match(r.text, /Lote de 3: 3 aprobada\(s\) · 0 con fallo/);
     for (const id of ids) {
@@ -598,7 +612,7 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const s = sandbox();
     lote(s, ids);
     const { byName } = commands(s.root);
-    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids.join(' ')} --global` });
+    const r = byName['skill-approve'].handler({ agent, rawInput: `${ids.join(' ')} --global` });
     assert.equal(r.kind, 'success', r.text);
     assert.match(r.text, /biblioteca de usuario/);
     for (const id of ids) {
@@ -612,7 +626,7 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const s = sandbox();
     lote(s, ids.slice(0, 2));
     const { byName } = commands(s.root);
-    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]},${ids[1]},no-existe --local` });
+    const r = byName['skill-approve'].handler({ agent, rawInput: `${ids[0]},${ids[1]},no-existe --local` });
     assert.equal(r.kind, 'error', 'un lote con un fallo necesita que alguien lo mire');
     assert.match(r.text, /Lote de 3: 2 aprobada\(s\) · 1 con fallo/);
     assert.match(r.text, new RegExp(`ok +${ids[0]}`));
@@ -624,8 +638,8 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const s = sandbox();
     lote(s, ids.slice(0, 2));
     const { byName } = commands(s.root);
-    byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]} --local` });
-    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]},${ids[1]} --local` });
+    byName['skill-approve'].handler({ agent, rawInput: `${ids[0]} --local` });
+    const r = byName['skill-approve'].handler({ agent, rawInput: `${ids[0]},${ids[1]} --local` });
     assert.equal(r.kind, 'success', r.text);
     assert.match(r.text, /Lote de 2: 2 aprobada\(s\) · 0 con fallo/);
     assert.match(r.text, /Ya estaba activa/);
@@ -635,7 +649,7 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const s = sandbox();
     lote(s, ids);
     const { byName } = commands(s.root);
-    const r = byName['skill-aprobar'].handler({ agent, rawInput: ids.join(',') });
+    const r = byName['skill-approve'].handler({ agent, rawInput: ids.join(',') });
     assert.equal(r.kind, 'success', 'es la pregunta, no un fallo');
     assert.match(r.text, /¿Dónde quieres que vivan estas 3\?/);
     assert.match(r.text, /--local/);
@@ -650,19 +664,19 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const s = sandbox();
     lote(s, ids.slice(0, 1));
     const { byName } = commands(s.root);
-    const r = byName['skill-aprobar'].handler({ agent, rawInput: `${ids[0]},${ids[0]} --local` });
+    const r = byName['skill-approve'].handler({ agent, rawInput: `${ids[0]},${ids[0]} --local` });
     assert.match(r.text, /Lote de 1: 1 aprobada\(s\)/);
   });
 });
 
-describe('comandos · /skill-pendientes', () => {
+describe('comandos · /skill-pending', () => {
   it('devuelve los ids en una línea, sin descripciones: lo que la tarjeta consulta', () => {
     const s = sandbox();
     const { byName } = commands(s.root, fakeCatalog());
     const uno = 'pendiente-uno';
     const hecho = propose(goodInput({ id: uno }), { root: s.root, curated: s.curated, cwd: 'C:\\xampp\\htdocs\\saas-corporative' });
     assert.equal(hecho.status, 'proposed', JSON.stringify(hecho.errors ?? hecho.conflicts));
-    const r = byName['skill-pendientes'].handler({ agent, rawInput: '' });
+    const r = byName['skill-pending'].handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success', r.text);
     assert.match(r.text, /^pendientes: 1$/m);
     assert.match(r.text, new RegExp(`^ids: ${uno}$`, 'm'));
@@ -671,13 +685,13 @@ describe('comandos · /skill-pendientes', () => {
   it('sin nada pendiente dice cero y una lista vacía, no una línea inventada', () => {
     const s = sandbox();
     const { byName } = commands(s.root, fakeCatalog());
-    const r = byName['skill-pendientes'].handler({ agent, rawInput: '' });
+    const r = byName['skill-pending'].handler({ agent, rawInput: '' });
     assert.match(r.text, /^pendientes: 0$/m);
     assert.match(r.text, /^ids:\s*$/m);
   });
 });
 
-describe('comandos · /skill-pendientes con avisos', () => {
+describe('comandos · /skill-pending con avisos', () => {
   it('dice cuántos avisos tiene cada id y los escribe: la tarjeta pregunta antes de mandar la orden', () => {
     const s = sandbox();
     const { byName } = commands(s.root, fakeCatalog());
@@ -699,7 +713,7 @@ describe('comandos · /skill-pendientes con avisos', () => {
     assert.equal(hecho.status, 'proposed', JSON.stringify(hecho.errors ?? hecho.conflicts));
     assert.equal(hecho.warnings.length > 0, true, 'la propuesta trae aviso');
 
-    const r = byName['skill-pendientes'].handler({ agent, rawInput: '' });
+    const r = byName['skill-pending'].handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success', r.text);
     assert.match(r.text, new RegExp(`^avisos: ${id}=1$`, 'm'));
     assert.match(r.text, new RegExp(`^aviso: ${id} · .*ruta absoluta`, 'm'));
