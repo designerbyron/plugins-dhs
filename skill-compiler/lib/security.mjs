@@ -386,7 +386,13 @@ export function huellaDeContenido(dir) {
   return createHash('sha256').update(partes.join('\n')).digest('hex');
 }
 
-/** Los ficheros de contenido que difieren entre dos fotos de un árbol: para poder decir CUÁL cambió. */
+/**
+ * Los ficheros de contenido que difieren entre dos fotos de un árbol: para poder decir CUÁL cambió.
+ *
+ * Devuelve el DATO, no la frase: `[{ ruta, cambio }]` con `cambio` en `cambio` | `nuevo` | `igual`. Quien lo
+ * pinta compone el marcador con el catalogo (`cmd.approve.drift-file.*`), asi el aviso de una aprobacion que
+ * no cuadra se lee en el idioma de la sesion sin mover ni una ruta.
+ */
 export function ficherosQueDifieren(dirA, dirB) {
   const foto = (dir) => {
     const salida = new Map();
@@ -409,9 +415,21 @@ export function ficherosQueDifieren(dirA, dirB) {
   const a = foto(dirA);
   const b = foto(dirB);
   const salida = [];
-  for (const [ruta, huella] of a) if (b.get(ruta) !== huella) salida.push(`${ruta} (${huella === b.get(ruta) ? 'igual' : 'cambió'})`);
-  for (const ruta of b.keys()) if (!a.has(ruta)) salida.push(`${ruta} (nuevo)`);
+  for (const [ruta, huella] of a) if (b.get(ruta) !== huella) salida.push({ ruta, cambio: huella === b.get(ruta) ? 'igual' : 'cambio' });
+  for (const ruta of b.keys()) if (!a.has(ruta)) salida.push({ ruta, cambio: 'nuevo' });
   return salida;
+}
+
+/**
+ * El marcador de un fichero que difiere, en el idioma de la sesion. Si el dato trae un `cambio` que el catalogo
+ * no conoce, se pinta la ruta con el codigo tal cual: nunca una clave cruda, y nunca perder el fichero.
+ */
+export function cambioEnTexto(entrada, { lang } = {}) {
+  const ruta = String(entrada?.ruta ?? '');
+  const cambio = String(entrada?.cambio ?? '');
+  const clave = `cmd.approve.drift-file.${cambio}`;
+  const texto = t(clave, { ruta }, { lang });
+  return texto === clave ? `${ruta} (${cambio})` : texto;
 }
 
 // ── 4 · El diario, verificable ──────────────────────────────────────────────────────────────────────

@@ -36,7 +36,8 @@ import {
   approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, move, pending, sugerenciaDeId,
   projectKey, reject, retire, retired,
 } from './compiler.mjs';
-import { anotarEntradaEnDiario, diagnosticoDeId, ficherosQueDifieren, huellaDeContenido, motivoDeIdInseguro } from './security.mjs';
+import { anotarEntradaEnDiario, cambioEnTexto, diagnosticoDeId, ficherosQueDifieren, huellaDeContenido, motivoDeIdInseguro } from './security.mjs';
+import { lineasDePuerta } from './audit.mjs';
 import { medirAutoActualizacion } from './auto-update.mjs';
 import { scopeOf } from './definitions.mjs';
 import { t } from './i18n/index.mjs';
@@ -120,8 +121,11 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
     `${chose.path}`,
     '',
     check.ok ? t('cmd.show.gate-ok') : t('cmd.show.gate-fail'),
-    ...check.errors.map((e) => t('cmd.show.gate-error', { error: e })),
-    ...check.warnings.map((w) => t('cmd.show.gate-warning', { aviso: w })),
+    // Las lineas se componen de los HALLAZGOS (que llevan codigo), no de su texto crudo: la misma puerta que la
+    // CLI y la pagina de revision, en el idioma de la sesion. `check.errors`/`check.warnings` siguen siendo el
+    // dato que viaja en `params`.
+    ...lineasDePuerta(check.findings, 'error', check.errorLines, check.errors).map((e) => t('cmd.show.gate-error', { error: e })),
+    ...lineasDePuerta(check.findings, 'warn', null, check.warnings).map((w) => t('cmd.show.gate-warning', { aviso: w })),
     ...(check.warnings.length > 0 ? ['', t('cmd.show.force-hint', { id: wanted })] : []),
     '',
     readFileSync(chose.path, 'utf8'),
@@ -278,14 +282,14 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   if (!check.ok) {
     return bad([
       t('cmd.approve.gate-failed', { id: wanted }),
-      ...check.errors.map((e) => t('cmd.approve.gate-error', { error: e })),
+      ...lineasDePuerta(check.findings, 'error', check.errorLines, check.errors).map((e) => t('cmd.approve.gate-error', { error: e })),
       t('cmd.approve.gate-hint'),
     ].join('\n'), { code: 'gate-failed', params: { id: wanted, errors: check.errors } });
   }
   if (check.warnings.length > 0 && !force) {
     return bad([
       t('cmd.approve.warnings', { id: wanted }),
-      ...check.warnings.map((w) => t('cmd.approve.warning-line', { aviso: w })),
+      ...lineasDePuerta(check.findings, 'warn', null, check.warnings).map((w) => t('cmd.approve.warning-line', { aviso: w })),
       '',
       t('cmd.approve.force-hint', { id: wanted }),
     ].join('\n'), { code: 'with-warnings', params: { id: wanted, warnings: check.warnings } });
@@ -337,7 +341,9 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     const vuelta = move(root, key, wanted, 'approved', 'proposed');
     return bad([
       t('cmd.approve.drift', { id: wanted, antes: huellaAntes.slice(0, 12), despues: huellaDespues.slice(0, 12) }),
-      ...(ficheros.length ? [t('cmd.approve.drift-files', { ficheros: ficheros.join(', ') })] : []),
+      // El dato de cada fichero (`ruta` + `cambio`) se conserva; el marcador se compone aqui, en el idioma de la
+      // sesion: `(nuevo)` / `(cambio)` / `(igual)` nunca viajan como frase traducida.
+      ...(ficheros.length ? [t('cmd.approve.drift-files', { ficheros: ficheros.map((f) => cambioEnTexto(f)).join(', ') })] : []),
       vuelta.ok
         ? t('cmd.approve.drift-returned')
         : t('cmd.approve.drift-return-failed', { reason: vuelta.reason }),
@@ -352,7 +358,7 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     t('cmd.approve.path', { path: moved.path }),
     ...(moved.superseded ? [t('cmd.approve.superseded', { path: moved.superseded })] : []),
     ...(check.warnings.length > 0
-      ? ['', t('cmd.approve.with-warnings-header'), ...check.warnings.map((w) => t('cmd.approve.warning-bullet', { aviso: w }))]
+      ? ['', t('cmd.approve.with-warnings-header'), ...lineasDePuerta(check.findings, 'warn', null, check.warnings).map((w) => t('cmd.approve.warning-bullet', { aviso: w }))]
       : []),
     '',
     preservarEstado ? t('cmd.approve.still-off') : t('cmd.approve.now-served'),

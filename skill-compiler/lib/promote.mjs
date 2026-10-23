@@ -31,6 +31,7 @@ import {
   projectKey, treeOf, treeOfConErrores, vigenteDe,
 } from './compiler.mjs';
 import { inventario, inventarioPerdido, seccionesDe, topeDeMovimiento } from './repair.mjs';
+import { textoDeCodigo } from './i18n/index.mjs';
 
 /**
  * Qué niveles se activan solos **si nadie dice otra cosa**. Vacío, y a propósito: la promoción automática es
@@ -39,6 +40,21 @@ import { inventario, inventarioPerdido, seccionesDe, topeDeMovimiento } from './
 export const NIVELES_POR_DEFECTO = [];
 /** El nivel 3 no se promociona nunca automáticamente, ni aunque alguien lo ponga en la lista. */
 export const NIVEL_QUE_EXIGE_HUMANO = 3;
+
+/** El detalle de una prueba, en el idioma de la sesion: su codigo (`detalleCode`) y su texto como reserva. */
+export function detalleDePrueba(prueba, opciones = {}) {
+  return textoDeCodigo(prueba?.detalleCode, prueba?.detalleParams ?? {}, prueba?.detalle, opciones);
+}
+
+/**
+ * El motivo de un resultado de promocion, en el idioma de la sesion.
+ *
+ * El `reason` sigue siendo el DATO -es lo que se anota como `why` en el diario, y lo que afirma una prueba- y
+ * `reasonCode` + `reasonParams` es su representacion: se compone al pintar, nunca dentro del motor.
+ */
+export function motivoDePromocion(resultado, opciones = {}) {
+  return textoDeCodigo(resultado?.reasonCode, resultado?.reasonParams ?? {}, resultado?.reason, opciones);
+}
 
 /** Dónde vive el diario de un proyecto. */
 export function diarioDe(key, { root = defaultRoot() } = {}) {
@@ -265,7 +281,13 @@ export function promover(id, key, {
   const dirPropuesta = join(root, 'projects', key, 'proposed', id);
   const fichero = join(dirPropuesta, 'SKILL.md');
   if (!existsSync(fichero)) {
-    return { status: 'no-propuesta', id, reason: `no hay ninguna propuesta ${id} en ${key}: la promoción activa lo que ya está propuesto` };
+    return {
+      status: 'no-propuesta',
+      id,
+      reason: `no hay ninguna propuesta ${id} en ${key}: la promoción activa lo que ya está propuesto`,
+      reasonCode: 'promote.reason.no-proposal',
+      reasonParams: { id, key },
+    };
   }
   let meta = null;
   try { meta = JSON.parse(readFileSync(join(dirPropuesta, 'meta.json'), 'utf8')); } catch { meta = null; }
@@ -284,7 +306,18 @@ export function promover(id, key, {
   const nivel = avisosDeSeguridad > 0 ? NIVEL_QUE_EXIGE_HUMANO : nivelMedido;
   if (veredicto !== null && veredicto?.apto !== true) {
     anotarEnDiario(key, { id, key, group: meta?.group?.id ?? null, nivel, reglas: meta?.repair?.reglas ?? [], base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: veredicto?.medidas ?? [], decision: 'espera-medidor', por, hashResultante: null, hashAnterior: null, why: String(veredicto?.resumen ?? 'el medidor no dio veredicto') }, { root, now });
-    return { status: 'pending', id, nivel, regresion: { ok: false, pruebas: veredicto?.medidas ?? [] }, razonMedida: veredicto?.resumen ?? '', reason: String(veredicto?.resumen ?? 'el medidor no dio veredicto: la propuesta espera') };
+    const resumenMedido = typeof veredicto?.resumen === 'string' ? veredicto.resumen : '';
+    return {
+      status: 'pending',
+      id,
+      nivel,
+      regresion: { ok: false, pruebas: veredicto?.medidas ?? [] },
+      razonMedida: veredicto?.resumen ?? '',
+      // El resumen del medidor ya viene compuesto en el idioma de la sesion (`lib/auto-update.mjs`): se conserva
+      // tal cual, y solo el caso sin veredicto tiene codigo propio.
+      reason: String(resumenMedido || 'el medidor no dio veredicto: la propuesta espera'),
+      ...(resumenMedido === '' ? { reasonCode: 'promote.reason.meter', reasonParams: {} } : {}),
+    };
   }
   const reglas = meta?.repair?.reglas ?? [];
 
@@ -301,8 +334,18 @@ export function promover(id, key, {
     if (autorizado && grupo) {
       const bloqueoLote = comprobarLote(grupo, propuestasDelLote(grupo.id, key, { root }), { key, root, curated, maxLineas, maxFicheros, alcance });
       if (bloqueoLote) {
-        anotarEnDiario(key, { id, key, group: grupo.id, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'espera-lote', por, hashResultante: null, hashAnterior: null, why: bloqueoLote }, { root, now });
-        return { status: 'pending', id, nivel, grupo: grupo.id, regresion, reason: bloqueoLote };
+        // El texto del bloqueo es lo que se anota (`why`); su codigo es lo que la CLI compone.
+        anotarEnDiario(key, { id, key, group: grupo.id, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'espera-lote', por, hashResultante: null, hashAnterior: null, why: bloqueoLote.text }, { root, now });
+        return {
+          status: 'pending',
+          id,
+          nivel,
+          grupo: grupo.id,
+          regresion,
+          reason: bloqueoLote.text,
+          reasonCode: bloqueoLote.code,
+          reasonParams: bloqueoLote.params,
+        };
       }
     }
 
@@ -312,12 +355,19 @@ export function promover(id, key, {
         ? `el nivel ${nivel} de esta corrección exige aprobación humana: la propuesta queda pendiente y con sus pruebas hechas`
         : `el nivel ${nivel} no está en la lista de niveles autorizados (${niveles.length ? niveles.join(', ') : 'ninguno'}): la promoción automática está apagada`;
       anotarEnDiario(key, { id, key, group: grupo?.id ?? null, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision, por, hashResultante: null, hashAnterior: null, why: reason }, { root, now });
-      return { status: 'pending', id, nivel, regresion, reason };
+      return nivel > 2
+        ? { status: 'pending', id, nivel, regresion, reason, reasonCode: 'promote.reason.needs-human', reasonParams: { nivel } }
+        : {
+          status: 'pending', id, nivel, regresion, reason,
+          reasonCode: niveles.length ? 'promote.reason.off' : 'promote.reason.off-none',
+          reasonParams: niveles.length ? { nivel, niveles: niveles.join(', ') } : { nivel },
+        };
     }
     if (!regresion.ok) {
-      const reason = `no se activa: ${regresion.pruebas.filter((p) => !p.ok).map((p) => p.nombre).join(', ')}`;
+      const fallan = regresion.pruebas.filter((p) => !p.ok).map((p) => p.nombre).join(', ');
+      const reason = `no se activa: ${fallan}`;
       anotarEnDiario(key, { id, key, group: grupo?.id ?? null, nivel, reglas, base: meta?.base ?? null, diff: meta?.diff ?? null, pruebas: regresion.pruebas, decision: 'rechazada-por-regresion', por, hashResultante: null, hashAnterior: null, why: reason }, { root, now });
-      return { status: 'regression', id, nivel, regresion, reason };
+      return { status: 'regression', id, nivel, regresion, reason, reasonCode: 'promote.reason.regression', reasonParams: { fails: fallan } };
     }
 
     // ── A partir de aquí se escribe. Todo lo que siga está dentro de esta guarda. ──────────────────
@@ -328,10 +378,16 @@ export function promover(id, key, {
     try {
       resultado = approve(id, key, opts); // aparta la anterior en `superseded/` y deja la nueva activa
     } catch (error) {
-      return { status: 'critical', id, nivel, regresion, reason: `la activación lanzó: ${error.message}`, hashAnterior };
+      return { status: 'critical', id, nivel, regresion, reason: `la activación lanzó: ${error.message}`, reasonCode: 'promote.reason.activation-threw', reasonParams: { message: error.message }, hashAnterior };
     }
     if (!resultado?.ok) {
-      return { status: 'critical', id, nivel, regresion, reason: `no se pudo activar: ${resultado?.reason ?? 'sin motivo'}`, hashAnterior };
+      return {
+        status: 'critical', id, nivel, regresion,
+        reason: `no se pudo activar: ${resultado?.reason ?? 'sin motivo'}`,
+        reasonCode: 'promote.reason.activation-failed',
+        reasonParams: { reason: resultado?.reason ?? 'sin motivo' },
+        hashAnterior,
+      };
     }
 
     // ── Verificación DESPUÉS de escribir: se relee y se compara por huella ────────────────────────
@@ -371,8 +427,15 @@ export function promover(id, key, {
         status: 'reverted', id, nivel, regresion, problems: problemas,
         hashAnterior, hashRestaurado: reverso.hash, hashApartado: reverso.huellaApartada, apartada: reverso.apartada,
         reason: `se activó y no cuadró (${problemas.join(' | ')}): se ha deshecho y la versión anterior está de vuelta, con su huella`,
+        reasonCode: 'promote.reason.reverted',
+        reasonParams: { problems: problemas.join(' | ') },
       }
-      : { status: 'critical', id, nivel, regresion, problems: problemas, reverso, hashAnterior, reason: 'no se pudo publicar bien NI deshacer: hace falta una persona. Nada más se ha tocado' };
+      : {
+        status: 'critical', id, nivel, regresion, problems: problemas, reverso, hashAnterior,
+        reason: 'no se pudo publicar bien NI deshacer: hace falta una persona. Nada más se ha tocado',
+        reasonCode: 'promote.reason.irreversible',
+        reasonParams: {},
+      };
   });
 
   if (cerrado?.ok === false && cerrado.reason?.startsWith('ya hay una operación')) return { status: 'locked', id, ...cerrado };
@@ -439,21 +502,35 @@ export function propuestasDelLote(groupId, key, { root = defaultRoot() } = {}) {
  * ¿Está el lote entero, y entero **verificable**, como para activar una de sus partes sola?
  *
  * Un cambio que toca varias skills y se activa a medias deja la biblioteca contando dos historias distintas
- * — y es justo lo que el lote existe para evitar. Devuelve el motivo del bloqueo, o `null` si el lote está
- * completo y cada una de sus propuestas pasa su propia regresión.
+ * - y es justo lo que el lote existe para evitar. Devuelve el motivo del bloqueo -`{ code, params, text }`-, o
+ * `null` si el lote está completo y cada una de sus propuestas pasa su propia regresión. El `text` es el dato que
+ * se anota en el diario; el `code` es lo que permite decirlo en el idioma de la sesión al pintarlo.
  */
 export function comprobarLote(grupo, propuestas, { key = null, root = defaultRoot(), curated = null, maxLineas = 200, maxFicheros = 5, alcance = null } = {}) {
   if (!grupo) return null;
   if (typeof grupo.esperadas !== 'number') {
-    return `el lote «${grupo.id}» no declara cuántas propuestas lo forman («esperadas»): sin eso no se puede saber si falta alguna, y un lote no se activa a medias`;
+    return {
+      code: 'promote.reason.batch-no-count',
+      params: { group: grupo.id },
+      text: `el lote «${grupo.id}» no declara cuántas propuestas lo forman («esperadas»): sin eso no se puede saber si falta alguna, y un lote no se activa a medias`,
+    };
   }
   if (propuestas.length !== grupo.esperadas) {
-    return `el lote «${grupo.id}» declara ${grupo.esperadas} propuestas y solo hay ${propuestas.length} propuesta(s): un lote no se activa a medias (la vía humana puede activar lo que quiera, esta no)`;
+    return {
+      code: 'promote.reason.batch-incomplete',
+      params: { group: grupo.id, expected: grupo.esperadas, n: propuestas.length },
+      text: `el lote «${grupo.id}» declara ${grupo.esperadas} propuestas y solo hay ${propuestas.length} propuesta(s): un lote no se activa a medias (la vía humana puede activar lo que quiera, esta no)`,
+    };
   }
   for (const hermana of propuestas) {
     const regresion = pruebasDeRegresion(hermana.id, key ?? hermana.meta?.projectKey ?? null, hermana.meta, { root, curated, maxLineas, maxFicheros, alcance });
     if (!regresion.ok) {
-      return `la hermana «${hermana.id}» del lote «${grupo.id}» no pasa su regresión (${regresion.pruebas.filter((p) => !p.ok).map((p) => p.nombre).join(', ')}): se arregla eso antes de activar ninguna`;
+      const fallan = regresion.pruebas.filter((p) => !p.ok).map((p) => p.nombre).join(', ');
+      return {
+        code: 'promote.reason.batch-sister',
+        params: { sister: hermana.id, group: grupo.id, fails: fallan },
+        text: `la hermana «${hermana.id}» del lote «${grupo.id}» no pasa su regresión (${fallan}): se arregla eso antes de activar ninguna`,
+      };
     }
   }
   return null;

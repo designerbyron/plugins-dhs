@@ -22,13 +22,19 @@
  *   5. **Vive mientras tú lo tengas abierto.** No queda un puerto escuchando de fondo.
  *
  * El servidor no se arranca solo: lo arranca una persona, y se cierra con Ctrl+C.
+ *
+ * El texto de la página sale del catalogo (`review.*`) en el idioma **efectivo** de la sesión: es una página
+ * para una persona, y las dos superficies humanas (CLI y página) dicen lo mismo. Lo que no se traduce es el
+ * dato: ids, rutas, descripciones, y las líneas de la puerta, que se componen de los hallazgos.
  */
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { lineasDePuerta } from './audit.mjs';
 import { parseFrontmatter } from './compiler.mjs';
+import { resolveLang, t, textoDeCodigo } from './i18n/index.mjs';
 
 /** Un token nuevo por arranque: 128 bits en hexadecimal. */
 export function createToken() {
@@ -117,34 +123,38 @@ footer { margin-top: 40px; opacity: .55; font-size: 12.5px; }
 .empty { opacity: .6; font-size: 14px; }
 `;
 
-/** La página. Todo lo dinámico pasa por `escapeHtml`. */
-export function renderPage({ model, token, notice = '' }) {
+/**
+ * La página. Todo lo dinámico pasa por `escapeHtml`; todo el texto fijo sale del catalogo en el idioma
+ * efectivo (`lang`, que el servidor resuelve por petición).
+ */
+export function renderPage({ model, token, notice = '', lang = resolveLang().lang }) {
+  const tx = (clave, params = {}) => t(clave, params, { lang });
   const items = model.pending.map((row) => {
     const status = row.check.ok
-      ? `<span class="tag ok">en verde</span>`
-      : `<span class="tag bad">no pasa la validación</span>`;
-    const warnings = row.check.warnings.length
-      ? `<ul>${row.check.warnings.map((w) => `<li>aviso: ${escapeHtml(w)}</li>`).join('')}</ul>`
-      : '';
-    const errors = row.check.errors.length
-      ? `<ul>${row.check.errors.map((e) => `<li class="bad">${escapeHtml(e)}</li>`).join('')}</ul>`
-      : '';
+      ? `<span class="tag ok">${escapeHtml(tx('review.tag.ok'))}</span>`
+      : `<span class="tag bad">${escapeHtml(tx('review.tag.fail'))}</span>`;
+    // Las lineas de la puerta se componen de los HALLAZGOS (que llevan codigo), no de su texto crudo: la misma
+    // puerta que la CLI. `check.errors`/`check.warnings` son el dato y siguen siendo la reserva.
+    const warnings = lineasDePuerta(row.check.findings, 'warn', null, row.check.warnings, { lang })
+      .map((w) => `<li>${escapeHtml(tx('review.warning-item', { aviso: w }))}</li>`).join('');
+    const errors = lineasDePuerta(row.check.findings, 'error', row.check.errorLines, row.check.errors, { lang })
+      .map((e) => `<li class="bad">${escapeHtml(e)}</li>`).join('');
     // La misma política que el terminal: si no pasa la puerta, no hay botón de aprobar; y si tiene
     // avisos, aprobar es un acto explícito y separado, no el botón de siempre.
     const buttons = !row.check.ok
-      ? `<button class="danger" name="action" value="reject">Rechazar</button>
-    <span class="sub" style="align-self:center">No se puede aprobar hasta que pase la validación.</span>`
+      ? `<button class="danger" name="action" value="reject">${escapeHtml(tx('review.button.reject'))}</button>
+    <span class="sub" style="align-self:center">${escapeHtml(tx('review.cannot-approve'))}</span>`
       : row.check.warnings.length
-        ? `<button class="primary" name="action" value="approve">Aprobar con avisos</button>
+        ? `<button class="primary" name="action" value="approve">${escapeHtml(tx('review.button.approve-warnings'))}</button>
     <input type="hidden" name="force" value="1">
-    <button class="danger" name="action" value="reject">Rechazar</button>`
-        : `<button class="primary" name="action" value="approve">Aprobar y activar</button>
-    <button class="danger" name="action" value="reject">Rechazar</button>`;
+    <button class="danger" name="action" value="reject">${escapeHtml(tx('review.button.reject'))}</button>`
+        : `<button class="primary" name="action" value="approve">${escapeHtml(tx('review.button.approve'))}</button>
+    <button class="danger" name="action" value="reject">${escapeHtml(tx('review.button.reject'))}</button>`;
     return `<article class="card">
   <h3><code>${escapeHtml(row.id)}</code> ${status}</h3>
   <p>${escapeHtml(row.description)}</p>
-  ${row.whenToUse ? `<p class="sub">Cuándo: ${escapeHtml(row.whenToUse)}</p>` : ''}
-  ${errors}${warnings}
+  ${row.whenToUse ? `<p class="sub">${escapeHtml(tx('review.when', { texto: row.whenToUse }))}</p>` : ''}
+  ${errors ? `<ul>${errors}</ul>` : ''}${warnings ? `<ul>${warnings}</ul>` : ''}
   <div class="actions">
     <form method="post" action="/action?token=${escapeHtml(token)}">
       <input type="hidden" name="id" value="${escapeHtml(row.id)}">
@@ -155,56 +165,80 @@ export function renderPage({ model, token, notice = '' }) {
   }).join('\n');
 
   const summary = (rows) => (rows.length
-    ? `<ul>${rows.map((r) => `<li><code>${escapeHtml(r.id)}</code> — ${escapeHtml(r.description)}</li>`).join('')}</ul>`
-    : '<p class="empty">Ninguna.</p>');
+    ? `<ul>${rows.map((r) => `<li><code>${escapeHtml(r.id)}</code> - ${escapeHtml(r.description)}</li>`).join('')}</ul>`
+    : `<p class="empty">${escapeHtml(tx('review.empty.none'))}</p>`);
 
   return `<!doctype html>
-<html lang="es"><head><meta charset="utf-8">
+<html lang="${escapeHtml(lang)}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>Revisión de skills — ${escapeHtml(model.projectKey)}</title>
+<title>${escapeHtml(tx('review.page-title', { key: model.projectKey }))}</title>
 <style>${STYLES}</style>
 </head><body><main>
-<h1>Revisión de skills</h1>
-<p class="sub">Proyecto <code>${escapeHtml(model.projectKey)}</code> · nada se activa sin que lo apruebes tú.</p>
+<h1>${escapeHtml(tx('review.heading'))}</h1>
+<p class="sub">${escapeHtml(tx('review.lead', { key: model.projectKey }))}</p>
 ${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}
-<h2>Pendientes (${model.pending.length})</h2>
-${model.pending.length ? items : '<p class="empty">No hay propuestas esperando decisión.</p>'}
-<h2>Aprobadas y activas (${model.approved.length})</h2>
+<h2>${escapeHtml(tx('review.section.pending', { n: model.pending.length }))}</h2>
+${model.pending.length ? items : `<p class="empty">${escapeHtml(tx('review.empty.pending'))}</p>`}
+<h2>${escapeHtml(tx('review.section.approved', { n: model.approved.length }))}</h2>
 ${summary(model.approved)}
-<h2>Rechazadas (${model.rejected.length})</h2>
+<h2>${escapeHtml(tx('review.section.rejected', { n: model.rejected.length }))}</h2>
 ${summary(model.rejected)}
-<footer>Servido por LifeCode Skill-Compiler en 127.0.0.1. Cierra esta ventana y pulsa Ctrl+C en la terminal para apagarlo.</footer>
+<footer>${escapeHtml(tx('review.footer'))}</footer>
 </main></body></html>`;
 }
 
+/**
+ * El aviso de una acción, en el idioma de la sesión: `code` + `params` es lo que se compone, y el texto crudo es
+ * la reserva. Así la página no guarda una segunda copia de ninguna frase.
+ */
+const aviso = (code, params = {}, text = '', lang = undefined) => textoDeCodigo(code, params, text, { lang });
+
 /** El id solo puede ser uno de los pendientes de este proyecto: el cliente nunca nombra una ruta. */
-export function resolveAction(model, id, action, { approve, reject, force = false }) {
-  if (action !== 'approve' && action !== 'reject') return { status: 400, notice: 'Acción no reconocida.' };
+export function resolveAction(model, id, action, { approve, reject, force = false, lang = resolveLang().lang }) {
+  // El aviso se compone en el idioma de la pagina que lo va a ensenar: `lang` lo pasa el servidor, y en una
+  // llamada suelta es el efectivo.
+  const tx = (code, params = {}, text = '') => aviso(code, params, text, lang);
+  if (action !== 'approve' && action !== 'reject') return { status: 400, notice: tx('review.notice.bad-action'), noticeCode: 'review.notice.bad-action' };
   const row = model.pending.find((p) => p.id === id);
-  if (!row) return { status: 404, notice: `No hay ninguna propuesta pendiente con el id «${id}».` };
+  if (!row) {
+    const params = { id };
+    return { status: 404, notice: tx('review.notice.no-pending', params), noticeCode: 'review.notice.no-pending', noticeParams: params };
+  }
   if (action === 'reject') {
     reject(id, model.projectKey);
-    return { status: 303, notice: `Rechazada: ${id}` };
+    return { status: 303, notice: tx('review.notice.rejected', { id }), noticeCode: 'review.notice.rejected', noticeParams: { id } };
   }
   // Misma puerta que el terminal: primero la validación, después los avisos como acto explícito.
-  if (!row.check.ok) return { status: 303, notice: `No se aprobó ${id}: no pasa la validación.` };
+  if (!row.check.ok) {
+    return { status: 303, notice: tx('review.notice.gate', { id }), noticeCode: 'review.notice.gate', noticeParams: { id } };
+  }
   if (row.check.warnings.length > 0 && force !== true) {
-    return { status: 303, notice: `No se aprobó ${id}: tiene avisos y hay que aceptarlos expresamente.` };
+    return { status: 303, notice: tx('review.notice.warnings', { id }), noticeCode: 'review.notice.warnings', noticeParams: { id } };
   }
   const result = approve(id, model.projectKey);
-  if (!result.ok) return { status: 303, notice: `No se aprobó ${id}: ${result.reason ?? 'no se pudo mover'}` };
-  return { status: 303, notice: `Aprobada y activa: ${id}${result.superseded ? ' (la versión anterior quedó apartada)' : ''}` };
+  if (!result.ok) {
+    const params = { id, reason: result.reason ?? tx('review.notice.fallback') };
+    return { status: 303, notice: tx('review.notice.failed', params), noticeCode: 'review.notice.failed', noticeParams: params };
+  }
+  const params = { id };
+  const texto = `${tx('review.notice.approved', params)}${result.superseded ? tx('review.notice.superseded') : ''}`;
+  return { status: 303, notice: texto, noticeCode: 'review.notice.approved', noticeParams: params, superseded: Boolean(result.superseded) };
 }
 
 /**
  * Arranca el servidor. Devuelve el servidor (para poder cerrarlo) y la URL con el token.
  * Separado de la lógica para que las pruebas puedan levantarlo de verdad, en un puerto efímero.
  */
-export function createReviewServer({ root, key, check, approve, reject, port = 0, token = createToken() }) {
+export function createReviewServer({ root, key, check, approve, reject, port = 0, token = createToken(), lang: idiomaFijo = null }) {
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${port || 0}`);
     const provided = url.searchParams.get('token') ?? '';
+    // El idioma se resuelve POR PETICIÓN: la página sigue al idioma efectivo, también si se cambia con la
+    // terminal abierta (`lang --es`). No se guarda en el modelo ni en el token.
+    // `lang` existe para las pruebas, que tienen que medir los dos idiomas sin depender del `config.json` del
+    // almacen real; en produccion no se pasa y manda el idioma efectivo.
+    const lang = idiomaFijo ?? resolveLang().lang;
     const send = (status, body, headers = {}) => {
       res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...headers });
       res.end(body);
@@ -212,7 +246,7 @@ export function createReviewServer({ root, key, check, approve, reject, port = 0
 
     if (!tokenMatches(token, provided)) {
       // Sin el token no se revela ni que existe: 403 y nada más.
-      send(403, '<!doctype html><meta charset="utf-8"><p>Falta el token de esta sesión de revisión.</p>');
+      send(403, `<!doctype html><meta charset="utf-8"><p>${escapeHtml(t('review.http.no-token', {}, { lang }))}</p>`);
       return;
     }
 
@@ -220,7 +254,7 @@ export function createReviewServer({ root, key, check, approve, reject, port = 0
 
     if (req.method === 'GET') {
       const notice = url.searchParams.get('notice') ?? '';
-      send(200, renderPage({ model, token, notice }));
+      send(200, renderPage({ model, token, notice, lang }));
       return;
     }
 
@@ -236,6 +270,7 @@ export function createReviewServer({ root, key, check, approve, reject, port = 0
           approve,
           reject,
           force: form.get('force') === '1',
+          lang,
         });
         // Patrón «redirige tras actuar»: recargar la página no repite la acción.
         send(result.status, '', { location: `/?token=${encodeURIComponent(token)}&notice=${encodeURIComponent(result.notice)}` });
@@ -243,7 +278,7 @@ export function createReviewServer({ root, key, check, approve, reject, port = 0
       return;
     }
 
-    send(405, '<!doctype html><meta charset="utf-8"><p>Método no permitido.</p>');
+    send(405, `<!doctype html><meta charset="utf-8"><p>${escapeHtml(t('review.http.bad-method', {}, { lang }))}</p>`);
   });
 
   return {

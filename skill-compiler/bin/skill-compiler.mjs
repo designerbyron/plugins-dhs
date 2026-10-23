@@ -14,7 +14,7 @@
  * la que se imprime, y la prueba de coherencia la compara con los `case` de este fichero: ni un comando de
  * mas en la ayuda, ni uno de menos.
  */
-import { clavesFaltantes, resolveLang, setLang, t as tr } from '../lib/i18n/index.mjs';
+import { clavesFaltantes, resolveLang, setLang, t as tr, textoDeCodigo } from '../lib/i18n/index.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,13 +23,13 @@ import {
   ambito, approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate,
   overview, pending, projectKey, reject, restore, retire, retired, retiredRoot,
 } from '../lib/compiler.mjs';
-import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
+import { readProvenance, etiquetaDeHallazgo, upstreamStatus, vendor } from '../lib/vendor.mjs';
 import {
   MAQUINA, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, propiedadEnTexto,
   textoDeSistemas, textoDelEstado,
 } from '../lib/scope.mjs';
 import { leerDiario, verificarCadena } from '../lib/security.mjs';
-import { arregloDeHallazgo, estadoEnTexto, fraseDeHallazgo } from '../lib/audit.mjs';
+import { arregloDeHallazgo, estadoEnTexto, fraseDeHallazgo, lineasDePuerta } from '../lib/audit.mjs';
 
 /**
  * La ruta de este propio CLI. Se deriva en tiempo de ejecucion en vez de escribirse: el mensaje que la
@@ -190,25 +190,29 @@ function checkSkill(id, key) {
 }
 
 /**
- * Las lineas de la puerta de `check`, en el idioma de la sesion.
- *
- * Los hallazgos traen su codigo (`messageCode` o la tabla por regla) y la integridad de la base viaja ya
- * codificada (`errorLines`). Si el numero de frases compuestas no cuadra con `errors`/`warnings`, se pintan los
- * textos crudos: perder una linea de una puerta es peor que ensenar una frase en el otro idioma.
+ * Pinta la puerta de `check`. Las lineas las compone `lineasDePuerta` (`lib/audit.mjs`), que es tambien la que
+ * usa la pagina de revision: una regla, una implementacion, y las dos superficies dicen lo mismo.
  */
-const lineasDePuerta = (findings, severidad, codificadas, crudas) => {
-  const deHallazgos = (findings ?? []).filter((f) => f.severity === severidad).map((f) => fraseDeHallazgo(f));
-  const propias = severidad === 'error' ? (codificadas ?? []).map((l) => fraseDeHallazgo(l)) : [];
-  const compuestas = [...deHallazgos, ...propias];
-  return compuestas.length === (crudas ?? []).length ? compuestas : (crudas ?? []);
-};
-
 function printCheck(id, key, result) {
   for (const e of lineasDePuerta(result.findings, 'error', result.errorLines, result.errors)) process.stderr.write(`${tr('cli.check.fail', { error: e })}\n`);
   for (const w of lineasDePuerta(result.findings, 'warn', null, result.warnings)) process.stderr.write(`${tr('cli.check.warning', { aviso: w })}\n`);
   if (result.ok) {
     process.stdout.write(`${result.warnings.length ? tr('cli.check.green-warnings', { id }) : tr('cli.check.green', { id })}\n`);
   }
+}
+
+/**
+ * Una lista de mensajes de un resultado (errores, avisos), en el idioma de la sesion.
+ *
+ * `codigos` viaja en paralelo a `textos` -el mismo `i` es el mismo mensaje- y el texto crudo es la reserva: si un
+ * codigo no tiene frase en el catalogo se pinta el dato, nunca la clave. Es la forma en que `lib/vendor.mjs`
+ * entrega sus motivos: el dato intacto y, al lado, su representacion.
+ */
+function mensajes(lista, codigos) {
+  return (lista ?? []).map((texto, i) => {
+    const codigo = Array.isArray(codigos) ? codigos[i] : null;
+    return codigo === null || codigo === undefined ? String(texto) : textoDeCodigo(codigo.code, codigo.params ?? {}, texto);
+  });
 }
 
 switch (command) {
@@ -452,7 +456,7 @@ switch (command) {
         tr('cli.vendor.not-active'),
         tr('cli.vendor.approve', { bin: SELF, id: result.id }),
         ...(result.warnings.length
-          ? ['', tr('cli.vendor.warnings'), ...result.warnings.map((w) => tr('cli.vendor.warning-row', { aviso: w }))]
+          ? ['', tr('cli.vendor.warnings'), ...mensajes(result.warnings, result.warningCodes).map((w) => tr('cli.vendor.warning-row', { aviso: w }))]
           : []),
       ].join('\n') + '\n');
       break;
@@ -463,12 +467,12 @@ switch (command) {
     }
     if (result.status === 'blocked') {
       process.stderr.write(`${tr('cli.vendor.blocked')}\n`);
-      process.stderr.write(`${tr('cli.vendor.reason', { reason: result.errors[0] })}\n`);
-      for (const f of result.findings ?? []) process.stderr.write(`${tr('cli.vendor.finding', { file: f.file, line: f.line, label: f.label })}\n`);
+      process.stderr.write(`${tr('cli.vendor.reason', { reason: mensajes(result.errors, result.errorCodes)[0] ?? '' })}\n`);
+      for (const f of result.findings ?? []) process.stderr.write(`${tr('cli.vendor.finding', { file: f.file, line: f.line, label: etiquetaDeHallazgo(f) })}\n`);
       process.stderr.write(`${tr('cli.vendor.no-bypass')}\n`);
       process.exit(1);
     }
-    process.stderr.write(`${tr('cli.vendor.failed', { status: result.status, errors: (result.errors ?? []).join(' ') })}\n`);
+    process.stderr.write(`${tr('cli.vendor.failed', { status: result.status, errors: mensajes(result.errors, result.errorCodes).join(' ') })}\n`);
     if (result.conflicts?.length) for (const c of result.conflicts) process.stderr.write(`${tr('cli.vendor.conflict', { id: c.id, reason: c.reason })}\n`);
     process.exit(1);
   }
@@ -477,7 +481,7 @@ switch (command) {
     const id = positional[0];
     if (!id) usage(2);
     const status = await upstreamStatus(id, scope(), { root });
-    if (status.status !== 'checked') { process.stderr.write(`${tr('cli.upstream.failed', { id, errors: (status.errors ?? []).join(' ') })}\n`); process.exit(1); }
+    if (status.status !== 'checked') { process.stderr.write(`${tr('cli.upstream.failed', { id, errors: mensajes(status.errors, status.errorCodes).join(' ') })}\n`); process.exit(1); }
     process.stdout.write([
       status.changed ? tr('cli.upstream.changed', { fecha: status.fetchedAt?.slice(0, 10) }) : tr('cli.upstream.same'),
       `  ${status.url}${status.ref ? ` (${status.ref})` : ''}`,
@@ -1041,7 +1045,7 @@ switch (command) {
   case 'promote': {
     // Aplica y activa una correccion YA preparada. Por defecto **no activa nada solo**: hay que decir que
     // niveles estan autorizados, y el 3 no se autoriza nunca por aqui.
-    const { promover } = await import('../lib/promote.mjs');
+    const { promover, detalleDePrueba, motivoDePromocion } = await import('../lib/promote.mjs');
     const id = positional[0];
     if (!id) usage(2);
     const key = scope();
@@ -1054,7 +1058,7 @@ switch (command) {
     }
     if (flags.dry) {
       // Solo las pruebas: la informacion de la decision, sin escribir nada.
-      const { pruebasDeRegresion } = await import('../lib/promote.mjs');
+      const { pruebasDeRegresion, detalleDePrueba } = await import('../lib/promote.mjs');
       const { readFileSync: leer, existsSync: hay } = await import('node:fs');
       const { join: unir } = await import('node:path');
       const metaFile = unir(root, 'projects', key, 'proposed', id, 'meta.json');
@@ -1063,7 +1067,7 @@ switch (command) {
       const r = pruebasDeRegresion(id, key, meta, { root, curated: curatedLibraryRoot() });
       process.stdout.write([
         tr('cli.promote.dry-title', { id }),
-        ...r.pruebas.map((p) => tr('cli.promote.test-row', { mark: p.ok ? tr('cli.mark.ok') : tr('cli.mark.fail'), name: p.nombre.padEnd(22), detail: p.detalle })),
+        ...r.pruebas.map((p) => tr('cli.promote.test-row', { mark: p.ok ? tr('cli.mark.ok') : tr('cli.mark.fail'), name: p.nombre.padEnd(22), detail: detalleDePrueba(p) })),
         tr('cli.promote.dry-result', { result: r.ok ? tr('cli.promote.pass') : tr('cli.promote.fail') }),
         '',
       ].join('\n'));
@@ -1075,7 +1079,7 @@ switch (command) {
     if (r.grupo) texto.push(tr('cli.promote.batch', { group: r.grupo }));
     if (r.regresion) {
       for (const p of r.regresion.pruebas) {
-        texto.push(tr('cli.promote.test-row', { mark: p.ok ? tr('cli.mark.ok') : tr('cli.mark.fail'), name: p.nombre.padEnd(22), detail: p.detalle }));
+        texto.push(tr('cli.promote.test-row', { mark: p.ok ? tr('cli.mark.ok') : tr('cli.mark.fail'), name: p.nombre.padEnd(22), detail: detalleDePrueba(p) }));
       }
     }
     texto.push('');
@@ -1083,14 +1087,14 @@ switch (command) {
       texto.push(tr('cli.promote.promoted', { before: String(r.hashAnterior).slice(0, 12), after: String(r.hashResultante).slice(0, 12) }));
       texto.push(tr('cli.promote.previous', { path: r.superseded ?? tr('cli.promote.no-previous') }));
     } else if (r.status === 'reverted') {
-      texto.push(tr('cli.promote.reverted', { reason: r.reason }));
+      texto.push(tr('cli.promote.reverted', { reason: motivoDePromocion(r) }));
       texto.push(tr('cli.promote.reverted-hash', { hash: String(r.hashRestaurado).slice(0, 12) }));
     } else if (r.status === 'pending') {
-      texto.push(tr('cli.promote.pending', { reason: r.reason }));
+      texto.push(tr('cli.promote.pending', { reason: motivoDePromocion(r) }));
       if (r.nivel <= 2) texto.push(tr('cli.promote.activate', { id, nivel: r.nivel }));
       else texto.push(tr('cli.promote.needs-human', { id }));
     } else {
-      texto.push(tr('cli.promote.status', { status: r.status.toUpperCase(), reason: r.reason }));
+      texto.push(tr('cli.promote.status', { status: r.status.toUpperCase(), reason: motivoDePromocion(r) }));
     }
     if (r.status !== 'promoted' && r.status !== 'reverted') texto.push(tr('cli.promote.unchanged'));
     texto.push('');

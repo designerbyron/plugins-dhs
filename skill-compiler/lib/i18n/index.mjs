@@ -148,6 +148,18 @@ export function t(key, params = {}, { lang } = {}) {
   });
 }
 
+/**
+ * Compone una clave con el catalogo; si esa clave no existe, devuelve el **texto crudo** que ya viajaba.
+ *
+ * Es el unico punto donde se decide esa reserva, para que ninguna superficie pinte una clave cruda ni invente
+ * una conclusion: `{code, params}` + texto es la forma en que un hallazgo o un resultado lleva las dos cosas.
+ */
+export function textoDeCodigo(code, params = {}, crudo = '', { lang } = {}) {
+  if (typeof code !== 'string' || code === '') return String(crudo ?? '');
+  const texto = t(code, params, { lang });
+  return texto === code ? String(crudo ?? '') : texto;
+}
+
 /** ¿Está el catálogo de un idioma completo respecto al base? Para `doctor` y para la prueba de paridad. */
 export function clavesFaltantes(lang) {
   const dicc = DICTIONARIES[lang];

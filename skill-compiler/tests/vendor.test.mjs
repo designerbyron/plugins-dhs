@@ -233,26 +233,32 @@ describe('adaptUpstream', () => {
   it('reescribe las referencias al espacio del origen', () => {
     const r = adapt();
     assert.match(r.body, /`upstream\/references\/checklist\.md`/);
-    assert.equal(r.warnings.some((w) => /referencias relativas/.test(w)), true);
+    // El aviso viaja como { code, params, text }: el texto es el dato y el codigo su representacion.
+    const aviso = r.warnings.find((w) => w.code === 'vendor.warn.references-rewritten');
+    assert.equal(aviso !== undefined, true);
+    assert.equal(aviso.params.n, 1);
+    assert.match(aviso.text, /referencias relativas/u);
   });
 
   it('deduce una descripción cuando el origen no la trae, y lo avisa', () => {
     const sinDescripcion = UPSTREAM_SKILL.replace(/^description: .*$/m, '').replace(/^whenToUse: .*$/m, '');
     const r = adaptUpstream({ path: 'SKILL.md', text: sinDescripcion }, { source, files: [], now: 't' });
     assert.equal(r.description.length > 20, true);
-    assert.equal(r.warnings.some((w) => /no traía descripción/.test(w)), true);
+    assert.equal(r.warnings.some((w) => w.code === 'vendor.warn.derived-description'), true);
   });
 
   it('recorta una descripción que el modelo no podría leer entera', () => {
     const larga = UPSTREAM_SKILL.replace(/^description: .*$/m, `description: "${'palabra '.repeat(60)}"`);
     const r = adaptUpstream({ path: 'SKILL.md', text: larga }, { source, files: [], now: 't' });
     assert.equal(r.description.length <= 300, true);
-    assert.equal(r.warnings.some((w) => /recortó/.test(w)), true);
+    assert.equal(r.warnings.some((w) => w.code === 'vendor.warn.description-truncated'), true);
   });
 
   it('declara lo que se dejó fuera del origen', () => {
     const r = adapt({ skipped: ['scripts/run.sh', 'logo.png'] });
-    assert.equal(r.warnings.some((w) => /solo se vendoriza markdown/.test(w)), true);
+    const aviso = r.warnings.find((w) => w.code === 'vendor.warn.skipped');
+    assert.equal(aviso !== undefined, true);
+    assert.match(aviso.params.list, /scripts\/run\.sh, logo\.png/u);
   });
 });
 

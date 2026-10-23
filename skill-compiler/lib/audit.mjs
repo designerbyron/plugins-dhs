@@ -412,22 +412,29 @@ export const PROSA_DE_REGLA = Object.freeze({
 });
 
 /** Los parametros de la frase de un hallazgo: los de la variante, y los del arreglo si van aparte. */
-const parametrosDe = (hallazgo) => {
+const parametrosDe = (hallazgo, { lang } = {}) => {
   const params = { ...(hallazgo?.messageParams ?? {}), ...(hallazgo?.params ?? {}), ...(hallazgo?.fixParams ?? {}) };
   // `motivoCode` es el unico valor anidado: el motivo del patron de seguridad se dice en el idioma de la sesion,
   // y si el catalogo no lo tuviera se queda el motivo crudo que ya traia el hallazgo (nunca una clave).
   if (typeof params.motivoCode === 'string') {
     const clave = `security.motivo.${params.motivoCode}`;
-    const motivo = t(clave);
+    const motivo = t(clave, {}, { lang });
     params.motivo = motivo === clave ? params.motivo : motivo;
+  }
+  // `etiquetaCode` es el mismo caso para la FORMA del contenido (`shape.*`): `lib/vendor.mjs` y `lib/compiler.mjs`
+  // etiquetan con el mismo catalogo, y el texto crudo de la tabla sigue viajando como dato.
+  if (typeof params.etiquetaCode === 'string') {
+    const clave = `shape.${params.etiquetaCode}`;
+    const etiqueta = t(clave, {}, { lang });
+    params.etiqueta = etiqueta === clave ? params.etiqueta : etiqueta;
   }
   return params;
 };
 
 /** Compone una clave con el catalogo; si no existe, el texto crudo. Nunca devuelve una clave cruda. */
-const resolver = (codigo, params, crudo) => {
+const resolver = (codigo, params, crudo, { lang } = {}) => {
   if (typeof codigo !== 'string') return crudo;
-  const texto = t(codigo, params);
+  const texto = t(codigo, params, { lang });
   return texto === codigo ? crudo : texto;
 };
 
@@ -437,17 +444,34 @@ const resolver = (codigo, params, crudo) => {
  * Acepta el hallazgo entero (`rule`/`messageCode`/`messageParams`/`message`) o una linea ya codificada
  * (`{code, params, texto}`), que es como `checkProposal` entrega la integridad de la puerta.
  */
-export function fraseDeHallazgo(hallazgo) {
+export function fraseDeHallazgo(hallazgo, opciones = {}) {
   const crudo = String(hallazgo?.message ?? hallazgo?.texto ?? '');
   const codigo = hallazgo?.messageCode ?? hallazgo?.code ?? PROSA_DE_REGLA[hallazgo?.rule]?.message;
-  return resolver(codigo, parametrosDe(hallazgo), crudo);
+  return resolver(codigo, parametrosDe(hallazgo, opciones), crudo, opciones);
 }
 
 /** El arreglo de un hallazgo, en el idioma de la sesion: misma regla, misma reserva. */
-export function arregloDeHallazgo(hallazgo) {
+export function arregloDeHallazgo(hallazgo, opciones = {}) {
   const crudo = String(hallazgo?.fix ?? hallazgo?.arreglo ?? '');
   const codigo = hallazgo?.fixCode ?? PROSA_DE_REGLA[hallazgo?.rule]?.fix;
-  return resolver(codigo, parametrosDe(hallazgo), crudo);
+  return resolver(codigo, parametrosDe(hallazgo, opciones), crudo, opciones);
+}
+
+/**
+ * Las lineas de la puerta, en el idioma de la sesion.
+ *
+ * Los hallazgos traen su codigo (`messageCode` o la tabla por regla) y la integridad de la base viaja ya
+ * codificada (`errorLines`). Si el numero de frases compuestas no cuadra con `errors`/`warnings`, se pintan los
+ * textos crudos: perder una linea de una puerta es peor que ensenar una frase en el otro idioma.
+ *
+ * Vive aqui -y no en la CLI- porque la CLI y la pagina de revision (`lib/review.mjs`) tienen que decir
+ * exactamente lo mismo: una regla, una implementacion.
+ */
+export function lineasDePuerta(findings, severidad, codificadas, crudas, opciones = {}) {
+  const deHallazgos = (findings ?? []).filter((f) => f.severity === severidad).map((f) => fraseDeHallazgo(f, opciones));
+  const propias = severidad === 'error' ? (codificadas ?? []).map((l) => fraseDeHallazgo(l, opciones)) : [];
+  const compuestas = [...deHallazgos, ...propias];
+  return compuestas.length === (crudas ?? []).length ? compuestas : [...(crudas ?? [])];
 }
 
 /**

@@ -29,7 +29,7 @@ function check(id, key, root) {
 }
 
 /** Levanta el servidor de verdad, con el almacén en la caja de arena. */
-async function serve(s) {
+async function serve(s, { lang = null } = {}) {
   const review = createReviewServer({
     root: s.root,
     key: KEY,
@@ -37,6 +37,7 @@ async function serve(s) {
     approve: (id, key) => approve(id, key, { root: s.root }),
     reject: (id, key) => reject(id, key, { root: s.root }),
     port: 0,
+    lang,
   });
   const port = await review.listen();
   return { review, port, base: `http://127.0.0.1:${port}` };
@@ -63,7 +64,7 @@ describe('página servida de verdad', () => {
   it('sin token no responde, y con el token sirve la propuesta', async () => {
     const s = sandbox();
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
-    const { review, base } = await serve(s);
+    const { review, base } = await serve(s, { lang: 'en' });
     try {
       const sinToken = await fetch(`${base}/`);
       assert.equal(sinToken.status, 403);
@@ -74,7 +75,9 @@ describe('página servida de verdad', () => {
       assert.equal(ok.status, 200);
       const html = await ok.text();
       assert.match(html, /measured-decision-check/);
-      assert.match(html, /en verde/, 'la página tiene que enseñar el resultado de la validación');
+      // El idioma efectivo por defecto es `en`: la pagina es humana y sigue al catalogo.
+      assert.match(html, /<html lang="en">/);
+      assert.match(html, /green/, 'la página tiene que enseñar el resultado de la validación');
       assert.match(html, /name="action" value="approve"/, 'una propuesta en verde tiene que poder aprobarse');
     } finally {
       review.server.close();
@@ -163,9 +166,12 @@ describe('página servida de verdad', () => {
     const result = resolveAction(model, 'rota-a-mano', 'approve', {
       approve: (id, key) => approve(id, key, { root: s.root }),
       reject: (id, key) => reject(id, key, { root: s.root }),
+      lang: 'en',
     });
     assert.equal(result.status, 303);
-    assert.match(result.notice, /no pasa la validación/);
+    // El aviso de la accion sigue al idioma efectivo; el id es dato y no se toca.
+    assert.match(result.notice, /does not pass validation/);
+    assert.match(result.notice, /rota-a-mano/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'rota-a-mano')), false);
     assert.equal(typeof review.urlFor, 'function');
   });

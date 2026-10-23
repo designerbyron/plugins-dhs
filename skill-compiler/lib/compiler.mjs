@@ -126,8 +126,10 @@ const REFERENCE_DIR = 'references/';
 /** Formas de credencial y de ruta de usuario que una skill NUNCA debe llevar consigo. */
 /** Rutas personales de la máquina del autor: acoplan la skill a un puesto, no a un proyecto. */
 const PERSONAL_PATH_SHAPES = [
-  [/[A-Za-z]:\\Users\\[^\\\s"']+/i, 'ruta de perfil de Windows'],
-  [/\/(?:home|Users)\/[^/\s"']+\//, 'ruta de perfil POSIX'],
+  // [forma, etiqueta, codigo]: la etiqueta es el DATO que viaja en el hallazgo (`observed`/`etiqueta`) y el
+  // codigo es su representacion en el catalogo (`shape.*`), compartido con `lib/vendor.mjs`.
+  [/[A-Za-z]:\\Users\\[^\\\s"']+/i, 'ruta de perfil de Windows', 'windows-profile'],
+  [/\/(?:home|Users)\/[^/\s"']+\//, 'ruta de perfil POSIX', 'posix-profile'],
 ];
 /** Rutas absolutas en general: se avisa, no se veta (documentar una herramienta del puesto es legítimo). */
 /**
@@ -451,7 +453,7 @@ export function validateInput(input, { references = [], cwd = null, present = []
   // la frase (si se perdiera el codigo, `audit`/`check` volverian a pintar el espanol del motor).
   for (const h of seguridad.bloqueos) add('error', { rule: h.rule, observed: h.observed, threshold: null, message: h.message, messageCode: h.messageCode, messageParams: h.messageParams, fix: h.fix, fixCode: h.fixCode, fixParams: h.fixParams });
   for (const h of seguridad.avisos) add('warn', { rule: h.rule, observed: h.observed, threshold: null, message: h.message, messageCode: h.messageCode, messageParams: h.messageParams, fix: h.fix, fixCode: h.fixCode, fixParams: h.fixParams });
-  for (const [re, label] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) add('error', { rule: 'personal-path', observed: label, message: `contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`, messageParams: { etiqueta: label }, fix: 'Sustituye la ruta personal por $DSH_HOME o una ruta relativa' });
+  for (const [re, label, labelCode] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) add('error', { rule: 'personal-path', observed: label, message: `contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`, messageParams: { etiqueta: label, etiquetaCode: labelCode }, fix: 'Sustituye la ruta personal por $DSH_HOME o una ruta relativa' });
   // Las rutas absolutas, por **contexto**: una ruta que se usa (prosa) avisa; un ejemplo o una cita se
   // ven en el informe como `info` sin pedir nada. Así el aviso sigue significando algo —y una ruta
   // escapada ( «letra:» + separador + camino`, típica de un JSON) se declara ambigua en vez de callarse—.
