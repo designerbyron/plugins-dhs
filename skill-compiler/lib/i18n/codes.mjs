@@ -28,6 +28,14 @@ export const CODES = Object.freeze({
   'scope-ask': ['id', 'idList'],
   'language-ask': ['value', 'supported'],
 
+  // ajustes de idioma en vivo (el comando estable)
+  'language-status': ['lang'],
+  'language-set': ['lang', 'previous'],
+  'language-unchanged': ['lang'],
+  'language-fixed-by-env': ['imposed', 'requested'],
+  'language-persist-failed': ['lang', 'reason'],
+  'language-name-conflict': ['lang', 'reason'],
+
   // negativas y avisos de la puerta
   'no-proposal': ['id', 'key'],
   'with-warnings': ['id', 'warnings'],

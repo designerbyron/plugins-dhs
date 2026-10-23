@@ -214,6 +214,21 @@ describe('CLI real (subproceso, arena) · idioma del plugin', () => {
     else process.env.DSH_LANG = guardado;
   });
 
+  it('la bandera del comando del harness tambien vale en el CLI, y fuera de lang se rechaza', () => {
+    const arena = sandbox();
+    const guardado = process.env.DSH_LANG;
+    delete process.env.DSH_LANG;
+    const conBandera = cli(arena, 'lang', '--es');
+    assert.equal(conBandera.code, 0, conBandera.salida);
+    assert.match(conBandera.salida, /idioma fijado en es/);
+    assert.equal(JSON.parse(readFileSync(join(arena.root, 'config.json'), 'utf8')).lang, 'es');
+    // Y no se traga en otro subcomando: un `--es` ignorado haria creer que el idioma se fijo.
+    const fuera = cli(arena, 'where', '--es');
+    assert.equal(fuera.code, 2, fuera.salida);
+    if (guardado === undefined) delete process.env.DSH_LANG;
+    else process.env.DSH_LANG = guardado;
+  });
+
   it('un idioma no admitido sale con código 2 y no crea configuración', () => {
     const arena = sandbox();
     const r = cli(arena, 'lang', 'fr');

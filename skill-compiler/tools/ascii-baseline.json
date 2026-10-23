@@ -1,5 +1,5 @@
 {
-  "generado": "2026-10-23T14:07:50.879Z",
+  "generado": "2026-10-23T17:13:32.026Z",
   "ficheros": {
     "lib/audit.mjs": 309,
     "lib/auto-approve.mjs": 170,
@@ -8,7 +8,8 @@
     "lib/compiler.mjs": 1766,
     "lib/definitions.mjs": 263,
     "lib/lock.mjs": 21,
-    "lib/pending-rows.mjs": 306,
+    "lib/localized-commands.mjs": 0,
+    "lib/pending-rows.mjs": 305,
     "lib/presentation.mjs": 158,
     "lib/projection.mjs": 176,
     "lib/promote.mjs": 402,

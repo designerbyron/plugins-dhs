@@ -443,3 +443,37 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   `doctor` cuenta 31 filas); la prosa de `observado`/`umbral` y los `motivo` de bloqueo de `repair` (viajan como
   DATO); y las dos retiradas declaradas —alias en 5.0.0, prosa del panel en 4.2.0 **condicionada** a que el
   anfitrion transporte el resultado completo.
+
+## Prototipo 2026-10-23 - registro dinamico por idioma, en rama (NO publicado)
+
+Rama local `proto/i18n-live-commands` desde el tag `v4.0.1` (`8393977`). `main` intacto, sin push, sin mover
+etiquetas. El arbol de trabajo vuelve a `main` al cerrar: el plugin esta instalado por `link:` y lo que se
+cargue en el proximo arranque es el codigo publicado. Informe autorizable: `plans/PLAN-2026-10-23-idioma-en-vivo.md`.
+
+- **El contrato del host instalado (0.2.1-rc.2) se midio antes de disenar**: `register()` devuelve el disposer
+  de ESA definicion (`dsh-commands/lib/index.js:266-269` + `dsh-scope/lib/index.js:211-215`), alta y baja emiten
+  `commands/change` (`dsh-commands/lib/index.js:426-436`), y el adaptador de UI instalado se suscribe
+  (`dsh-client-ui-commands/lib/client.js:1435-1437`). No hizo falta parchear el `app.asar`.
+- **La actualizacion del menu es SUAVE**: `invalidateAll` no degrada una foto ya lista (`client.js:858`,
+  `:903-916`) y `ensureReady` sirve la foto anterior mientras la repoblacion vuela (`:927-937`). Por eso el
+  cambio da las ALTAS antes que las BAJAS: la ventana muestra dos nombres y **nunca cero** (medido).
+- **El registro real recorta el resultado a `{kind,text}`** (`normalizeResult`, `dsh-commands/lib/index.js:183-204`).
+  Medido en la ruta real del comando: `campos=kind,text`; `code` y `params` no llegan al consumidor. Los codigos
+  nuevos siguen siendo contrato del plugin y de sus pruebas, no de la interfaz.
+- **Medido con el registro real** (paquete extraido del asar, `Context` real, almacen en arena): arranque EN con
+  `/skill-approve` y sin `/skill-aprobar`; cambio por `/skill-compiler-language --es` con **2 avisos**, 31 filas,
+  el nombre retirado devuelve `undefined` (no invocable), **el handler es el mismo objeto**, la aprobacion por el
+  nombre espanol deja `approved/` en disco; cinco vueltas dejan 31 filas, 20 avisos y 1 disposer vivo.
+- **Transicion**: idioma invalido no escribe ni toca el registro; persistencia rota devuelve el conjunto anterior;
+  con `DSH_LANG` imponiendo el idioma no se escribe nada y el comando lo dice. El comando estable vive fuera del
+  conjunto intercambiable y sobrevive a todos los cambios.
+- **Numeros**: `npm test` **796/796** (777 -> 796), hermetico verde, i18n 576 claves por idioma, ASCII 7579 con
+  tope 7579 y 22 ficheros (el nuevo `lib/localized-commands.mjs` entra con 0 de deuda).
+- **Queda abierto, y no se declara resuelto**: la comprobacion VISUAL del menu (este entorno no la ve; el
+  refresco esta inferido por codigo y medido por evento, no visto); `doctor` sigue contando la tabla vieja
+  («15 of 31 menu rows (16 canonical)», medido) porque la migracion es de una operacion; y
+  `decisionKindOf('skill-aprobar')` devuelve `''` (`lib/presentation.mjs:42-47`), asi que el pliegue no cuenta
+  esa decision con el nombre espanol - deuda del acto de migracion, con su linea.
+- **Trampa nueva**: `propose` veta por TEMA tambien contra lo ya aprobado en el mismo almacen, asi que una
+  segunda propuesta de prueba con el mismo asunto que una aprobada sale `status:"conflict"`. Un almacen por
+  idioma aisla la medicion del efecto.

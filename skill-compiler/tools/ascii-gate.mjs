@@ -20,7 +20,7 @@ const actualizar = args.includes('--update');
 /** Ficheros cuyo texto es del plugin. El contenido de usuario (SKILL.md) no entra aqui nunca. */
 const FICHEROS = [
   'lib/audit.mjs', 'lib/auto-approve.mjs', 'lib/auto-update.mjs', 'lib/commands.mjs', 'lib/compiler.mjs',
-  'lib/definitions.mjs', 'lib/lock.mjs', 'lib/pending-rows.mjs', 'lib/presentation.mjs', 'lib/projection.mjs',
+  'lib/definitions.mjs', 'lib/lock.mjs', 'lib/localized-commands.mjs', 'lib/pending-rows.mjs', 'lib/presentation.mjs', 'lib/projection.mjs',
   'lib/promote.mjs', 'lib/repair.mjs', 'lib/scope.mjs', 'lib/security.mjs',
   'lib/i18n/codes.mjs', 'lib/i18n/en.mjs', 'lib/i18n/es.mjs', 'lib/i18n/index.mjs',
   'bin/skill-compiler.mjs', 'client.js', 'index.js',

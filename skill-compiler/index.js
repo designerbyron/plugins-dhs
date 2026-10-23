@@ -24,6 +24,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createCatalogSignal } from './lib/catalog-signal.mjs';
 import { skillCommands, targetCommands } from './lib/commands.mjs';
 import { curatedLibraryRoot, defaultRoot } from './lib/compiler.mjs';
+import { resolveLang } from './lib/i18n/index.mjs';
+import { createLanguageState, createLocalizedSet, languageCommandDefinition, swapSet } from './lib/localized-commands.mjs';
 import { pendingRowsFor, retiredRowsFor } from './lib/pending-rows.mjs';
 import { PROTOCOL, scopeOf, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
 
@@ -141,6 +143,8 @@ export function apply(ctx, config = {}) {
     if (registry === undefined || typeof registry.register !== 'function') return;
     ctx.effect(() => {
       const base = [];
+      /** El conjunto de nombres que sigue al idioma: que esta puesto y con que disposer se retira. */
+      const languageState = createLanguageState();
       /** agente → cómo recomponer sus filas, y cómo retirarlas si el plugin se descarga. */
       const perAgent = new Map();
 
@@ -319,7 +323,42 @@ export function apply(ctx, config = {}) {
       try {
         // `onMount` entra aquí porque el humano es el otro camino que conoce al agente: si el provider no
         // llegó a montar sus filas, ejecutar `/skill-proposals` las monta antes de listar.
-        for (const command of skillCommands({ root, catalog, onListed: refreshPendingRows, onMount: (agent) => mountSession(agent) })) base.push(registry.register(command));
+        //
+        // El idioma decide QUE nombres se registran, y el conjunto queda intercambiable en vivo: se construye
+        // una sola vez (con las dos lenguas dentro y un solo handler por operacion) y se omite del registro
+        // base lo que ese conjunto va a poseer. Sin omision, el alta localizada chocaria con el canonico o
+        // con su alias.
+        const todas = skillCommands({ root, catalog, onListed: refreshPendingRows, onMount: (agent) => mountSession(agent) });
+        let conjunto = null;
+        try {
+          conjunto = createLocalizedSet({ definitions: todas });
+        } catch {
+          conjunto = null; // un mapa roto no puede quitar los 31 comandos que ya funcionan
+        }
+        const omitidos = new Set(conjunto === null ? [] : conjunto.omitNames);
+        const tomados = new Set();
+        for (const command of todas) {
+          if (omitidos.has(command.name)) continue;
+          tomados.add(command.name);
+          base.push(registry.register(command));
+        }
+        if (conjunto !== null) {
+          const inicial = resolveLang({ root }).lang;
+          const puesto = swapSet({ registry, state: languageState, set: conjunto, lang: inicial, taken: tomados });
+          if (!puesto.ok) {
+            // El conjunto localizado no se pudo poner: los nombres omitidos vuelven al registro, para que el
+            // idioma no sea la causa de que desaparezca un comando.
+            for (const command of todas) {
+              if (omitidos.has(command.name)) base.push(registry.register(command));
+            }
+            languageState.lang = null;
+          }
+          // El comando de ajustes NO entra en el conjunto: si estuviera dentro se retiraria justo cuando se
+          // usa. Es el unico que tiene que existir siempre, en los dos idiomas.
+          base.push(registry.register(languageCommandDefinition({
+            registry, state: languageState, set: conjunto, taken: tomados, root,
+          })));
+        }
       } catch {
         // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.
       }
@@ -355,6 +394,18 @@ export function apply(ctx, config = {}) {
           }
         }
         perAgent.clear();
+        // El conjunto localizado se retira por sus propios disposers: no esta en `base` (ese arreglo solo
+        // guarda lo que se registra una vez), y dejarlo vivo al descargar el plugin dejaria el nombre de un
+        // idioma apuntando a un registro que ya no esta.
+        for (const dispose of languageState.live.values()) {
+          try {
+            dispose?.();
+          } catch {
+            /* ya retirado */
+          }
+        }
+        languageState.live.clear();
+        languageState.lang = null;
         for (const dispose of base) {
           try {
             if (typeof dispose === 'function') dispose();

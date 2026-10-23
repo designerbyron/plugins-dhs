@@ -65,11 +65,22 @@ for (let i = 1; i < argv.length; i++) {
   // Un lote: la misma decision sobre todas las propuestas que van juntas. No es un atajo -cada una pasa su
   // puerta- es poder mirarlas y decidirlas como lo que son.
   if (arg === '--grupo') { flags.grupo = argv[++i]; continue; }
+  // El idioma, tambien por bandera: `lang --es` es la forma del comando del harness, y dos puertas con la
+  // misma verdad no deben discrepar en la ortografia. Fuera de `lang` se rechaza mas abajo.
+  if (arg === '--en') { flags.lang = 'en'; continue; }
+  if (arg === '--es') { flags.lang = 'es'; continue; }
   if (arg === '--dry') { flags.dry = true; continue; }
   if (arg.startsWith('--')) { process.stderr.write(`${tr('cli.unknown-option', { option: arg })}\n`); process.exit(2); }
   positional.push(arg);
 }
 const root = defaultRoot();
+
+// Una bandera de idioma fuera de `lang` no se ignora: se rechaza, igual que una opcion desconocida. Un
+// `--es` tragado en silencio haria creer que el idioma se fijo cuando no se toco nada.
+if (flags.lang !== undefined && command !== 'lang') {
+  process.stderr.write(`${tr('cli.unknown-option', { option: `--${flags.lang}` })}\n`);
+  process.exit(2);
+}
 
 /**
  * La etiqueta de un estado y el motivo de `repair`, que el motor devuelve como DATO.
@@ -96,7 +107,7 @@ const motivoDeReparacion = (r) => {
  * lista, y `tests/coherencia.test.mjs` compara esta tabla con los `case` implementados.
  */
 const AYUDA = [
-  ['lang [en|es]', 'cli.help.lang'],
+  ['lang [en|es] [--en|--es]', 'cli.help.lang'],
   ['where', 'cli.help.where'],
   ['list', 'cli.help.list'],
   ['show <id>', 'cli.help.show'],
@@ -565,7 +576,7 @@ switch (command) {
   // Una sola resolucion para las dos superficies. Sin argumento informa el idioma efectivo **y su fuente**:
   // sin la fuente, "idioma: es" no dice si fue una decision de la persona o una variable de la sesion.
   case 'lang': {
-    const pedido = positional[0];
+    const pedido = positional[0] ?? flags.lang;
     if (pedido === undefined) {
       const info = resolveLang({ fresh: true });
       const lineas = [tr('lang.status', { lang: info.lang, source: info.source }, { lang: info.lang })];

@@ -112,21 +112,30 @@ describe('activación', () => {
     apply(ctx, { root: s.root });
     disposeAll();
 
-    // Canónicos ingleses, y los 15 alias españoles declarados con metadatos (sin duplicar el canónico).
+    // Canonicos ingleses, los alias espanoles declarados con metadatos (sin duplicar el canonico), y el
+    // nombre del idioma resuelto para la operacion que ya es localizada. Este fichero fija `DSH_LANG=es`
+    // arriba, asi que `approve` se registra con su nombre espanol y NO con el ingles: es la propiedad que
+    // se mide, no un efecto colateral. `/skill-compiler-language` es el comando estable, fuera del conjunto
+    // que cambia, y por eso aparece siempre.
     assert.deepEqual(registered.filter((c) => c.aliasOf === undefined).map((c) => c.name).sort(),
       [
-        'skill-approve', 'skill-auto', 'skill-disable', 'skill-enable', 'skill-ownership',
-        'skill-ownership-dsh-only', 'skill-ownership-machine', 'skill-pending', 'skill-proposals',
-        'skill-publish', 'skill-reject', 'skill-retire', 'skill-retired', 'skill-scope', 'skill-show',
-        'skill-systems',
+        'skill-aprobar', 'skill-auto', 'skill-compiler-language', 'skill-disable', 'skill-enable',
+        'skill-ownership', 'skill-ownership-dsh-only', 'skill-ownership-machine', 'skill-pending',
+        'skill-proposals', 'skill-publish', 'skill-reject', 'skill-retire', 'skill-retired', 'skill-scope',
+        'skill-show', 'skill-systems',
       ]);
     assert.deepEqual(registered.filter((c) => c.aliasOf !== undefined).map((c) => c.name).sort(),
       [
-        'skill-ambito', 'skill-aprobar', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar',
+        'skill-ambito', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar',
         'skill-habilitar', 'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only',
         'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar', 'skill-retiradas',
         'skill-sistemas', 'skill-ver',
       ]);
+    // Un nombre por operacion: el nombre ingles del comando localizado NO se registra a la vez que el
+    // espanol. Si esto fallara, el menu volveria a pintar la misma operacion dos veces.
+    assert.equal(registered.some((c) => c.name === 'skill-approve'), false, 'el nombre ingles no convive con el localizado');
+    const localizado = registered.find((c) => c.definitionId === 'skill-compiler.approve');
+    assert.notEqual(localizado, undefined, 'la operacion localizada declara su id interno estable');
     for (const alias of registered.filter((c) => c.aliasOf !== undefined)) {
       assert.equal(alias.deprecatedIn, '5.0.0', `${alias.name} sin versión de retirada`);
       assert.equal(typeof alias.description, 'string');
@@ -156,8 +165,11 @@ describe('activación', () => {
     assert.equal(invalidations, 1, 'la señal tiene que estar atada a la invalidación del registro');
 
     // Y aprobar desde el harness avisa a esa misma capacidad: es lo que hace usable la skill al instante.
+    // El comando se busca por su **id interno estable**, no por su nombre: el nombre cambia con el idioma y
+    // el id no, que es justo la razon de declararlo.
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
-    const aprobar = registered.find((c) => c.name === 'skill-approve');
+    const aprobar = registered.find((c) => c.definitionId === 'skill-compiler.approve');
+    assert.notEqual(aprobar, undefined, 'el comando de aprobar tiene que estar registrado en su idioma');
     const result = aprobar.handler({ agent: { session: { header: { cwd: CWD } } }, rawInput: 'measured-decision-check --local' });
     assert.equal(result.kind, 'success', JSON.stringify(result));
     assert.equal(invalidations, 2, 'aprobar tiene que avisar al catálogo');
