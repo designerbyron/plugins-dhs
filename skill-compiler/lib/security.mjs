@@ -22,6 +22,7 @@
 import { createHash } from 'node:crypto';
 import { lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
+import { t } from './i18n/index.mjs';
 
 // ── 1 · El id ────────────────────────────────────────────────────────────────────────────────────────
 
@@ -42,28 +43,41 @@ const RESERVADOS = new Set([
 ]);
 
 /**
- * Por qué ese id no es un id, o `null` si lo es.
+ * ¿Por que ese id no es un id? En DATOS: `null` si es utilizable, o `{ code, params }` si no.
  *
- * Devuelve el **motivo** y no un booleano: un «id inválido» a secas obliga a adivinar qué arreglar, y quien
- * lo escribe suele ser un humano o el modelo, que necesitan saber qué cambiar.
+ * Devuelve el juicio y no un booleano: un "id invalido" a secas obliga a adivinar que arreglar, y quien lo
+ * escribe suele ser un humano o el modelo, que necesitan saber que cambiar. `code` es estable y no se traduce
+ * —es lo que elige la frase en el catalogo—; `params` lleva los valores que esa frase necesita.
  */
-export function motivoDeIdInseguro(id) {
+export function diagnosticoDeId(id) {
   const valor = String(id ?? '');
-  if (valor === '') return 'el id está vacío';
-  if (valor !== valor.trim()) return 'el id lleva espacios al principio o al final';
-  if (valor.length > ID_MAX) return `el id tiene ${valor.length} caracteres y el máximo es ${ID_MAX}: acórtalo, que además es la ruta`;
-  if (/[\\/]/.test(valor)) return 'el id lleva un separador de ruta: un id no es una ruta';
-  if (valor.includes('..')) return 'el id lleva «..»: un id no sale de su carpeta';
-  if (valor.includes('\0')) return 'el id lleva un byte nulo';
-  if (!ID_RE.test(valor)) return 'el id tiene que ser kebab-case ASCII: minúsculas, números y guiones simples, empezando por letra';
+  if (valor === '') return { code: 'empty', params: {} };
+  if (valor !== valor.trim()) return { code: 'spaces', params: {} };
+  if (valor.length > ID_MAX) return { code: 'long', params: { n: valor.length, max: ID_MAX } };
+  if (/[\\/]/.test(valor)) return { code: 'separator', params: {} };
+  if (valor.includes('..')) return { code: 'parent', params: {} };
+  if (valor.includes('\0')) return { code: 'nul', params: {} };
+  if (!ID_RE.test(valor)) return { code: 'shape', params: {} };
   const base = valor.split('.')[0].toLowerCase();
-  if (RESERVADOS.has(base)) return `«${valor}» es un nombre reservado de Windows y no se puede usar como carpeta`;
-  if (/[. ]$/.test(valor)) return 'el id termina en punto o espacio: Windows lo recorta y dos ids distintos acabarían en la misma carpeta';
+  if (RESERVADOS.has(base)) return { code: 'reserved', params: { id: valor } };
+  if (/[. ]$/.test(valor)) return { code: 'trailing', params: {} };
   return null;
 }
 
+/**
+ * Por que ese id no es un id, o `null` si lo es: el juicio de `diagnosticoDeId`, en texto.
+ *
+ * El juicio devuelve DATOS (un codigo estable y los valores de la frase) y la frase se compone aqui con el
+ * catalogo. Asi hay un solo criterio y dos idiomas, en vez de dos implementaciones del mismo criterio: un
+ * cambio de regla se hace en `diagnosticoDeId` y las dos superficies lo heredan.
+ */
+export function motivoDeIdInseguro(id) {
+  const diagnostico = diagnosticoDeId(id);
+  return diagnostico === null ? null : t(`id.reason.${diagnostico.code}`, diagnostico.params);
+}
+
 export function esIdSeguro(id) {
-  return motivoDeIdInseguro(id) === null;
+  return diagnosticoDeId(id) === null;
 }
 
 // ── 2 · El contenido ─────────────────────────────────────────────────────────────────────────────────

@@ -15,6 +15,10 @@ import { medirAutoActualizacion, textoDeMedidas } from '../lib/auto-update.mjs';
 import { promover, leerDiario } from '../lib/promote.mjs';
 import { buenaRevision, cleanupSandboxes, goodInput, patchInput, sandbox } from './helpers.mjs';
 
+// La prosa de este fichero (el texto de las medidas) se afirma en espanol: se fija el idioma, porque el base
+// es `en` y sin fijarlo el aserto mediria la traduccion inglesa.
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const EVIDENCIA = 'resultados/medicion-2026-10-16.txt';

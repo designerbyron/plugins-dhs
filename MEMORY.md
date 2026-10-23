@@ -351,3 +351,32 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   ninguna prueba lo ejercitaba (`ambito.test.mjs` prueba el motor, no el comando). Arreglado y con prueba.
 - Lección: un `try` alrededor de una función no importada convierte un fallo de código en un aviso de datos;
   la única prueba que lo ve es la que ejecuta **el comando**, no la función.
+
+## Acto 2026-10-23 — el falso fallo de `doctor` y las seis deudas de idioma
+
+- **Causa demostrada, no hipótesis.** `doctor` cerraba con «1 problema(s): con esto el plugin falla al
+  activarse» en un almacén **recién instalado**: su capa de seguridad hacía `readdirSync(<almacén>/projects)`
+  sin guarda, y el `ENOENT` de un `projects/` que todavía no existe caía en el `catch` como si fuera un fallo de
+  lectura. No faltaban `skills/` ni el almacén: faltaba distinguir **«no hay»** de **«no pude leer»**.
+- **Reproducido en tres arenas, con el binario y `DSH_LANG=en`**: sin `projects/` → exit 1 y la línea
+  `FAIL security layer: it could not be reviewed (ENOENT … scandir '<arena>\skill-compiler\projects')`;
+  con `projects/` creado a mano → exit 0 y 16 ok; con `projects` sustituido por un **fichero** (`ENOTDIR`) →
+  exit 1, que es lo correcto.
+- **Arreglo en la raíz**: `leerProyectosDelAlmacen(root)` (lib/compiler.mjs) devuelve `{estado, proyectos, ruta,
+  motivo}` — `inexistente` sólo con `ENOENT`, `ilegible` con cualquier otro error—, `listProjects` delega en él,
+  y `doctor` informa «nada que revisar todavía» sin contarlo como problema pero **sigue fallando** con una ruta
+  ilegible. Un `ENOENT` por carpeta de estado es «no hay»; otro código se declara en vez de revisar menos en
+  silencio. Regresión: `tests/doctor-almacen.test.mjs` (4 casos, rojo antes del arreglo).
+- **Deudas de idioma, clasificadas antes de tocar**: `textoDeMedidas` y el prefijo de alias eran (a) texto
+  visible → catálogo; `motivoDeIdInseguro`, `reason` de `repair` y `estadoLegible` eran (c) dato interno
+  consumido por otra función → **el valor no se toca** y su representación se compone en el punto de
+  presentación (códigos nuevos `reasonCode`/`reasonParams`, `diagnosticoDeId`, y `cli.audit.state.*`); los
+  comentarios de `bin/` eran (b) comentario → ASCII sin tocar sintaxis, ejemplos ni ayuda. `f1-contrato`
+  verificaba una **frase** del prefijo de alias: ahora verifica `aliasOf`, `deprecatedIn`, invocabilidad,
+  mismo efecto y que el canónico viaje intacto **en los dos idiomas**.
+- Catalogo **527 → 562 claves** por idioma (35 nuevas, paridad y puerta `i18n-gate` en verde).
+- Suite **725 → 730** (4 de `doctor` + 1 de alias bilingüe), hermética en verde. ASCII **8120 → 7580**
+  (`bin/` a 0; `security.mjs` −15, `compiler.mjs` −2); la línea base **no se tocó**.
+- **Queda pendiente**: la prosa de `observado`/`umbral` de las medidas y los `motivo` de los bloqueos de
+  `repair` siguen siendo reporte en español (viajan como dato); `redaccion` del diario intacta por contrato.
+  El prefijo de alias se retira en 5.0.0, no antes.

@@ -36,7 +36,7 @@ import {
   approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, move, pending, sugerenciaDeId,
   projectKey, reject, retire, retired,
 } from './compiler.mjs';
-import { anotarEntradaEnDiario, ficherosQueDifieren, huellaDeContenido, motivoDeIdInseguro } from './security.mjs';
+import { anotarEntradaEnDiario, diagnosticoDeId, ficherosQueDifieren, huellaDeContenido, motivoDeIdInseguro } from './security.mjs';
 import { medirAutoActualizacion } from './auto-update.mjs';
 import { scopeOf } from './definitions.mjs';
 import { t } from './i18n/index.mjs';
@@ -177,13 +177,18 @@ export function aprobarLote({ root, key, ids = [], scope = 'project', force = fa
  * palabras —y no «no hay ninguna propuesta», que sería verdad y no enseñaría nada—.
  */
 function idNoUtilizable(wanted) {
-  const motivo = motivoDeIdInseguro(wanted);
-  return motivo === null
-    ? null
-    : bad([
-      t('cmd.ids.unsafe', { id: wanted, motivo }),
-      t('cmd.ids.unsafe-hint'),
-    ].join('\n'), { code: 'unsafe-id', params: { id: wanted, motivo } });
+  // El juicio es UNO (`diagnosticoDeId`) y la frase es presentacion: se compone con la clave de su codigo, en el
+  // idioma que toque. Si la clave faltara en el catalogo, se cae al motivo del propio juicio antes que ensenar
+  // una clave cruda a una persona.
+  const diagnostico = diagnosticoDeId(wanted);
+  if (diagnostico === null) return null;
+  const clave = `id.reason.${diagnostico.code}`;
+  const traducido = t(clave, diagnostico.params);
+  const motivo = traducido === clave ? motivoDeIdInseguro(wanted) : traducido;
+  return bad([
+    t('cmd.ids.unsafe', { id: wanted, motivo }),
+    t('cmd.ids.unsafe-hint'),
+  ].join('\n'), { code: 'unsafe-id', params: { id: wanted, motivo } });
 }
 
 function noEstáElId(wanted, key, root, { que = 'proposal' } = {}) {
@@ -824,6 +829,8 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
   // Los nombres españoles siguen funcionando **hasta 5.0.0** como alias del canónico: mismo handler, mismos
   // argumentos, misma puerta y mismos efectos. El alias se declara con metadatos (`aliasOf`, `deprecatedIn`),
   // no por el texto: así el menú puede ocultarlo por dato y `doctor` puede contarlos.
+  // La retirada de los alias es una fecha declarada, no una frase suelta en la descripcion.
+  const RETIRADA_DE_ALIAS = '5.0.0';
   const ALIASES = {
     'skill-propuestas': 'skill-proposals',
     'skill-pendientes': 'skill-pending',
@@ -850,7 +857,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       name: viejo,
       aliasOf: nuevo,
       deprecatedIn: '4.0.0',
-      description: `Alias obsoleto de /${nuevo}: se retira en 5.0.0. ${canonico.description}`,
+      description: `${t('cmd.alias.deprecated', { nuevo, retirada: RETIRADA_DE_ALIAS })} ${canonico.description}`,
     });
   }
 

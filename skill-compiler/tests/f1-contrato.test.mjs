@@ -60,10 +60,43 @@ describe('F1 · alias = canónico', () => {
       // lo que importa —y se prueba abajo— es que el efecto sea el mismo.
       assert.deepEqual(a.input ?? {}, canonico.input ?? {}, `${a.name}: entradas distintas`);
       assert.equal(typeof a.handler, 'function');
-      assert.equal(a.description.replace(/^Alias obsoleto de \/\S+: se retira en 5\.0\.0\. /, ''), canonico.description,
-        `${a.name}: la descripción no es la del canónico`);
+      // La descripcion del alias es la del canonico con un aviso delante, y el aviso es PRESENTACION: se
+      // comprueba que el canonico viaja intacto detras, no la frase del prefijo (que depende del idioma).
+      assert.equal(a.description.endsWith(canonico.description), true, `${a.name}: falta la descripcion del canonico`);
+      assert.equal(a.description.length > canonico.description.length, true, `${a.name}: no lleva aviso de alias`);
       assert.equal(a.deprecatedIn, '4.0.0');
-      assert.match(a.description, /^Alias obsoleto de \/skill-/);
+      assert.notEqual(a.description, canonico.description, `${a.name}: sin aviso se leeria como el canonico`);
+    }
+  });
+
+  it('el aviso de alias es presentacion: cambia con el idioma y el canonico viaja intacto', () => {
+    // El prefijo del aviso estaba escrito en el codigo y una prueba lo fijaba como frase. Ahora es una clave del
+    // catalogo: lo que se mide es el DATO (`aliasOf`, `deprecatedIn`, el canonico detras) en los dos idiomas y
+    // que los dos digan que es un alias. Una frase no es contrato; el dato si.
+    const conIdioma = (lang) => {
+      const previo = process.env.DSH_LANG;
+      process.env.DSH_LANG = lang;
+      try {
+        return new Map(skillCommands({}).map((c) => [c.name, c]));
+      } finally {
+        if (previo === undefined) delete process.env.DSH_LANG;
+        else process.env.DSH_LANG = previo;
+      }
+    };
+    const es = conIdioma('es');
+    const en = conIdioma('en');
+    assert.match(es.get('skill-aprobar').description, /^Alias obsoleto de \/skill-approve: se retira en 5\.0\.0\. /);
+    assert.match(en.get('skill-aprobar').description, /^Deprecated alias of \/skill-approve: removed in 5\.0\.0\. /);
+    for (const [viejo, nuevo] of [['skill-aprobar', 'skill-approve'], ['skill-ver', 'skill-show']]) {
+      for (const [lang, mapa] of [['es', es], ['en', en]]) {
+        const alias = mapa.get(viejo);
+        const canonico = mapa.get(nuevo);
+        assert.equal(alias.aliasOf, nuevo, `${lang}/${viejo}: aliasOf`);
+        assert.equal(alias.deprecatedIn, '4.0.0', `${lang}/${viejo}: deprecatedIn`);
+        assert.equal(alias.description.endsWith(canonico.description), true, `${lang}/${viejo}: el canonico se perdio`);
+        assert.deepEqual(alias.input ?? {}, canonico.input ?? {}, `${lang}/${viejo}: entradas distintas`);
+        assert.equal(typeof alias.handler, 'function', `${lang}/${viejo}: sin handler`);
+      }
     }
   });
 

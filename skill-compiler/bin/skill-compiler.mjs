@@ -31,12 +31,12 @@ import {
 import { leerDiario, verificarCadena } from '../lib/security.mjs';
 
 /**
- * La ruta de este propio CLI. Se deriva en tiempo de ejecución en vez de escribirse: el mensaje que la
- * enseña al usuario se quedaba obsoleto cada vez que el repositorio cambiaba de sitio, y una instrucción
- * de aprobación que no funciona es peor que no darla.
+ * La ruta de este propio CLI. Se deriva en tiempo de ejecucion en vez de escribirse: el mensaje que la
+ * ensena al usuario se quedaba obsoleto cada vez que el repositorio cambiaba de sitio, y una instruccion
+ * de aprobacion que no funciona es peor que no darla.
  */
 const SELF = fileURLToPath(import.meta.url);
-/** La raíz del paquete, derivada de la ruta de este fichero: `bin/` está un nivel por debajo. */
+/** La raiz del paquete, derivada de la ruta de este fichero: `bin/` esta un nivel por debajo. */
 const packageRoot = join(dirname(SELF), '..');
 
 const argv = process.argv.slice(2);
@@ -49,27 +49,46 @@ for (let i = 1; i < argv.length; i++) {
   if (arg === '--preserve-state') { flags.preserveState = true; continue; }
   if (arg === '--force') { flags.force = true; continue; }
   if (arg === '--yes') { flags.yes = true; continue; }
-  // El ámbito: publicar para todos los proyectos es un gesto explícito, y volver a local, otro.
+  // El ambito: publicar para todos los proyectos es un gesto explicito, y volver a local, otro.
   if (arg === '--global') { flags.global = true; continue; }
   if (arg === '--local') { flags.local = true; continue; }
   if (arg === '--id') { flags.id = argv[++i]; continue; }
   if (arg === '--note') { flags.note = argv[++i]; continue; }
   if (arg === '--url') { flags.url = argv[++i]; continue; }
   if (arg === '--port') { flags.port = argv[++i]; continue; }
-  // Las de `audit`: el informe entero en JSON, acotar por estado, o incluir también las que pasan.
+  // Las de `audit`: el informe entero en JSON, acotar por estado, o incluir tambien las que pasan.
   if (arg === '--json') { flags.json = true; continue; }
   if (arg === '--todo') { flags.todo = true; continue; }
   if (arg === '--estado') { flags.estado = argv[++i]; continue; }
-  // Las de la promoción: qué niveles se autorizan, y ver las pruebas sin escribir nada.
+  // Las de la promocion: que niveles se autorizan, y ver las pruebas sin escribir nada.
   if (arg === '--nivel') { flags.nivel = argv[++i]; continue; }
-  // Un lote: la misma decisión sobre todas las propuestas que van juntas. No es un atajo —cada una pasa su
-  // puerta— es poder mirarlas y decidirlas como lo que son.
+  // Un lote: la misma decision sobre todas las propuestas que van juntas. No es un atajo -cada una pasa su
+  // puerta- es poder mirarlas y decidirlas como lo que son.
   if (arg === '--grupo') { flags.grupo = argv[++i]; continue; }
   if (arg === '--dry') { flags.dry = true; continue; }
   if (arg.startsWith('--')) { process.stderr.write(`${tr('cli.unknown-option', { option: arg })}\n`); process.exit(2); }
   positional.push(arg);
 }
 const root = defaultRoot();
+
+/**
+ * La etiqueta de un estado y el motivo de `repair`, que el motor devuelve como DATO.
+ *
+ * El dato (`estado`, `reason`) no se traduce ni se toca: es lo que afirman las pruebas y lo que viaja a otras
+ * funciones. La FRASE se compone aqui, con el catalogo, en el idioma de la sesion. Y si la clave no estuviera, se
+ * dice el dato tal cual antes que ensenar una clave cruda a una persona.
+ */
+const etiquetaDeEstado = (skill) => {
+  const clave = `cli.audit.state.${skill.estado}`;
+  const texto = tr(clave);
+  return texto === clave ? skill.estadoLegible : texto;
+};
+const motivoDeReparacion = (r) => {
+  if (r.reasonCode === undefined) return r.reason;
+  const clave = `cli.repair.reason.${r.reasonCode}`;
+  const texto = tr(clave, r.reasonParams ?? {});
+  return texto === clave ? r.reason : texto;
+};
 
 /**
  * La ayuda, en una tabla: la **sintaxis** es un dato (nombres de comando y opciones, nunca se traduce) y la
@@ -121,15 +140,15 @@ function usage(code) {
 }
 
 /**
- * Las propuestas de un lote, leídas del mismo sitio que las lee el motor (`meta.json`). Si el lote no
- * existe, se dice con el número de lotes que sí hay: un error que nombra lo que hay se arregla solo.
+ * Las propuestas de un lote, leidas del mismo sitio que las lee el motor (`meta.json`). Si el lote no
+ * existe, se dice con el numero de lotes que si hay: un error que nombra lo que hay se arregla solo.
  */
 async function idsDelLote(groupId, key) {
   const { propuestasDelLote } = await import('../lib/promote.mjs');
   return propuestasDelLote(groupId, key, { root }).map((p) => p.id);
 }
 
-/** El ámbito sale del cwd actual, o de `--project-key` cuando se trabaja sobre otro proyecto. */
+/** El ambito sale del cwd actual, o de `--project-key` cuando se trabaja sobre otro proyecto. */
 function scope() {
   if (typeof flags.projectKey === 'string') return flags.projectKey;
   const key = projectKey(process.cwd());
@@ -138,8 +157,8 @@ function scope() {
 }
 
 /**
- * Valida una propuesta guardada. Se importa de `lib/` —donde está probada— porque la misma puerta la
- * aplican la CLI, la página de revisión y los comandos del harness: una regla, una implementación.
+ * Valida una propuesta guardada. Se importa de `lib/` -donde esta probada- porque la misma puerta la
+ * aplican la CLI, la pagina de revision y los comandos del harness: una regla, una implementacion.
  */
 function checkSkill(id, key) {
   return checkProposal(id, key, { root });
@@ -191,8 +210,8 @@ switch (command) {
       ? await idsDelLote(flags.grupo, key)
       : only ? [only] : pending({ root, key }).map((p) => p.id);
     if (ids.length === 0) {
-      // Un lote vacío y un proyecto sin pendientes no son lo mismo, y decir «nada pendiente» cuando se
-      // pidió un lote concreto haría pensar que está todo hecho.
+      // Un lote vacio y un proyecto sin pendientes no son lo mismo, y decir "nada pendiente" cuando se
+      // pidio un lote concreto haria pensar que esta todo hecho.
       process.stdout.write(`${flags.grupo !== undefined
         ? tr('cli.batch.empty', { grupo: flags.grupo, key })
         : tr('cli.nothing-pending', { key })}\n`);
@@ -211,10 +230,10 @@ switch (command) {
   case 'approve': {
     const id = positional[0];
     const key = scope();
-    // Un lote se aprueba entero o no se aprueba: primero se comprueban TODAS las puertas y después se
-    // aprueban. Comprobar y aprobar de una en una dejaría media parte activada si la tercera no pasa — y
-    // eso es exactamente lo que el lote existe para evitar (la decisión humana puede ir una a una, pero
-    // entonces es `approve <id>` a propósito, no un lote que se rompió por el camino).
+    // Un lote se aprueba entero o no se aprueba: primero se comprueban TODAS las puertas y despues se
+    // aprueban. Comprobar y aprobar de una en una dejaria media parte activada si la tercera no pasa - y
+    // eso es exactamente lo que el lote existe para evitar (la decision humana puede ir una a una, pero
+    // entonces es `approve <id>` a proposito, no un lote que se rompio por el camino).
     if (flags.grupo !== undefined) {
       const ids = await idsDelLote(flags.grupo, key);
       if (ids.length === 0) { process.stdout.write(`${tr('cli.batch.empty', { grupo: flags.grupo, key })}\n`); break; }
@@ -231,8 +250,8 @@ switch (command) {
       const { approveProposal } = await import('../lib/commands.mjs');
       const hechas = [];
       for (const cada of ids) {
-        // La misma función que el comando y el panel: puerta, seguridad, huella del contenido y entrada del
-        // diario. La CLI no reimplementa nada — si lo hiciera, sería el camino que olvida el rastro.
+        // La misma funcion que el comando y el panel: puerta, seguridad, huella del contenido y entrada del
+        // diario. La CLI no reimplementa nada - si lo hiciera, seria el camino que olvida el rastro.
         const movida = approveProposal({ root, key: key, id: cada, force: flags.force === true, scope: flags.global === true ? 'global' : 'project' });
         if (movida.kind !== 'success') { process.stderr.write(`${tr('cli.approve.batch-failed', { id: cada, reason: movida.text.split('\n')[0], done: hechas.join(', ') || tr('cli.approve.batch-none') })}\n`); process.exit(1); }
         hechas.push(cada);
@@ -242,8 +261,8 @@ switch (command) {
       break;
     }
     if (!id) usage(2);
-    // Aprobar algo ya aprobado no es un fallo: es un acto que ya ocurrió. Medido con el usuario delante:
-    // volvió a aprobar al ver la skill todavía en la lista, y aquí leería «no existe una propuesta».
+    // Aprobar algo ya aprobado no es un fallo: es un acto que ya ocurrio. Medido con el usuario delante:
+    // volvio a aprobar al ver la skill todavia en la lista, y aqui leeria "no existe una propuesta".
     const ambitoPedido = flags.global === true ? 'global' : 'project';
     if (ambitoPedido === 'global' && ['global', 'published'].includes(locate(id, key, { root }))) {
       process.stdout.write(`${tr('cli.approve.already-published', { id })}\n${tr('cli.approve.no-change')}\n`);
@@ -254,8 +273,8 @@ switch (command) {
       break;
     }
     // Igual que el comando y el panel: el mismo juicio, la misma huella, el mismo rastro. La CLI ya no
-    // reimplementa la aprobación (tenía su propia copia de las comprobaciones, y olvidaba el diario y la
-    // comprobación de contenido).
+    // reimplementa la aprobacion (tenia su propia copia de las comprobaciones, y olvidaba el diario y la
+    // comprobacion de contenido).
     const { approveProposal } = await import('../lib/commands.mjs');
     const r = approveProposal({ root, key, id, force: flags.force === true, scope: ambitoPedido, preservarEstado: flags.preserveState === true });
     process.stdout.write(`${r.text}\n`);
@@ -263,8 +282,8 @@ switch (command) {
     process.exit(r.kind === 'success' ? 0 : 1);
   }
 
-  // ── el ámbito, en las dos direcciones ────────────────────────────────────────────────────────────
-  // Una aprobación con el ámbito equivocado se corrige sin volver a proponer nada: la decisión tiene vuelta.
+  // -- el ambito, en las dos direcciones ------------------------------------------------------------
+  // Una aprobacion con el ambito equivocado se corrige sin volver a proponer nada: la decision tiene vuelta.
   case 'scope': {
     const id = positional[0];
     if (!id) usage(2);
@@ -277,9 +296,9 @@ switch (command) {
     break;
   }
 
-  // ── apagar, retirar y volver ────────────────────────────────────────────────────────────────────
-  // El único gesto irreversible es `delete`, y por eso **no borra**: mueve a un respaldo fechado y dice
-  // cuál es la vuelta. Sin `--yes` no toca nada.
+  // -- apagar, retirar y volver --------------------------------------------------------------------
+  // El unico gesto irreversible es `delete`, y por eso **no borra**: mueve a un respaldo fechado y dice
+  // cual es la vuelta. Sin `--yes` no toca nada.
   case 'disable': {
     const id = positional[0];
     if (!id) usage(2);
@@ -445,7 +464,7 @@ switch (command) {
       console.log(textoDelEstado(antes));
       process.exit(0);
     }
-    // Compare-and-swap: si la declaración cambió desde que se leyó, esta escritura se niega en vez de
+    // Compare-and-swap: si la declaracion cambio desde que se leyo, esta escritura se niega en vez de
     // pisar una respuesta que este proceso no vio.
     const r = declararPropiedad(respuesta, { root, por: 'humano', esperadaHuella: antes.huella ?? undefined });
     if (!r.ok) {
@@ -466,8 +485,8 @@ switch (command) {
   }
 
   case 'security': {
-    // Solo lectura, y por el mismo camino que la puerta: `auditarCarpeta` es la regla, una implementación.
-    // Recorre el almacén entero (todos los estados) y verifica además la cadena de cada diario.
+    // Solo lectura, y por el mismo camino que la puerta: `auditarCarpeta` es la regla, una implementacion.
+    // Recorre el almacen entero (todos los estados) y verifica ademas la cadena de cada diario.
     const fs = await import('node:fs');
     const { auditarCarpeta } = await import('../lib/compiler.mjs');
     let skills = 0;
@@ -510,7 +529,7 @@ switch (command) {
   }
 
   case 'auto': {
-    // El medidor, con su tabla: qué se midió, qué se exige y qué falla. Sin id, mide las actualizaciones
+    // El medidor, con su tabla: que se midio, que se exige y que falla. Sin id, mide las actualizaciones
     // pendientes del proyecto del directorio actual. Solo lectura: no activa nada.
     const { medirAutoActualizacion, textoDeMedidas } = await import('../lib/auto-update.mjs');
     const { pending } = await import('../lib/compiler.mjs');
@@ -530,9 +549,9 @@ switch (command) {
     process.exit(noAptas === 0 ? 0 : 1);
   }
 
-  // ── idioma ───────────────────────────────────────────────────────────────────────────────────────
-  // Una sola resolución para las dos superficies. Sin argumento informa el idioma efectivo **y su fuente**:
-  // sin la fuente, «idioma: es» no dice si fue una decisión de la persona o una variable de la sesión.
+  // -- idioma ---------------------------------------------------------------------------------------
+  // Una sola resolucion para las dos superficies. Sin argumento informa el idioma efectivo **y su fuente**:
+  // sin la fuente, "idioma: es" no dice si fue una decision de la persona o una variable de la sesion.
   case 'lang': {
     const pedido = positional[0];
     if (pedido === undefined) {
@@ -558,8 +577,8 @@ switch (command) {
 
   case 'doctor': {
     // Existe por un fallo real: el plugin importaba un paquete del harness sin declararlo, funcionaba
-    // en la máquina donde estaba suelto y fallaba al instalarse en un perfil con «failed to import».
-    // Este comando dice exactamente qué falta y qué hacer, en vez de dejar que se descubra instalando.
+    // en la maquina donde estaba suelto y fallaba al instalarse en un perfil con "failed to import".
+    // Este comando dice exactamente que falta y que hacer, en vez de dejar que se descubra instalando.
     const fs = await import('node:fs');
     const { pathToFileURL } = await import('node:url');
     const pkgPath = join(packageRoot, 'package.json');
@@ -573,36 +592,56 @@ switch (command) {
       if (!ok && remedy) process.stdout.write(`${tr('cli.doctor.remedy', { remedy })}\n`);
     };
 
-    // La capa de seguridad, en una línea: cuántas skills del almacén levantan algo. Informativo a propósito:
-    // `doctor` dice si el plugin puede activarse; `security` dice si el contenido está limpio, con su código.
+    // La capa de seguridad, en una linea: cuantas skills del almacen levantan algo. Informativo a proposito:
+    // `doctor` dice si el plugin puede activarse; `security` dice si el contenido esta limpio, con su codigo.
+    // Un almacen que todavia NO existe no es una averia: es el estado de una instalacion nueva, sin nada
+    // propuesto. Se dice y no se cuenta como problema. Lo que si es un problema es una ruta que existe y no se
+    // puede leer (permisos, o un "projects" que es un fichero): ahi no se sabe que hay, y responder "0
+    // revisadas" seria afirmar algo que no se miro. La distincion vive en `leerProyectosDelAlmacen`.
     try {
-      const { auditarCarpeta } = await import('../lib/compiler.mjs');
-      let bloqueos = 0;
-      let avisos = 0;
-      let revisadas = 0;
-      for (const proyecto of fs.readdirSync(join(root, 'projects'), { withFileTypes: true }).filter((d) => d.isDirectory())) {
-        for (const estado of ['proposed', 'approved', 'disabled', 'published', 'rejected']) {
-          let ids = [];
-          try { ids = fs.readdirSync(join(root, 'projects', proyecto.name, estado), { withFileTypes: true }).filter((d) => d.isDirectory()); } catch { continue; }
-          for (const id of ids) {
-            const dir = join(root, 'projects', proyecto.name, estado, id.name);
-            if (!fs.existsSync(join(dir, 'SKILL.md'))) continue;
-            revisadas += 1;
-            const { findings } = auditarCarpeta(dir, { id: id.name });
-            for (const h of findings) {
-              if (!/^(security|secret)/.test(String(h.rule ?? ''))) continue;
-              if (h.severity === 'error') bloqueos += 1; else avisos += 1;
+      const { auditarCarpeta, leerProyectosDelAlmacen } = await import('../lib/compiler.mjs');
+      const almacen = leerProyectosDelAlmacen(root);
+      if (almacen.estado === 'inexistente') {
+        line(true, tr('cli.doctor.security-empty', { ruta: almacen.ruta }));
+      } else if (almacen.estado === 'ilegible') {
+        // Existe y no se puede leer: no se sabe que hay dentro, asi que se declara en vez de decir "0 revisadas".
+        line(false, tr('cli.doctor.security-unreadable', { ruta: almacen.ruta, codigo: almacen.codigo ?? '?' }),
+          tr('cli.doctor.security-failed-remedy'));
+      } else {
+        let bloqueos = 0;
+        let avisos = 0;
+        let revisadas = 0;
+        for (const proyecto of almacen.proyectos) {
+          for (const estado of ['proposed', 'approved', 'disabled', 'published', 'rejected']) {
+            let ids = [];
+            try {
+              ids = fs.readdirSync(join(root, 'projects', proyecto, estado), { withFileTypes: true }).filter((d) => d.isDirectory());
+            } catch (error) {
+              // Una carpeta de estado que no existe es lo normal (no todo proyecto tiene "rejected/"); una que
+              // existe y no se puede leer no lo es, y se declara en vez de revisar menos en silencio.
+              if (error.code === 'ENOENT') continue;
+              throw new Error(`${estado}/${proyecto}: ${error.code ?? error.message}`);
+            }
+            for (const id of ids) {
+              const dir = join(root, 'projects', proyecto, estado, id.name);
+              if (!fs.existsSync(join(dir, 'SKILL.md'))) continue;
+              revisadas += 1;
+              const { findings } = auditarCarpeta(dir, { id: id.name });
+              for (const h of findings) {
+                if (!/^(security|secret)/.test(String(h.rule ?? ''))) continue;
+                if (h.severity === 'error') bloqueos += 1; else avisos += 1;
+              }
             }
           }
         }
+        line(bloqueos === 0, tr('cli.doctor.security-line', { revisadas, bloqueos, avisos }), tr('cli.doctor.security-remedy'));
       }
-      line(bloqueos === 0, tr('cli.doctor.security-line', { revisadas, bloqueos, avisos }), tr('cli.doctor.security-remedy'));
     } catch (error) {
       line(false, tr('cli.doctor.security-failed', { message: error.message }), tr('cli.doctor.security-failed-remedy'));
     }
 
-    // El idioma, con su fuente. Informativo: un `DSH_LANG` inválido no impide activar el plugin, pero se dice
-    // una vez y con el valor recibido —callarlo sería peor que el propio error—.
+    // El idioma, con su fuente. Informativo: un `DSH_LANG` invalido no impide activar el plugin, pero se dice
+    // una vez y con el valor recibido -callarlo seria peor que el propio error-.
     {
       const info = resolveLang({ fresh: true });
       process.stdout.write(`\n${tr('doctor.language', { lang: info.lang, source: info.source }, { lang: info.lang })}\n`);
@@ -619,7 +658,7 @@ switch (command) {
     line(missing.length === 0, tr('cli.doctor.installed', { ok: declaredNames.length - missing.length, total: declaredNames.length }),
       tr('cli.doctor.missing-remedy', { list: `${missing.slice(0, 4).join(', ')}${missing.length > 4 ? '...' : ''}` }));
 
-    // No basta con que la carpeta exista: lo que importa es que el módulo se pueda CARGAR.
+    // No basta con que la carpeta exista: lo que importa es que el modulo se pueda CARGAR.
     for (const name of ['@deepseek-ai/dsh-tools', 'zod']) {
       try {
         const loaded = await import(name);
@@ -629,7 +668,7 @@ switch (command) {
           line(false, tr('cli.doctor.no-define-tool'), tr('cli.doctor.no-define-tool-remedy'));
         }
         // Zod tiene que ser Zod: el registro de proyecciones valida con `schema.parse(...)`, y una
-        // biblioteca de esquemas que se resuelve llamándola como función (schemastery) no sirve.
+        // biblioteca de esquemas que se resuelve llamandola como funcion (schemastery) no sirve.
         if (name === 'zod' && typeof loaded.z?.object !== 'function') {
           line(false, tr('cli.doctor.zod'), tr('cli.doctor.zod-remedy'));
         }
@@ -654,13 +693,13 @@ switch (command) {
       line(false, tr('cli.doctor.tools-failed', { message: error.message }), tr('cli.doctor.tools-failed-remedy'));
     }
 
-    // ── La proyección, contra el registro REAL ────────────────────────────────────────────────────
+    // -- La proyeccion, contra el registro REAL ----------------------------------------------------
     //
-    // Esto faltaba, y su ausencia costó caro: el registro de proyecciones **no** valida los esquemas
-    // que recibe, así que una unidad con esquemas que no validan se registra sin queja y revienta al
-    // LEER sesiones (`Failed to load history: … def.wire.viewSchema.parse is not a function`). Un
-    // adorno visual dejando el historial sin cargar. Aquí se comprueba el contrato y se proyecta de
-    // verdad —snapshot y lectura en frío—, para que eso se vea antes de instalar y no después.
+    // Esto faltaba, y su ausencia costo caro: el registro de proyecciones **no** valida los esquemas
+    // que recibe, asi que una unidad con esquemas que no validan se registra sin queja y revienta al
+    // LEER sesiones (`Failed to load history: ... def.wire.viewSchema.parse is not a function`). Un
+    // adorno visual dejando el historial sin cargar. Aqui se comprueba el contrato y se proyecta de
+    // verdad -snapshot y lectura en frio-, para que eso se vea antes de instalar y no despues.
     try {
       const { learningProjection, projectionContractProblems } = await import(pathToFileURL(join(packageRoot, 'lib', 'projection.mjs')).href);
       const definition = learningProjection();
@@ -683,7 +722,7 @@ switch (command) {
       line(false, tr('cli.doctor.projection-failed', { message: error.message }), tr('cli.doctor.projection-failed-remedy'));
     }
 
-    // ── Los comandos humanos, y las puertas del harness ──────────────────────────────────────────
+    // -- Los comandos humanos, y las puertas del harness ------------------------------------------
     try {
       const { skillCommands } = await import(pathToFileURL(join(packageRoot, 'lib', 'commands.mjs')).href);
       const declared = skillCommands({ root });
@@ -696,11 +735,11 @@ switch (command) {
       line(false, tr('cli.doctor.commands-failed', { message: error.message }), tr('cli.doctor.commands-failed-remedy'));
     }
 
-    // ── Las filas de pendientes: la superficie que convierte aprobar en elegir ────────────────────
+    // -- Las filas de pendientes: la superficie que convierte aprobar en elegir --------------------
     //
-    // Medido con el usuario delante: veía la lista de pendientes y no encontraba cómo elegir una, porque
+    // Medido con el usuario delante: veia la lista de pendientes y no encontraba como elegir una, porque
     // el compositor no ofrece una lista pulsable para los argumentos de un comando. Las filas son
-    // comandos sin argumentos que el menú `/` ofrece; si su composición se rompe, autorizar vuelve a ser
+    // comandos sin argumentos que el menu `/` ofrece; si su composicion se rompe, autorizar vuelve a ser
     // una sintaxis que hay que recordar.
     try {
       const { pendingRowsFor } = await import(pathToFileURL(join(packageRoot, 'lib', 'pending-rows.mjs')).href);
@@ -722,17 +761,17 @@ switch (command) {
     }
 
     // Compilar las herramientas y proyectar la unidad cubre dos caminos; el resto de los contratos con el
-    // harness viven en pruebas que ya se ejecutan solas. Aquí se EJECUTAN, en vez de reimplementarlas: un
-    // diagnóstico que duplica la puerta acaba diciendo algo distinto que la puerta.
+    // harness viven en pruebas que ya se ejecutan solas. Aqui se EJECUTAN, en vez de reimplementarlas: un
+    // diagnostico que duplica la puerta acaba diciendo algo distinto que la puerta.
     try {
       const { spawnSync } = await import('node:child_process');
       const gates = [
         'tests/output-contract.test.mjs',      // el valor de cada herramienta contra el esquema que el harness valida
         'tests/projection-contract.test.mjs',  // el registro de proyecciones real
-        'tests/catalog-freshness.test.mjs',    // la frescura del catálogo, sin reiniciar
-        'tests/auto-approve.test.mjs',         // el modo de aprobación automática por sesión
+        'tests/catalog-freshness.test.mjs',    // la frescura del catalogo, sin reiniciar
+        'tests/auto-approve.test.mjs',         // el modo de aprobacion automatica por sesion
         'tests/commands.test.mjs',             // los comandos humanos, camino por camino
-        'tests/pending-rows.test.mjs',         // las filas que el menú ofrece por cada pendiente
+        'tests/pending-rows.test.mjs',         // las filas que el menu ofrece por cada pendiente
       ];
       const run = spawnSync(process.execPath, ['--test', ...gates], { cwd: packageRoot, encoding: 'utf8' });
       const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
@@ -742,12 +781,12 @@ switch (command) {
       line(false, tr('cli.doctor.gates-failed', { message: error.message }), tr('cli.doctor.tools-failed-remedy'));
     }
 
-    // ── La propiedad del puesto: se informa, no se suspende por ella ───────────────────────────────
+    // -- La propiedad del puesto: se informa, no se suspende por ella -------------------------------
     //
-    // Sin declarar, el plugin trabaja igual —no compite fuera de DSH—, así que esto **no** es un fallo:
-    // es el recordatorio donde el humano lo va a ver. Un diagnóstico que se pone rojo por una decisión
-    // que nadie ha tomado enseña a ignorar el rojo. Lo que sí importa decir: el estado real (no sólo
-    // «sin declarar»: también una declaración rota) y si el barrido del puesto pudo ser completo.
+    // Sin declarar, el plugin trabaja igual -no compite fuera de DSH-, asi que esto **no** es un fallo:
+    // es el recordatorio donde el humano lo va a ver. Un diagnostico que se pone rojo por una decision
+    // que nadie ha tomado ensena a ignorar el rojo. Lo que si importa decir: el estado real (no solo
+    // "sin declarar": tambien una declaracion rota) y si el barrido del puesto pudo ser completo.
     try {
       const {
         inventario: inventariar, leerPropiedad: leer, proyectosConocidos: proyectos, SOLO_DSH: soloDsh, MAQUINA: maquina,
@@ -779,9 +818,9 @@ switch (command) {
   }
 
   case 'audit': {
-    // Auditoría integral, en SOLO LECTURA: mira el almacén entero con la misma puerta que decide una
-    // aprobación y dice qué incumple cada skill, con qué valor, contra qué umbral y por dónde se arregla.
-    // No repara nada: señalar es lo que se le pide. Es el primer paso para decidir qué se corrige.
+    // Auditoria integral, en SOLO LECTURA: mira el almacen entero con la misma puerta que decide una
+    // aprobacion y dice que incumple cada skill, con que valor, contra que umbral y por donde se arregla.
+    // No repara nada: senalar es lo que se le pide. Es el primer paso para decidir que se corrige.
     const { auditarAlmacen, resumenDeAuditoria } = await import('../lib/audit.mjs');
     const estados = flags.estado !== undefined ? String(flags.estado).split(',').map((e) => e.trim()) : null;
     const informe = auditarAlmacen({ root, curated: curatedLibraryRoot(), estados });
@@ -816,7 +855,7 @@ switch (command) {
       salida.push(tr('cli.audit.detail-header', { shown: conHallazgo.length, total: informe.totals.total }));
       for (const skill of conHallazgo) {
         const m = skill.medidas;
-        salida.push(`\n${tr('cli.audit.skill-row', { status: skill.status.padEnd(10), key: skill.key, estado: skill.estadoLegible })}`);
+        salida.push(`\n${tr('cli.audit.skill-row', { status: skill.status.padEnd(10), key: skill.key, estado: etiquetaDeEstado(skill) })}`);
         salida.push(tr('cli.audit.measures', {
           description: m ? m.description : '?',
           whenToUse: m ? m.whenToUse : '?',
@@ -845,19 +884,19 @@ switch (command) {
   }
 
   case 'repair': {
-    // Prepara la corrección de una skill viva a partir de lo que la auditoría encontró. **No activa nada**:
-    // deja la propuesta lista (o dice por qué no se puede) para que la revise una persona o la promocione
-    // el motor si su nivel está autorizado.
+    // Prepara la correccion de una skill viva a partir de lo que la auditoria encontro. **No activa nada**:
+    // deja la propuesta lista (o dice por que no se puede) para que la revise una persona o la promocione
+    // el motor si su nivel esta autorizado.
     const { reparar } = await import('../lib/repair.mjs');
     const id = positional[0];
     if (!id) usage(2);
     const key = scope();
     const r = reparar(id, key, { root, curated: curatedLibraryRoot(), cwd: process.cwd() });
-    if (r.status === 'missing') { process.stderr.write(`${r.reason}\n`); process.exit(1); }
+    if (r.status === 'missing') { process.stderr.write(`${motivoDeReparacion(r)}\n`); process.exit(1); }
     const lineas = [];
     lineas.push(tr('cli.repair.title', { id, key }));
     if (r.status === 'nothing-to-do') {
-      lineas.push(tr('cli.repair.nothing', { reason: r.reason }), '');
+      lineas.push(tr('cli.repair.nothing', { reason: motivoDeReparacion(r) }), '');
       process.stdout.write(`${lineas.join('\n')}\n`);
       break;
     }
@@ -871,12 +910,12 @@ switch (command) {
     if (r.status === 'blocked') {
       lineas.push(tr('cli.repair.blocked'));
       for (const b of r.bloqueos) lineas.push(tr('cli.repair.block-row', { rule: b.rule, motivo: b.motivo }));
-      lineas.push(`    ${r.reason}`);
+      lineas.push(`    ${motivoDeReparacion(r)}`);
     } else if (r.status !== 'proposed') {
       lineas.push(tr('cli.repair.no-proposal', { status: r.status }));
       for (const e of r.errors ?? []) lineas.push(tr('cli.repair.error-row', { error: e }));
       for (const x of r.conflicts ?? []) lineas.push(tr('cli.repair.conflict-row', { id: x.id, reason: x.reason }));
-      if (r.reason) lineas.push(`    ${r.reason}`);
+      if (r.reason) lineas.push(`    ${motivoDeReparacion(r)}`);
       lineas.push(tr('cli.repair.nothing-changed'));
     } else {
       lineas.push(tr('cli.repair.diff', {
@@ -908,8 +947,8 @@ switch (command) {
   }
 
   case 'promote': {
-    // Aplica y activa una corrección YA preparada. Por defecto **no activa nada solo**: hay que decir qué
-    // niveles están autorizados, y el 3 no se autoriza nunca por aquí.
+    // Aplica y activa una correccion YA preparada. Por defecto **no activa nada solo**: hay que decir que
+    // niveles estan autorizados, y el 3 no se autoriza nunca por aqui.
     const { promover } = await import('../lib/promote.mjs');
     const id = positional[0];
     if (!id) usage(2);
@@ -922,7 +961,7 @@ switch (command) {
       process.exit(2);
     }
     if (flags.dry) {
-      // Sólo las pruebas: la información de la decisión, sin escribir nada.
+      // Solo las pruebas: la informacion de la decision, sin escribir nada.
       const { pruebasDeRegresion } = await import('../lib/promote.mjs');
       const { readFileSync: leer, existsSync: hay } = await import('node:fs');
       const { join: unir } = await import('node:path');
@@ -940,7 +979,7 @@ switch (command) {
     }
     const r = promover(id, key, { root, curated: curatedLibraryRoot(), cwd: process.cwd(), niveles });
     const texto = [tr('cli.promote.title', { id, key }), tr('cli.promote.level', { nivel: r.nivel ?? '?' })];
-    // El lote se anota también en el resultado del CLI: cuando espera por el lote, se ve por qué espera.
+    // El lote se anota tambien en el resultado del CLI: cuando espera por el lote, se ve por que espera.
     if (r.grupo) texto.push(tr('cli.promote.batch', { group: r.grupo }));
     if (r.regresion) {
       for (const p of r.regresion.pruebas) {
@@ -1003,8 +1042,8 @@ switch (command) {
   }
 
   case 'review': {
-    // La superficie de decisión para quien no quiere recordar la sintaxis de un comando. Se arranca a
-    // mano, escucha solo en 127.0.0.1 y exige el token que se imprime aquí: ver lib/review.mjs.
+    // La superficie de decision para quien no quiere recordar la sintaxis de un comando. Se arranca a
+    // mano, escucha solo en 127.0.0.1 y exige el token que se imprime aqui: ver lib/review.mjs.
     const key = scope();
     const port = flags.port !== undefined ? Number(flags.port) : 0;
     const { createReviewServer } = await import('../lib/review.mjs');
@@ -1012,7 +1051,7 @@ switch (command) {
       root,
       key,
       check: checkSkill,
-      // Se ata la raíz del almacén aquí: la página nunca debe poder actuar sobre otro almacén.
+      // Se ata la raiz del almacen aqui: la pagina nunca debe poder actuar sobre otro almacen.
       approve: (id, projectKey) => approve(id, projectKey, { root }),
       reject: (id, projectKey) => reject(id, projectKey, { root }),
       port,

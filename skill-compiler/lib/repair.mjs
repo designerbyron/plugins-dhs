@@ -439,7 +439,10 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
   if (curated) opts.curated = curated;
   const vigente = vigenteDe(id, key, opts);
   if (vigente === null) {
-    return { status: 'missing', id, reason: `no hay ninguna skill viva con el id ${id} en ${key}: nada que reparar` };
+    return {
+      status: 'missing', id, reason: `no hay ninguna skill viva con el id ${id} en ${key}: nada que reparar`,
+      reasonCode: 'missing', reasonParams: { id, key },
+    };
   }
   const { data, body } = parseFrontmatter(readFileSync(join(vigente.dir, 'SKILL.md'), 'utf8'));
   const cuerpoBase = cuerpoSinTitulo(body);
@@ -486,6 +489,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
       reparaciones: plan.filter((p) => p.nivel <= 2), sinReparacion,
       bloqueos: bloquean.map((f) => ({ rule: f.rule, observed: f.observed, fix: f.fix, motivo: REPARACIONES[f.rule]?.como ?? 'esta regla no tiene reparación automática' })),
       reason: `la skill incumple ${bloquean.map((f) => f.rule).join(', ')}: es criterio humano (nivel 3), y sin eso la puerta no admitiría ninguna corrección. Repara eso primero, o propón tú la corrección con su revisión.`,
+      reasonCode: 'blocked-human', reasonParams: { reglas: bloquean.map((f) => f.rule).join(', ') },
     };
   }
   if (!quiereNormalizar && plan.length === 0) {
@@ -493,6 +497,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
       status: 'nothing-to-do', id, nivel: 0, base: { state: vigente.state, hash: vigente.hash },
       reparaciones: [], sinReparacion, hallazgos: hallazgosDeForma.length,
       reason: 'la skill no incumple nada que el motor sepa reparar',
+      reasonCode: 'nothing-to-do', reasonParams: {},
     };
   }
 
@@ -520,6 +525,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
         reparaciones: plan, sinReparacion,
         bloqueos: [{ rule: 'unreadable', observed: ruta, fix: 'Revisa los permisos', motivo: `no se pudo leer «${ruta}» (${error.code ?? error.message}): sin poder leerlo todo, la propuesta podría perder material` }],
         reason: `la carpeta de la skill tiene material que no se puede leer: ${ruta}`,
+        reasonCode: 'unreadable', reasonParams: { ruta },
       };
     }
   }
@@ -560,6 +566,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
             motivo: `el material movido chocaría con «${repetido.path}», que ya existe con otro contenido`,
           }],
           reason: `la corrección reutilizaría «${repetido.path}» con otro contenido: se para antes de perder material`,
+          reasonCode: 'duplicate-path', reasonParams: { ruta: repetido.path },
         };
       }
       cuerpo = movimiento.body;
@@ -597,6 +604,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
           motivo: 'el corte automático dejaría el cuerpo por encima del umbral, así que no hay corrección automática que resuelva el hallazgo',
         }],
         reason: `el cuerpo pasa del umbral (${Buffer.byteLength(cuerpoBase)} > ${umbral}) y no cabe en una corrección automática: ${sinReparacion.at(-1)?.motivo ?? 'decidir ese corte es criterio'}`,
+        reasonCode: 'over-budget', reasonParams: { bytes: Buffer.byteLength(cuerpoBase), umbral, motivo: sinReparacion.at(-1)?.motivo ?? 'decidir ese corte es criterio' },
       };
     }
   }
@@ -686,6 +694,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
         reparaciones: plan, sinReparacion, movidas,
         bloqueos: [{ rule: 'material-perdido', observed: `faltan ${faltan.join(', ') || '—'} · sobran ${sobran.join(', ') || '—'}`, fix: 'Repórtalo: el motor no debe proponer una skill que pierde material', motivo: 'la propuesta no conserva el material de la skill' }],
         reason: `la propuesta perdía material (faltan: ${faltan.join(', ') || 'nada'}; sobran: ${sobran.join(', ') || 'nada'}): se ha retirado entera y no se ha tocado la skill`,
+        reasonCode: 'lost-material', reasonParams: { faltan: faltan.join(', ') || 'nada', sobran: sobran.join(', ') || 'nada' },
       };
     }
   }
@@ -696,6 +705,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
       reparaciones: plan, sinReparacion, movidas,
       errors: propuesta.errors ?? [], warnings: propuesta.warnings ?? [], conflicts: propuesta.conflicts ?? [],
       reason: `no se pudo proponer la corrección (${propuesta.status}): ${[...(propuesta.errors ?? []), ...(propuesta.conflicts ?? []).map((c) => `choca con ${c.id}`)].slice(0, 3).join(' | ') || 'sin motivo declarado'}`,
+      reasonCode: 'propose-failed', reasonParams: { status: propuesta.status, detalle: [...(propuesta.errors ?? []), ...(propuesta.conflicts ?? []).map((c) => `choca con ${c.id}`)].slice(0, 3).join(' | ') || 'sin motivo declarado' },
     };
   }
 

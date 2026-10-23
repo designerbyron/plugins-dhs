@@ -33,6 +33,7 @@ import { join } from 'node:path';
 import { escanear } from './security.mjs';
 import { NIVEL_QUE_EXIGE_HUMANO, pruebasDeRegresion } from './promote.mjs';
 import { defaultRoot, parseFrontmatter, vigenteDe } from './compiler.mjs';
+import { t } from './i18n/index.mjs';
 
 /** El techo del nivel que puede activarse sin humano. Se repite aquí a propósito: es la política, no un dato. */
 export const NIVEL_MAXIMO_AUTOMATICO = 2;
@@ -149,15 +150,21 @@ export function medirAutoActualizacion(id, key, {
   const resumen = apto
     ? `auto-actualizable: ${medidas.length} medidas en verde (nivel ${nivel}, ${seguridad.bloqueos.length + seguridad.avisos.length} avisos de seguridad)`
     : `requiere humano: ${fallan.map((m) => `${m.regla} (${m.observado})`).slice(0, 4).join(' · ')}`;
-  return { apto, medidas, fallan: fallan.map((m) => m.regla), resumen, nivel };
+  return { apto, medidas, fallan: fallan.map((m) => m.regla), resumen, nivel, avisosSeguridad: seguridad.bloqueos.length + seguridad.avisos.length };
 }
 
 /** El texto de las medidas, para la CLI y para el listado: una sola redacción, tres superficies. */
 export function textoDeMedidas(veredicto) {
   if (!veredicto) return '';
-  const lineas = [veredicto.apto ? 'APTO para actualizarse solo' : 'NO apto: lo decide una persona', veredicto.resumen, ''];
+  // El marco es presentacion y vive en el catalogo; `regla`, `observado` y `umbral` son las MEDIDAS del motor y
+  // se imprimen tal cual: traducir un valor medido seria inventarlo.
+  const resumen = veredicto.apto
+    ? t('cli.auto.summary-ready', { medidas: veredicto.medidas.length, nivel: veredicto.nivel, avisos: veredicto.avisosSeguridad })
+    : t('cli.auto.summary-human', { fallos: veredicto.fallan.join(', ') });
+  const lineas = [t(veredicto.apto ? 'cli.auto.verdict-ready' : 'cli.auto.verdict-human'), resumen, ''];
   for (const m of veredicto.medidas) {
-    lineas.push(`  ${m.pasa ? 'pasa ' : 'FALLA'} ${m.regla}: ${m.observado}${m.pasa ? '' : ` (se exige ${m.umbral})`}`);
+    lineas.push(t(m.pasa ? 'cli.auto.measure-pass' : 'cli.auto.measure-fail',
+      { regla: m.regla, observado: m.observado, umbral: m.umbral }));
   }
   return lineas.join('\n');
 }

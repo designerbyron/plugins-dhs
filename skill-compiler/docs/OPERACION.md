@@ -240,6 +240,24 @@ que se ven iguales desde fuera y se arreglan distinto: que falte una dependencia
 pueda cargar por un *peer* sin instalar, y que un esquema de herramienta no compile. El porqué de todo
 esto, en [`DEPENDENCIAS.md`](DEPENDENCIAS.md).
 
+### Que necesita `doctor` del entorno, y que no
+
+El almacen que `doctor` mide es `$DSH_HOME\skill-compiler` —sin `DSH_HOME`, `%USERPROFILE%\.dsh\skill-compiler`—, y
+cada skill vive en `projects\<clave>\<estado>\<id>\`. De ahi salen las precondiciones reales:
+
+- **El almacen puede no existir todavia.** Una instalacion nueva no tiene `projects/`, porque no hay nada
+  propuesto: es el estado inicial, y `doctor` lo dice («capa de seguridad: nada que revisar todavia») **sin**
+  contarlo como problema. Un almacen vacio no impide activar el plugin.
+- **Un almacen que existe y no se puede leer si es un problema**, y sigue saliendo con 1: si `projects` es un
+  fichero (`ENOTDIR`) o falta el permiso (`EACCES`), no se sabe que hay dentro, y responder «0 revisadas» seria
+  afirmar algo que no se miro. El mensaje dice el error real y el remedio.
+- **La biblioteca curada** (`%USERPROFILE%\.dsh\skills`, rango 400) **es ajena**: se lee para comparar y para
+  detectar choques, y solo se observa si existe. No es una precondicion, y el plugin no la crea ni la toca.
+
+La distincion —**«no hay»** frente a **«no pude leer»**— vive en `leerProyectosDelAlmacen` (`lib/compiler.mjs`), que
+devuelve el estado de la lectura junto a la lista, y la fija `tests/doctor-almacen.test.mjs` ejecutando el binario
+en las tres arenas: sin `projects/`, con `projects/` vacio, y con `projects` sustituido por un fichero.
+
 El ciclo entero, en tres comandos: **`audit`** dice qué incumple cada skill → **`repair`** prepara la corrección que el motor sabe hacer (y se calla cuando lo que falta es criterio humano) → **`promote`** la activa si su nivel está autorizado y todo pasa, con la versión anterior apartada y la vuelta atrás comprobada. `history` cuenta lo que pasó.
 
 **`audit` es el primer comando que hay que ejecutar cuando hay que decidir qué se corrige.** No arregla

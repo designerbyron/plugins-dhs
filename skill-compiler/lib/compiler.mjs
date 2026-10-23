@@ -1098,15 +1098,39 @@ export function overview({ root = defaultRoot() } = {}) {
   });
 }
 
-export function listProjects(root = defaultRoot()) {
+/**
+ * Las carpetas de proyecto del almacen, con el estado REAL de la lectura.
+ *
+ * La diferencia que importa: un almacen recien instalado NO TIENE `projects/` -no hay nada propuesto
+ * todavia- y eso es el estado inicial, no una averia. Una ruta que existe y no se puede leer (permisos, o un
+ * `projects` que es un fichero: ENOTDIR) es otra cosa: ahi no se sabe que hay, y responder "no hay" seria
+ * mentir sobre lo que no se miro. Un lector que devuelve cero por un catch mudo confunde las dos.
+ *
+ * @returns `{ estado: 'legible'|'inexistente'|'ilegible', proyectos, ruta, codigo, motivo }` — `motivo` es el
+ * detalle tecnico de Node y `codigo` el codigo del sistema: la frase la compone quien presenta, no este lector.
+ */
+export function leerProyectosDelAlmacen(root = defaultRoot()) {
   const dir = join(root, 'projects');
-  if (!existsSync(dir)) return [];
   try {
-    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name);
-  } catch {
-    // Un `projects/` ilegible no puede tumbar la herramienta que sólo venía a inventariar.
-    return [];
+    const proyectos = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => e.name);
+    return { estado: 'legible', proyectos, ruta: dir, motivo: null };
+  } catch (error) {
+    const codigo = error.code ?? null;
+    if (codigo === 'ENOENT') {
+      return { estado: 'inexistente', proyectos: [], ruta: dir, codigo, motivo: error.message };
+    }
+    return { estado: 'ilegible', proyectos: [], ruta: dir, codigo, motivo: error.message };
   }
+}
+
+/**
+ * Los proyectos del almacen para quien solo venia a inventariar. Tolerante por fuera: un `projects/` ilegible
+ * no puede tumbar la herramienta. Quien necesite el motivo usa `leerProyectosDelAlmacen`, que no lo esconde.
+ */
+export function listProjects(root = defaultRoot()) {
+  return leerProyectosDelAlmacen(root).proyectos;
 }
 
 // ── composición del SKILL.md ─────────────────────────────────────────────────────────────────────
