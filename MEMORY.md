@@ -30,13 +30,15 @@ medias, y el aviso del turno **cuenta por tipo y se retira**. **v2.0.0** publica
 calidad vigente, `audit`, `repair`/`promote` con los tres niveles de riesgo y la promoción automática
 **apagada** por defecto.
 
-**v5.0.0**, publicada el 2026-10-23: tag anotado `v5.0.0` sobre el commit de cierre de ese acto
-(`git rev-parse v5.0.0^{}`; la versión y el CHANGELOG entran en `354e93a`) y release estable en
-`designerbyron/plugins-dsh`. **889 pruebas en verde** en **220 suites**, suite hermética en verde (huella del
-almacén real idéntica antes y después); i18n **938 claves por idioma** y 16 operaciones x 2 nombres; ASCII
-**8.308 medidos con tope 8.308** en **26/26** ficheros de primera parte. Cambio de contrato: **un nombre de
-comando por operación en el idioma activo** y el modelo de alias, retirado. Antes, los 805/8.401/24 eran el
-estado de la rama `hardening/post-4.0.1` sola, y los 860/695/8.353 el del primer candidato integrado.
+**v5.0.1** (2026-10-23, parche del panel: una sola foto de pendientes por sesión y ninguna propuesta ya decidida
+ofreciéndose otra vez) sobre **v5.0.0**, publicada ese mismo día: tag anotado `v5.0.0` sobre el commit de cierre de
+ese acto (`git rev-parse v5.0.0^{}`; la versión y el CHANGELOG entran en `354e93a`) y release estable en
+`designerbyron/plugins-dsh`. **898 pruebas en verde** en **223 suites** (889/220 al publicar la 5.0.0), suite
+hermética en verde (huella del almacén real idéntica antes y después); i18n **938 claves por idioma** y 16
+operaciones x 2 nombres; ASCII **8.289 medidos con tope 8.289** en **26/26** ficheros de primera parte. Cambio de
+contrato de la 5.0.0: **un nombre de comando por operación en el idioma activo** y el modelo de alias, retirado.
+Antes, los 805/8.401/24 eran el estado de la rama `hardening/post-4.0.1` sola, y los 860/695/8.353 el del primer
+candidato integrado.
 
 ## Almacén: el objetivo del `DIAGNOSTICO-2026-10-15`, alcanzado
 
@@ -616,6 +618,31 @@ por `link:` a esta carpeta, asi que lo que arrancara es el codigo publicado y no
   (cabecera, estados, `fixes` y detalle) y `lib/security.mjs` (detalle y `fix` de cada regla), conservando el
   DATO (`rule`, `observed`, `fix` como valor y el vocabulario del diario) y traduciendo solo en el punto de
   presentacion, con la prueba en los dos idiomas sobre el texto real del binario.
+
+## Parche 2026-10-23 — v5.0.1: el panel deja de preguntar cinco veces y de ofrecer lo ya decidido
+
+Defecto reportado por el operador con una decisión real y reproducido en la traza de la sesión
+(`nexusbusinesssuite`, eventos 306-319): **cuatro `/skill-pending` idénticos antes de publicar y uno después** —cinco
+tarjetas de notificación por una decisión— y el bloque de la orden seguía ofreciendo aprobar la propuesta ya
+publicada, mientras la tarjeta de arriba decía «1 published · 0 failed · Pending now: 0». El almacén estaba bien:
+`proposed/` vacío, la skill en `published/` y en la biblioteca.
+
+- **Causa 1: cinco preguntas, cinco ejecuciones.** Para saber qué está pendiente el panel **ejecuta**
+  `/skill-pending` (no hay canal de lectura) y lo hacía en cada paso, sin memoria entre llamadas.
+- **Causa 2: cada tarjeta con su foto.** El estado vivía en el componente, así que la tarjeta que leyó antes de
+  publicar conservaba la lista vieja y ofrecía decidir sobre algo que ya no existía.
+- **Corrección estructural**, no un parche: `createPendingStore` en `client.js` — un store **por sesión**, con una
+  lectura en vuelo compartida, ventana de 1,5 s, `force`, `invalidar()` y suscriptores. Una lectura antes de decidir
+  (sirve para los avisos y para saber si el id sigue vivo) y una forzada después; la foto nueva la ven todas las
+  tarjetas. Una propuesta suelta que ya no está pendiente deja de ofrecerse (`bulk_decided`).
+- **Probado midiendo ejecuciones, no prosa**: `tests/panel-pendientes.test.mjs` extrae el bloque del propio
+  `client.js` y comprueba que tres llamadas seguidas o concurrentes cuestan **una** ejecución, que `force` cuesta
+  dos, que las tarjetas suscritas ven la lista nueva tras decidir y que un fallo de lectura no borra lo sabido.
+  **Mutación**: quitar la ventana y el aviso a los suscriptores deja 6/9 con los tres casos que guardan los dos
+  defectos en rojo; restaurado, 9/9.
+- **Medido**: `npm test` **898/898 en 223 suites**; `test:hermetic` verde; i18n 938 claves por idioma; ASCII
+  **8.289 con tope 8.289** en 26/26 (la base bajó al pasar a ASCII las líneas nuevas del panel).
+- **Aviso de instalación**: `client.js` lo carga el harness al arrancar; el arreglo no está vivo hasta reiniciar DSH.
 
 ## Cierre 2026-10-23 — v5.0.0 publicada
 

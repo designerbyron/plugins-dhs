@@ -4,6 +4,58 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [5.0.1] — 2026-10-23 · parche
+
+**El panel preguntaba «¿qué está pendiente?» cinco veces por decisión, y una tarjeta seguía ofreciendo aprobar
+lo ya publicado.** Es `parche` y no `menor`: no añade capacidad ni toca el protocolo, los esquemas de las
+herramientas ni el formato del almacén; corrige un defecto de la superficie del panel (`client.js`).
+
+### El defecto, medido
+
+En una publicación real (`agent-team-specialized-delivery`, sesión del proyecto `nexusbusinesssuite`), la traza
+de la sesión dio la secuencia exacta: **cuatro `/skill-pending` idénticos antes de decidir** (eventos 306-313) y
+**uno después** (316-319), o sea cinco tarjetas de notificación para una sola decisión; y el bloque de la propia
+orden de publicar seguía pintando la propuesta con su casilla y sus botones —«sigue disponible para aprobar»—
+aunque arriba la tarjeta ya dijera «1 published · 0 failed · Pending now: 0». El almacén estaba bien: `proposed/`
+vacío y la skill en `published/` y en la biblioteca. Era la interfaz, en dos capas:
+
+1. **Cinco preguntas, cinco ejecuciones.** Para saber qué está pendiente el panel **ejecuta** `/skill-pending`
+   (el anfitrión no ofrece canal de lectura) y lo hacía en cada paso: al leer los avisos previos, al comprobar
+   que el id seguía vivo, y en cada vuelta del sondeo del efecto. Sin memoria entre llamadas, cada pregunta es
+   una notificación en el flujo.
+2. **Cada tarjeta con su foto.** El estado de pendientes vivía en el componente, así que la tarjeta que había
+   leído antes de publicar conservaba su lista y ofrecía decidir sobre algo que ya no existía.
+
+### La corrección
+
+- **Un store de pendientes por sesión, compartido por todas las tarjetas** (`createPendingStore` en `client.js`):
+  una sola lectura en vuelo (las llamadas concurrentes comparten la misma promesa), una foto con caducidad corta
+  (1,5 s: dentro de la ventana, preguntar otra vez no ejecuta nada), `force` para comprobar el efecto de verdad,
+  `invalidar()` para cuando algo cambia, y **suscriptores** para que la foto nueva la vean todas las tarjetas.
+- **Una lectura antes de decidir y una después.** La de antes sirve para las dos cosas que se preguntaban por
+  separado (los avisos que el humano tiene que leer y si el id sigue pendiente); la de después es la que mide el
+  efecto, forzada, y es la que apaga el «sigue disponible» de las demás tarjetas.
+- **Una propuesta suelta ya no se ofrece si no está pendiente**: si la foto dice que se decidió, el bloque queda
+  como registro con su motivo (`bulk_decided`) y sin botones.
+- **Un fallo de lectura no se convierte en «no hay nada»**: el error se declara, la foto anterior no se borra y
+  la próxima lectura lo reintenta.
+
+### Medido
+
+- `npm test`: **898 pruebas, 898 pasan** en **223 suites** (antes 889/220; +9 casos, +3 suites).
+- `tests/panel-pendientes.test.mjs` (nuevo): prueba el bloque del propio `client.js` y mide **cuántas
+  ejecuciones cuesta el mismo dato** —1 para tres llamadas concurrentes o seguidas, 2 con `force`—, que todas
+  las tarjetas suscritas ven la lista nueva tras decidir, y que un fallo de lectura no borra lo sabido.
+- **Mutación controlada** (en una copia aislada, no en el árbol): quitar la ventana de la foto y el aviso a los
+  suscriptores deja **6/9 con los tres casos que guardan los dos defectos en rojo**; restaurado, 9/9.
+- Gates: i18n **938 claves por idioma**; ASCII **8.289 con tope 8.289** en 26/26 (la base bajó al pasar a ASCII
+  las líneas nuevas del panel; ningún tope sube).
+- Coste en el flujo: **una lectura al montar las tarjetas (compartida) + una antes de decidir + una después**,
+  frente a las cinco de antes.
+
+Ojo al instalarlo: `client.js` lo carga el harness **al arrancar**, así que el arreglo no está vivo hasta
+reiniciar DSH.
+
 ## [5.0.0] — 2026-10-23 · contrato
 
 **Las 16 operaciones de sesión pasan a tener un nombre por idioma, y el modelo de alias se retira.** Es `mayor`

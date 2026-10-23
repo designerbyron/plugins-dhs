@@ -316,11 +316,11 @@ y vendorizas una versión limpia, o no se vendoriza.
 
 ```sh
 cd "<donde-clonaste-el-repo>/skill-compiler"   # donde lo hayas clonado
-npm test              # las 889 pruebas (con las puertas i18n y ASCII antes)
-npm run test:hermetic # las 889 pruebas + huella del store real antes y después
+npm test              # las 898 pruebas (con las puertas i18n y ASCII antes)
+npm run test:hermetic # las 898 pruebas + huella del store real antes y después
 ```
 
-889 pruebas en 220 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
+898 pruebas en 223 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
 máquina. `pretest` corre las puertas de idioma y ASCII: con una en rojo, no se ejecuta ni una prueba.
 
 - `tests/compiler.test.mjs` — validación, composición del `SKILL.md`, solapamiento, idempotencia,

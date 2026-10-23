@@ -122,8 +122,9 @@ Consecuencias, dichas sin adornos:
 | Un resultado de comando viaja recortado a `{kind, text}` | el panel mide con la reserva de prosa; `code`, `params` e `items` esperan a que el anfitrión deje pasar el objeto del handler | una compilación que transporte el resultado completo |
 | Los avisos `body-budget` de la auditoría | **histórico**: los 17 del mantenimiento del 2026-10-21 quedaron cerrados; la medición de la 4.0.0 da **0** de esa regla (48 skills · PASS 47 · WARN 1) | — (cerrado; el registro está en `docs/MANTENIMIENTO-2026-10-21-ownership-body-budget.md`) |
 | `ownership.json` ausente | la propiedad del puesto no se presume | `ownership dsh-only` o `ownership machine` |
+| **Leer** qué está pendiente ejecuta `/skill-pending` (el anfitrión no da un canal de lectura) | cada lectura deja una notificación en el flujo, y el panel preguntaba cinco veces por decisión | desde la 5.0.1 el panel comparte **una foto por sesión** (una lectura en vuelo, ventana de 1,5 s, `force` para medir el efecto) y pregunta **una vez antes y una después** de decidir; las demás tarjetas leen esa misma foto, y una propuesta ya decidida deja de ofrecerse | un canal de lectura del anfitrión que no ejecute el comando |
 
-La etiqueta de release vigente es **`v5.0.0`** —la que declara los contratos de este documento—; el historial de
+La etiqueta de release vigente es **`v5.0.1`** —la que declara los contratos de este documento—; el historial de
 versiones está en [`CHANGELOG.md`](../../CHANGELOG.md).
 
 Lo que **no** es una limitación y conviene no confundir: el aprendizaje funciona de punta a punta —proponer,

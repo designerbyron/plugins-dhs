@@ -244,10 +244,12 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
   });
 
   it('tras el lote, el estado de la lista se mueve con lo que dice el HOST (no con lo que creía el panel)', () => {
-    // Antes se recortaba la lista local con `done`, que es el informe del propio panel: si el host no
-    // ejecutó nada, la lista se vaciaba igual y decía «Pending now: 0». Ahora manda la relectura del host,
-    // y el recorte local queda sólo como respaldo cuando la relectura falla.
-    assert.match(client, /setIds\(restantes \?\? rows\.filter\(\(id\) => !done\.includes\(id\)\)\)/);
+    // La foto de las pendientes es UNA por sesión (store compartido): tras decidir se invalida y se vuelve a
+    // preguntar al host con `force`, y esa foto nueva la ven todas las tarjetas. El panel ya no recorta la lista
+    // con su propio informe, que era lo que vaciaba la tarjeta aunque el host no hubiera ejecutado nada.
+    assert.match(client, /store\.invalidar\(\);/);
+    assert.match(client, /const despues = await pendientesAhora\(\{ force: true \}\)/);
+    assert.equal(/setIds\(/.test(client), false, 'quedó un recorte local de la lista');
     assert.match(client, /bulk_remaining/);
     assert.match(client, /report\.failed\.length === 0/);
   });
@@ -363,7 +365,7 @@ describe('artefacto de interfaz · el informe del lote se comprueba contra el ef
     assert.match(client, /ok: v\.fallos\.size === 0 && idsPedidos\.every\(\(id\) => v\.hechos\.has\(id\)\)/);
     assert.equal(/resultado\?\.kind === 'success'\)?\s*return \{ ok: true/.test(client), false, 'no se cree al kind');
     // Las filas quedan como comprobación de respaldo, y su ausencia es un estado de primera clase.
-    assert.match(client, /medible: filas\.length > 0/);
+    assert.match(client, /medible: encontradas\.length > 0/);
     assert.match(client, /if \(observado === true\) \{/);
   });
 
@@ -416,7 +418,7 @@ describe('artefacto de interfaz · el informe del lote se comprueba contra el ef
   });
 
   it('después del lote se vuelve a leer la lista del host —si la ofrece— y se pinta lo que diga', () => {
-    assert.match(client, /const despues = await pendientesAhora\(\)/);
+    assert.match(client, /const despues = await pendientesAhora\(\{ force: true \}\)/);
     assert.match(client, /restantes = despues\.medible \? despues\.ids\.filter/, 'sin filas no se afirma una cifra');
     assert.match(client, /bulk_remaining_unknown/);
     assert.match(client, /report\.restantes/);
@@ -511,8 +513,9 @@ describe('artefacto de interfaz · la puerta pide decisión, la tarjeta la ofrec
 describe('artefacto de interfaz · preguntar antes, no después del fallo', () => {
   it('los avisos se leen del almacén y la pantalla se abre SIN haber mandado la orden', () => {
     assert.match(client, /for \(const m of texto\.matchAll\(\/\^aviso:/);
-    assert.match(client, /if \(!forzar\) \{/);
-    assert.match(client, /const conAvisos = \[\.\.\.picked\]\.filter\(\(id\) => \(previo\.avisos\?\.get\(id\)\?\.length \?\? 0\) > 0\)/);
+    // Una sola lectura antes de decidir: sirve para los avisos y para saber si el id sigue pendiente.
+    assert.match(client, /if \(!forzar && antes !== null\) \{/);
+    assert.match(client, /const conAvisos = \[\.\.\.picked\]\.filter\(\(id\) => \(antes\.avisos\?\.get\(id\)\?\.length \?\? 0\) > 0\)/);
     assert.match(client, /setStage\('avisos'\);\s*\n\s*return;/, 'se detiene antes de ejecutar');
   });
 });

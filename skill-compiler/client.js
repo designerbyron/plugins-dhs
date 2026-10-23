@@ -248,6 +248,7 @@ window.__ModuleLoader__.load({
         bulk_ids_hint: 'Sin filas en esta sesión: el comando con el id funciona igual.',
         bulk_no_rows: 'No hay filas que decidir en el catálogo de esta sesión. La lista está en el resultado de arriba: escribe «/» y elige la fila, o teclea el comando con su id.',
         bulk_nothing: 'Nada pendiente: no hay ninguna propuesta esperando tu decisión. Las activas siguen en el resultado de arriba.',
+        bulk_decided: 'Esta propuesta ya no esta pendiente: se decidio (o se decidio en otra tarjeta). Aqui queda como registro; no hay nada que aprobar.',
         bulk_unreadable: 'No se pudieron leer las pendientes',
         bulk_unreadable_hint: 'Síguelo desde el terminal o desde el menú «/»: la lista y la aprobación funcionan igual, pasan por la misma puerta',
         bulk_habilitar: 'Volver a encender las marcadas',
@@ -327,6 +328,7 @@ window.__ModuleLoader__.load({
         bulk_none: 'Nothing pending: if you just approved, there is nothing left to decide.',
         bulk_no_rows: 'No rows to decide on in this session catalog. The list is in the result above: type «/» and pick the row, or type the command with its id.',
         bulk_nothing: 'Nothing pending: no proposal is waiting for your decision. The active ones are in the result above.',
+        bulk_decided: 'This proposal is no longer pending: it was decided (or decided in another card). It stays here as a record; there is nothing to approve.',
         bulk_ids_hint: 'No rows in this session: the command with its id works the same.',
         bulk_unreadable: 'Could not read the pending ones',
         bulk_unreadable_hint: 'Follow it from the terminal or from the «/» menu: the list and the approval work the same, through the same gate',
@@ -712,6 +714,84 @@ window.__ModuleLoader__.load({
      *   · Si el remoto no está disponible, se dice con el motivo: no hay un plan B silencioso, y aprobar
      *     sigue siendo un acto humano.
      */
+    /* [store:pendientes:inicio]
+     *
+     * La lista de pendientes, UNA vez por sesion y compartida por todas las tarjetas.
+     *
+     * El problema que resuelve, medido en una decision real: el panel preguntaba "que esta pendiente?" cuatro
+     * veces antes de decidir y una despues, y el anfitrion **ejecuta un comando para contestar** -no hay canal de
+     * lectura-, asi que cada pregunta dejaba una notificacion en el flujo. Y como cada tarjeta guardaba su propia
+     * foto, la que habia leido antes de publicar seguia ofreciendo aprobar lo ya publicado.
+     *
+     * La forma que aguanta:
+     *   · una sola lectura en vuelo (las llamadas concurrentes comparten la misma promesa),
+     *   · una foto con caducidad corta (dentro de la ventana, preguntar otra vez no ejecuta nada),
+     *   · `force` para el momento en que el efecto tiene que comprobarse de verdad,
+     *   · y suscriptores: decidir invalida y **todas** las tarjetas leen la misma foto nueva.
+     *
+     * Esto vive en el cliente porque el panel es del plugin; el motor no participa en la presentacion.
+     */
+    const ESPERA_FOTO_MS = 1500;
+
+    function createPendingStore() {
+      let foto = { ids: null, avisos: new Map(), medible: false, failure: '', at: 0, seq: 0 };
+      let enVuelo = null;
+      let lector = null;
+      const oyentes = new Set();
+      const avisar = () => { for (const oyente of [...oyentes]) oyente(foto); };
+      return {
+        /** La foto actual. `ids === null` significa "todavia no se ha podido leer". */
+        foto: () => foto,
+        /** Quien sabe leer: lo pone la tarjeta en cada render (runCommand/listCommands son del host). */
+        usarLector: (fn) => { if (typeof fn === 'function') lector = fn; },
+        suscribir(fn) { oyentes.add(fn); return () => oyentes.delete(fn); },
+        /** La foto deja de servir: la proxima lectura pregunta al almacen aunque este dentro de la ventana. */
+        invalidar() { foto = { ...foto, at: 0 }; },
+        /**
+         * La foto, leyendola si hace falta. Devuelve SIEMPRE la foto (con `failure` si no se pudo leer), para
+         * que quien llama no tenga que distinguir "no hay nada" de "no pude mirar": son cosas distintas y el
+         * panel las dice distintas.
+         */
+        async leer({ force = false } = {}) {
+          const ahora = Date.now();
+          if (!force && foto.at > 0 && ahora - foto.at < ESPERA_FOTO_MS) return foto;
+          if (enVuelo !== null) return enVuelo;
+          enVuelo = (async () => {
+            try {
+              if (lector === null) throw new Error('sin lector');
+              const leida = await lector();
+              foto = {
+                ids: Array.isArray(leida?.ids) ? leida.ids : [],
+                avisos: leida?.avisos instanceof Map ? leida.avisos : new Map(),
+                medible: leida?.medible === true,
+                failure: '',
+                at: Date.now(),
+                seq: foto.seq + 1,
+              };
+            } catch (error) {
+              // Un fallo de lectura no se convierte en "no hay nada": la foto conserva lo que sabia y dice el
+              // motivo. `at` a 0 para que la proxima llamada lo reintente de verdad.
+              foto = { ...foto, failure: String(error?.message ?? error), at: 0, seq: foto.seq + 1 };
+            } finally {
+              enVuelo = null;
+              avisar();
+            }
+            return foto;
+          })();
+          return enVuelo;
+        },
+      };
+    }
+
+    /** Un store por sesion: dos tarjetas de la misma sesion comparten la foto; dos sesiones no. */
+    const storesPendientes = new Map();
+    function pendingStoreFor(sessionId) {
+      const clave = String(sessionId ?? '');
+      if (!storesPendientes.has(clave)) storesPendientes.set(clave, createPendingStore());
+      return storesPendientes.get(clave);
+    }
+    /* [store:pendientes:fin] */
+
     function BulkActions(props) {
       const { say, node, sessionId, runCommand, listCommands } = props;
       // Diagnóstico del contrato: el host no documenta sus props y el asar está minificado. Esta línea dice
@@ -725,8 +805,13 @@ window.__ModuleLoader__.load({
       const bulk = ['skill-proposals', 'skill-propuestas'].includes(String(node?.name ?? ''));
       const reading = typeof node?.args === 'string' ? node.args.trim() : '';
 
-      const [ids, setIds] = React.useState(null);
-      const [failure, setFailure] = React.useState('');
+      // La foto la comparte TODA la sesion: leer aqui no ejecuta nada si otra tarjeta acaba de leer, y decidir
+      // en una tarjeta actualiza las demas (antes cada una guardaba su foto y la vieja seguia ofreciendo lo ya
+      // publicado).
+      const store = pendingStoreFor(sessionId);
+      const [foto, setFoto] = React.useState(store.foto());
+      const [filas, setFilas] = React.useState(null);
+      const [falloFilas, setFalloFilas] = React.useState('');
       const [picked, setPicked] = React.useState([]);
       const [stage, setStage] = React.useState('pick');
       // La primera acción de la lista decide el verbo inicial; el resto se ofrecen como botones. Antes sólo
@@ -736,35 +821,73 @@ window.__ModuleLoader__.load({
       const [report, setReport] = React.useState(null);
       const [busy, setBusy] = React.useState(false);
 
-      React.useEffect(() => {
-        if (!bulk) {
-          setIds(reading === '' ? [] : [reading]);
-          return undefined;
+      /**
+       * Lo que el store usa para leer: el comando del plugin primero (existe siempre), las filas del menu
+       * como respaldo. Se registra en cada render porque `runCommand`/`listCommands` son del host.
+       */
+      const leerPendientes = async () => {
+        try {
+          const r = await runCommand(sessionId, '/skill-pending');
+          const texto = String(r?.text ?? '');
+          const linea = /^ids:\s*(.*)$/m.exec(texto);
+          if (linea !== null) {
+            const ids = linea[1].trim() === '' ? [] : linea[1].split(',').map((x) => x.trim()).filter(Boolean);
+            const avisos = new Map();
+            for (const m of texto.matchAll(/^aviso:\s*(\S+)\s*·\s*(.*)$/gm)) {
+              if (!avisos.has(m[1])) avisos.set(m[1], []);
+              avisos.get(m[1]).push(m[2]);
+            }
+            return { ids, medible: true, avisos };
+          }
+        } catch {
+          /* sin el comando se sigue por las filas */
         }
+        const encontradas = rowIds(await listCommands(sessionId), listVerbFor(node?.name));
+        return { ids: encontradas, medible: encontradas.length > 0, avisos: new Map() };
+      };
+      store.usarLector(leerPendientes);
+
+      React.useEffect(() => {
+        const baja = store.suscribir(setFoto);
+        setFoto(store.foto());
+        // Una lectura por sesion y compartida: si otra tarjeta ya leyo hace un instante, esto no ejecuta nada.
+        store.leer().catch(() => {});
+        return baja;
+      }, [store]);
+
+      // Las filas del menu son el respaldo cuando la foto no se pudo leer, y son gratis (no ejecutan comando).
+      // El comando que origino el bloque acaba de armar sus filas, asi que se reintenta una vez.
+      React.useEffect(() => {
+        if (!bulk) return undefined;
         let alive = true;
-        const leer = () => listCommands(sessionId).then((commands) => rowIds(commands, listVerbFor(node?.name)));
+        const leerFilas = () => listCommands(sessionId).then((commands) => rowIds(commands, listVerbFor(node?.name)));
         (async () => {
           try {
-            let found = await leer();
-            // El comando que originó este bloque acaba de armar sus filas (`onListed`), así que el host
-            // puede tardar un instante en anunciarlas. Sin este reintento, el panel decía «no hay nada»
-            // justo cuando acababa de llegar algo.
+            let found = await leerFilas();
             if (found.length === 0) {
               await new Promise((resolve) => setTimeout(resolve, 400));
               if (!alive) return;
-              found = await leer();
+              found = await leerFilas();
             }
-            if (alive) setIds(found);
+            if (alive) setFilas(found);
           } catch (error) {
             if (alive) {
-              setIds([]);
-              setFailure(String(error?.message ?? error));
+              setFilas([]);
+              setFalloFilas(String(error?.message ?? error));
             }
           }
         })();
         return () => { alive = false; };
-      }, [bulk, reading, sessionId]);
+      }, [bulk, sessionId, node?.name]);
 
+      // Una propuesta suelta se ofrece solo si de verdad sigue pendiente: si la foto dice que ya se decidio, el
+      // bloque queda como registro y no ofrece botones. Es el defecto que se vio en pantalla: publicar arriba y
+      // seguir ofreciendo publicar abajo.
+      const yaDecidida = !bulk && foto.ids !== null && foto.medible && reading !== '' && !foto.ids.includes(reading);
+      const ids = bulk
+        ? (foto.ids !== null && foto.medible ? foto.ids : filas)
+        : (yaDecidida ? [] : (reading === '' ? [] : [reading]));
+      const failure = foto.failure || falloFilas;
       const rows = ids ?? [];
       const toggle = (id) => setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
       // El verbo decide el comando, y solo retirar pide confirmacion explicita al host. El nombre es el del
@@ -798,31 +921,14 @@ window.__ModuleLoader__.load({
       /**
        * Las pendientes **según el host**, ahora mismo, y si el host ofrece filas.
        *
+       * La lectura la hace el store compartido: dentro de su ventana devuelve la foto sin ejecutar nada, y dos
+       * tarjetas que pregunten a la vez comparten la misma ejecucion. `force` es para cuando el efecto de una
+       * decision tiene que comprobarse de verdad.
+       *
        * `medible === false` es un estado de primera clase: sin filas no hay efecto que observar, y decir
        * «sigue pendiente» cuando no se ha podido mirar es la mentira que hacía fallar aprobaciones correctas.
        */
-      const pendientesAhora = async () => {
-        // 1) La fuente que **siempre** existe: el propio plugin dice qué ids esperan decisión.
-        try {
-          const r = await runCommand(sessionId, '/skill-pending');
-          const texto = String(r?.text ?? '');
-          const linea = /^ids:\s*(.*)$/m.exec(texto);
-          if (linea !== null) {
-            const ids = linea[1].trim() === '' ? [] : linea[1].split(',').map((x) => x.trim()).filter(Boolean);
-            const avisos = new Map();
-            for (const m of texto.matchAll(/^aviso:\s*(\S+)\s*·\s*(.*)$/gm)) {
-              if (!avisos.has(m[1])) avisos.set(m[1], []);
-              avisos.get(m[1]).push(m[2]);
-            }
-            return { ids, medible: true, avisos };
-          }
-        } catch {
-          /* sin el comando se sigue por las filas */
-        }
-        // 2) Respaldo: las filas del menú, si el anfitrión las ofrece.
-        const filas = rowIds(await listCommands(sessionId), listVerbFor(node?.name));
-        return { ids: filas, medible: filas.length > 0 };
-      };
+      const pendientesAhora = (opciones = {}) => store.leer(opciones);
 
       /** Espera a que una condición se cumpla (el efecto tarda lo que tarde el host). */
       const esperarA = async (condicion, intentos = 6, espera = 250) => {
@@ -902,7 +1008,7 @@ window.__ModuleLoader__.load({
           let observado = null;
           try {
             observado = await esperarA(async () => {
-              const ahora = await pendientesAhora();
+              const ahora = await pendientesAhora({ force: true });
               return ahora.medible && idsPedidos.every((id) => !ahora.ids.includes(id));
             });
           } catch {
@@ -936,43 +1042,40 @@ window.__ModuleLoader__.load({
         const failed = [];
         // La forma que funcione se descubre con la primera orden y se reutiliza: una vez por lote.
         let forma = null;
-        // Avisos conocidos de antemano: se pregunta **antes** de mandar nada. Así el humano decide sin que el
-        // anfitrión pinte un «failed» por una negativa que el propio panel provocó.
-        if (!forzar) {
-          try {
-            const previo = await pendientesAhora();
-            const conAvisos = [...picked].filter((id) => (previo.avisos?.get(id)?.length ?? 0) > 0);
-            if (conAvisos.length > 0) {
-              const texto = conAvisos
-                .map((id) => [`${id}:`, ...previo.avisos.get(id).map((a) => `  aviso  ${a}`)].join('\n'))
-                .join('\n\n');
-              setAvisos({ texto, ids: conAvisos });
-              setBusy(false);
-              setStage('avisos');
-              return;
-            }
-          } catch { /* si no se puede saber, se intenta y la puerta dirá lo suyo */ }
+        // UNA lectura antes de decidir, y sirve para las dos cosas: los avisos que el humano tiene que leer y si
+        // el id sigue pendiente. Antes eran dos preguntas seguidas al host -dos ejecuciones, dos notificaciones-
+        // para el mismo dato, y el panel contaba como "fallo" lo que ya se habia decidido en otra tarjeta.
+        let antes = null;
+        try { antes = await pendientesAhora(); } catch { antes = null; }
+        if (!forzar && antes !== null) {
+          const conAvisos = [...picked].filter((id) => (antes.avisos?.get(id)?.length ?? 0) > 0);
+          if (conAvisos.length > 0) {
+            const texto = conAvisos
+              .map((id) => [`${id}:`, ...antes.avisos.get(id).map((a) => `  aviso  ${a}`)].join('\n'))
+              .join('\n\n');
+            setAvisos({ texto, ids: conAvisos });
+            setBusy(false);
+            setStage('avisos');
+            return;
+          }
         }
         let pendientes = [...picked];
-        // Lo que la tarjeta muestra puede ser viejo (otra sesión, otra decisión). Antes de mandar una orden
-        // se pregunta al almacén; lo que ya no está pendiente se dice como tal —no como un fallo del comando,
-        // que era un callejón sin salida—.
-        try {
-          const ahora = await pendientesAhora();
-          const vivos = pendientes.filter((id) => ahora.ids.includes(id));
+        // Lo que la tarjeta muestra puede ser viejo (otra sesion, otra decision). Lo que ya no esta pendiente se
+        // dice como tal -no como un fallo del comando, que era un callejon sin salida-.
+        if (antes !== null) {
+          const vivos = pendientes.filter((id) => antes.ids.includes(id));
           for (const id of pendientes) {
             if (!vivos.includes(id)) failed.push({ id, reason: 'ya no está pendiente en el almacén: la tarjeta estaba desactualizada' });
           }
           pendientes = vivos;
           if (pendientes.length === 0) {
-            setReport({ done, failed, restantes: ahora.ids, lineas: [], forma: null });
-            setIds(ahora.ids);
+            setReport({ done, failed, restantes: antes.ids, lineas: [], forma: null });
             setPicked([]);
             setBusy(false);
             setStage('done');
             return;
           }
-        } catch { /* sin lectura fiable se intenta igual: el comando dirá lo suyo */ }
+        }
         // 1) El LOTE como UNA orden: una llamada al host, N aprobaciones dentro, un solo efecto que medir.
         if ((verb === 'aprobar' || verb === 'globalizar') && picked.length > 1) {
           const salida = await ejecutarLote(picked, forma, forzar);
@@ -1003,17 +1106,20 @@ window.__ModuleLoader__.load({
             if (forma === null && salida.forma) { forma = salida.forma; setFormaUsada(salida.forma.nombre); }
           } else failed.push({ id, reason: salida.fallos.get(id) ?? salida.motivo });
         }
-        // El informe se comprueba contra el EFECTO: se vuelve a leer la lista del host. Si dice que se
-        // aprobaron diez y el host sigue devolviendo diez, lo que se pinta es lo que el host dice.
+        // El informe se comprueba contra el EFECTO: se vuelve a leer la lista del host, forzando la lectura
+        // (la foto de hace un instante es de ANTES de decidir). Si dice que se aprobaron diez y el host sigue
+        // devolviendo diez, lo que se pinta es lo que el host dice.
+        store.invalidar();
         let restantes = null;
         try {
-          const despues = await pendientesAhora();
+          const despues = await pendientesAhora({ force: true });
           // Sólo se afirma una cifra si el host ofreció filas que mirar. Si no, se declara que no se pudo:
           // pintar el número de la tarjeta como si fuera el del almacén es exactamente la mentira anterior.
           restantes = despues.medible ? despues.ids.filter((id) => !done.includes(id)) : null;
         } catch { restantes = null; }
         setReport({ done, failed, restantes, lineas: picked.map((id) => `/${linea(id)}`), forma: forma?.nombre ?? null });
-        setIds(restantes ?? rows.filter((id) => !done.includes(id)));
+        // La foto nueva la ven TODAS las tarjetas de la sesion: es lo que apaga el "sigue disponible para
+        // aprobar" de la tarjeta que leyo antes de decidir.
         setPicked(failed.map((entry) => entry.id));
         setBusy(false);
         setStage('done');
@@ -1064,7 +1170,13 @@ window.__ModuleLoader__.load({
         // la lista vino vacía, lo que hay que decir es que no hay nada que decidir —no mandar a buscar filas
         // que no existen—. «No hay filas» se reserva para el caso de verdad: había pendientes y el catálogo de
         // la sesión no las anunció (ahí sí: el comando con el id funciona igual).
-        ids !== null && failure === '' && ids.length === 0 && report === null
+        // Una propuesta suelta que ya se decidio no se ofrece otra vez: el bloque queda como registro, y el
+        // aviso dice por que no hay botones. (Es el defecto que se vio en pantalla: publicada arriba y ofrecida
+        // abajo.)
+        yaDecidida && report === null
+          ? h('div', { className: 'skc-bulk-note', 'data-tone': 'ok' }, say('bulk_decided'))
+          : null,
+        ids !== null && failure === '' && ids.length === 0 && report === null && !yaDecidida
           ? h('div', { className: 'skc-bulk-note', 'data-tone': 'ok' }, say('bulk_nothing'))
           : null,
         ids !== null && failure === '' && ids.length > 0 && rows.length === 0 && report === null

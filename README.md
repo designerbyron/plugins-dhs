@@ -124,9 +124,9 @@ criterios y un compromiso.
 
 **Lo que lo sostiene**
 
-- **889 pruebas en verde** en **220 suites**, con la suite **hermética** que mide la huella del almacén real
+- **898 pruebas en verde** en **223 suites**, con la suite **hermética** que mide la huella del almacén real
   antes y después, y con las puertas de **i18n** (938 claves por idioma, 16 operaciones × 2 nombres) y **ASCII**
-  (8.308 caracteres medidos, tope igual al medido, 26/26 ficheros de primera parte) colgadas de `npm test`
+  (8.289 caracteres medidos, tope igual al medido, 26/26 ficheros de primera parte) colgadas de `npm test`
   (`pretest`): la suite no corre una sola prueba con una puerta en rojo.
 - Los contratos se comprueban contra los **paquetes reales** del harness (registro de skills, de comandos y de
   proyecciones), no contra dobles escritos a mano.
