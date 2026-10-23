@@ -108,10 +108,13 @@ node --test tests/definitions-schema.test.mjs -> 18/18
 
 ## Lo que cerro F1.2 grupo 3 (reject / disable / enable / retire / retired)
 
--  entero, los cuatro handlers del ciclo de vida y las cinco descripciones. Catalogo 131 -> 167.
-- No cambiaron los  (, , , , ) ni el requisito de
-   para retirar, ni el respaldo con huella, ni el diario.
-- La fila de  es UNA clave con el estado aparte: dos claves con su separador duplicaban la
-  tipografia y habrian subido la linea base ASCII. Total **8.614, sin crecer** (commands.mjs 617, es.mjs 172).
-- : 7 casos por idioma y por efecto (707/707 en total).
-- Siguiente: grupo 4 (ownership/systems/auto, prosa en ) y grupo 5 ().
+- `rejectProposal` entero, los cuatro handlers del ciclo de vida y las cinco descripciones del menu.
+  Catalogo: 131 -> 167 claves por idioma.
+- No cambiaron los `code` (`set-aside`, `already-set-aside`, `disabled`, `enabled`, `retired`), ni el
+  requisito de `--yes` para retirar, ni el respaldo fechado con su huella, ni la anotacion del diario.
+- La fila de `/skill-retired` es UNA clave con el estado traducido aparte: dos claves con su propio
+  separador duplicaban la tipografia y habrian subido la linea base ASCII en dos caracteres.
+- Total ASCII **8.614, sin crecer** (`commands.mjs` 645 -> 617, `es.mjs` 144 -> 172: el mismo texto movido).
+- `tests/i18n-comandos-grupo3.test.mjs`: 7 casos por idioma y por efecto. Suite 700 -> 707.
+- Siguiente: **grupo 4** (ownership / systems / auto, cuya prosa vive en `lib/scope.mjs`) y **grupo 5**
+  (mensajes humanos de `bin/`); despues F1.1-menu, F1.4, F2, F3 y F4.
