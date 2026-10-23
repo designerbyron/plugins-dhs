@@ -1,5 +1,5 @@
 {
-  "generado": "2026-10-23T16:01:54.616Z",
+  "generado": "2026-10-23T16:05:40.314Z",
   "ficheros": {
     "bin/skill-compiler.mjs": 0,
     "client.js": 906,
@@ -8,7 +8,7 @@
     "lib/auto-approve.mjs": 170,
     "lib/auto-update.mjs": 287,
     "lib/catalog-signal.mjs": 214,
-    "lib/commands.mjs": 583,
+    "lib/commands.mjs": 570,
     "lib/compiler.mjs": 1766,
     "lib/definitions.mjs": 263,
     "lib/i18n/codes.mjs": 11,

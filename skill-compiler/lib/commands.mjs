@@ -648,7 +648,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
   const definiciones = [
     {
       name: 'skill-proposals',
-      description: 'Qué skills aprendidas esperan tu aprobación en este proyecto y cuáles están activas.',
+      description: t('cmd.proposals.description'),
       handler: guarded(({ agent }, montaje) => listar({ agent, montaje })),
     },
 
@@ -657,7 +657,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       // muestra sigue pendiente. Sin esto, una tarjeta vieja ofrece decidir algo que el almacén ya no tiene
       // y la orden falla con «no hay ninguna propuesta» —un fallo que el humano no puede arreglar—.
       name: 'skill-pending',
-      description: 'Los ids que esperan decisión, en una línea: lo que la tarjeta consulta antes de decidir.',
+      description: t('cmd.pending.description'),
       handler: guarded(({ agent }) => {
         const { key } = scopeOfAgent(agent);
         if (key === null) return bad(noScope());
@@ -687,7 +687,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
     {
       name: 'skill-show',
-      description: 'Lee una skill aprendida de este proyecto: la propuesta pendiente o la ya activa.',
+      description: t('cmd.show.description'),
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { cwd, key } = scopeOfAgent(agent);
@@ -1022,9 +1022,9 @@ export function targetCommands({ root = defaultRoot(), catalog, rows = [] } = {}
       if (key === null) return bad(noScope());
       if (key !== row.key) {
         return bad([
-          `«${row.id}» está pendiente en ${row.project}, no en esta sesión.`,
-          `Esta sesión trabaja en ${cwd}.`,
-          'Ábrela desde el proyecto que le corresponde: el ámbito no se elige a mano.',
+          t('cmd.row.other-project', { id: row.id, project: row.project }),
+          t('cmd.row.this-session', { cwd }),
+          t('cmd.row.open-there'),
         ].join('\n'));
       }
       if (row.verb === 'show') return viewProposal({ root, cwd, key, id: row.id });

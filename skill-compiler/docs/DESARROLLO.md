@@ -132,6 +132,10 @@ El aumento es **exactamente los caracteres que ya existían en ficheros antes no
 tapar texto: el único fichero que se movió de los veinte ya vigilados **bajó** un carácter, y las pruebas
 siembran un acento en cada uno de los tres módulos nuevos para exigir el rojo.
 
+Después de esa cobertura, migrar las tres descripciones del menu al catalogo dejo `lib/commands.mjs`
+sin esos acentos: el total bajo de 8.414 a 8.401 y la linea base se ajusto a lo medido (un tope que solo
+mengua).
+
 - `tests/output-contract.test.mjs` — **el valor de cada herramienta contra el esquema que el harness
   valida**, en todas las ramas de su `execute`, con `validateJsonSchemaValue` (el juez real) y el esquema
   compilado por `defineTool`. Nació del defecto de la 1.3.0: `skill_propose` devolvía un campo no declarado y
