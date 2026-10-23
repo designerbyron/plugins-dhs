@@ -4,7 +4,7 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 
 ## SHA y rama
 
-- HEAD de codigo: **`4f3a0d3`** (F1.2 grupo 2). Antes: `1a4b170` (grupo 1), `f9b8421` (F1.3), `eb9bbb4` (PROTOCOL).
+- HEAD de codigo: **`4a240c9`** (F1.2 grupo 3). Antes: `4f3a0d3` (grupo 2), `1a4b170` (grupo 1), `f9b8421` (F1.3), `eb9bbb4` (PROTOCOL).
 - Este documento se versiona en el commit siguiente y se empuja con el.
 - Rama `main`, remoto `designerbyron/plugins-dsh`, arbol limpio, divergencia **0/0**.
 - Version declarada: **3.9.3**. Sin tag `v4.0.0`: no se publica hasta cerrar F1.2, F1.1-menu, F2 y F4.
@@ -16,7 +16,7 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 | F0 | cerrada | `lib/i18n/{index,es,en}.mjs`, resolucion `DSH_LANG` -> `config.json` -> `en`, `lang` en CLI, `doctor` con idioma y fuente |
 | F1.1 | parcial | 16 comandos canonicos + 15 alias con `aliasOf`/`deprecatedIn`, mismo codigo y efecto (probado). **Menu real sin verificar** |
 | **F1.3** | **cerrada** | superficie completa congelada + texto visible al modelo en ASCII puro |
-| **F1.2** | **grupos 1 y 2 de 5** | proposals/pending/show + approve/publish/scope al catalogo (**131 claves** por idioma). Grupos 3-5 pendientes |
+| **F1.2** | **grupos 1-3 de 5** | proposals/pending/show + approve/publish/scope + reject/disable/enable/retire/retired (**167 claves** por idioma). Grupos 4-5 pendientes |
 | F1.4 | parcial | 18 casos en `definitions-schema` (antes 4), 5 en `i18n-comandos` (nuevo), 7 de la puerta i18n, paridad de catalogos |
 | F1.5 | cerrada | `docs/ANFITRION.md`: fallback de prosa en 4.0.0-4.1.x, retirada en **4.2.0** |
 | F2 | parcial | el panel lee `code`, `bulk_ids_hint` corregido, reserva `en` |
@@ -71,9 +71,9 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 ## Mediciones reales de este arbol
 
 ```
-npm test                 -> 700/700 (171 suites)
+npm test                 -> 707/707 (172 suites)
 npm run test:hermetic    -> hermetico (huella del almacen identica antes y despues)
-node tools/i18n-gate.mjs -> en orden (131 claves por idioma · 15 alias)
+node tools/i18n-gate.mjs -> en orden (167 claves por idioma · 15 alias)
 node tools/ascii-gate.mjs-> 8.614 caracteres heredados, tope 8.614 (ninguno nuevo)
 node --test tests/definitions-schema.test.mjs -> 18/18
 ```
@@ -105,3 +105,13 @@ node --test tests/definitions-schema.test.mjs -> 18/18
 - `skillCommands({})` usa el almacen **real**: en pruebas, pasar `{ root: arena.root }`.
 - Una constante de modulo con texto traducible congela el idioma del arranque: usar funcion.
 - El catalogo ingles tambien cuenta para `ascii-gate`: no meterle tipografia.
+
+## Lo que cerro F1.2 grupo 3 (reject / disable / enable / retire / retired)
+
+-  entero, los cuatro handlers del ciclo de vida y las cinco descripciones. Catalogo 131 -> 167.
+- No cambiaron los  (, , , , ) ni el requisito de
+   para retirar, ni el respaldo con huella, ni el diario.
+- La fila de  es UNA clave con el estado aparte: dos claves con su separador duplicaban la
+  tipografia y habrian subido la linea base ASCII. Total **8.614, sin crecer** (commands.mjs 617, es.mjs 172).
+- : 7 casos por idioma y por efecto (707/707 en total).
+- Siguiente: grupo 4 (ownership/systems/auto, prosa en ) y grupo 5 ().
