@@ -96,10 +96,41 @@ window.__ModuleLoader__.load({
      * Vivía sólo en la comprobación por filas, y ahí está el defecto que esto cierra: en un anfitrión que no
      * anuncia filas, el efecto no se puede medir, así que una aprobación correcta se contaba como fallida.
      */
-    const veredicto = (texto, ids) => {
+    /**
+     * Códigos que el panel entiende. Son el contrato: si llega uno reconocido, manda él y no se lee `text`.
+     * Un código **desconocido** no puede convertirse en éxito ni en «sigue con la prosa»: es un fallo visible,
+     * porque significa que el servidor habla un contrato que esta tarjeta no conoce.
+     */
+    const CODIGOS_HECHO = new Set([
+      'activated', 'already-active', 'updated-disabled', 'published', 'set-aside',
+      'enabled', 'disabled', 'retired', 'rejected', 'already-published', 'already-set-aside', 'scope-changed',
+    ]);
+    const CODIGOS_FALLO = new Set([
+      'with-warnings', 'gate-failed', 'unsafe-id', 'no-proposal', 'no-scope', 'id-conflict',
+      'topic-conflict', 'invalid-flag', 'internal-error', 'batch-partial', 'batch-empty', 'batch-nothing',
+    ]);
+    /** Códigos que no son veredicto (una pregunta, un listado): se dejan pasar sin decidir nada. */
+    const CODIGOS_NEUTROS = new Set(['scope-ask', 'language-ask', 'pending-list']);
+
+    const veredicto = (texto, ids, code, params) => {
       const pedidos = new Set(ids);
       const hechos = new Set();
       const fallos = new Map();
+      // 1) Contrato nuevo: el código decide. Sólo se acepta como hecho si nombra un id pedido; si no, se cae a
+      //    la prosa (compatibilidad), nunca a un éxito inventado.
+      if (typeof code === 'string' && code !== '' && !CODIGOS_NEUTROS.has(code)) {
+        if (CODIGOS_HECHO.has(code) && typeof params?.id === 'string' && pedidos.has(params.id)) {
+          return { hechos: new Set([params.id]), fallos: new Map(), code };
+        }
+        if (CODIGOS_FALLO.has(code)) {
+          const id = typeof params?.id === 'string' && pedidos.has(params.id) ? params.id : ([...pedidos][0] ?? '?');
+          return { hechos: new Set(), fallos: new Map([[id, code]]), code };
+        }
+        if (!CODIGOS_HECHO.has(code)) {
+          const id = typeof params?.id === 'string' && pedidos.has(params.id) ? params.id : ([...pedidos][0] ?? '?');
+          return { hechos: new Set(), fallos: new Map([[id, `código desconocido: ${code}`]]), code };
+        }
+      }
       for (const cruda of String(texto ?? '').split('\n')) {
         const linea = cruda.trim();
         if (linea === '') continue;
@@ -781,7 +812,7 @@ window.__ModuleLoader__.load({
 
           // 1) El comando contestó con veredicto por id. Es la evidencia: exactamente la frase que vería el
           //    humano al escribirlo. No hace falta preguntar por filas —y en este anfitrión, además, no hay—.
-          const v = veredicto(salida, idsPedidos);
+          const v = veredicto(salida, idsPedidos, resultado?.code, resultado?.params);
           if (v.hechos.size > 0 || v.fallos.size > 0) {
             return {
               ok: v.fallos.size === 0 && idsPedidos.every((id) => v.hechos.has(id)),
