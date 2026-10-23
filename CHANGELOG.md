@@ -4,13 +4,14 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
-## [No publicado] — rama `proto/i18n-live-commands` · contrato
+## [No publicado] — rama `release/v5.0.0` · contrato
 
 **Las 16 operaciones de sesión pasan a tener un nombre por idioma, y el modelo de alias se retira.** No sube
 `package.json`: la versión publicada sigue siendo la 4.0.1 y este bloque describe lo que **aún no ha salido**.
 Por la política del repositorio, cuando se autorice la publicación entrará como **5.0.0** —es cambio de contrato:
 los nombres de comando son superficie—, y entonces el número se moverá en los tres sitios que lo llevan
-(`package.json`, esta entrada y la política).
+(`package.json`, esta entrada y la política). Esta entrada cubre el candidato que integra las dos ramas locales
+(`proto/i18n-live-commands` y `hardening/post-4.0.1`).
 
 ### Cambiado — un nombre por operación, en el idioma activo
 
@@ -40,16 +41,22 @@ los nombres de comando son superficie—, y entonces el número se moverá en lo
 - **Los catálogos** ya no citan un comando que no existe en su idioma: la prosa española dice `/skill-aprobar`,
   `/skill-propuestas`, `/skill-propiedad`… (43 líneas).
 
-### Medido en este acto
+### Medido en el candidato integrado
 
-- `npm test`: **804 pruebas, 804 pasan** (antes 796/795: la única roja era una prueba que leía el `config.json`
-  del almacén **real**, y el `--es` del operador la puso en rojo; ahora resuelve el idioma en su arena).
-- `npm run test:hermetic`: 804/804 y la huella del almacén real **idéntica** antes y después.
-- `node tools/i18n-gate.mjs`: en orden, 578 claves por idioma, 16 operaciones × 2 nombres.
-- `node tools/ascii-gate.mjs`: 7565 caracteres heredados (bajó de 7579 al mudar tres descripciones al catálogo en
-  ASCII), tope igual al medido, 22 ficheros.
-- `node --test tests/definitions-schema.test.mjs`: 18/18, con el manifiesto congelado actualizado de `alias` a
-  `nombres` (una operación, un nombre por idioma).
+- `npm test`: **860 pruebas, 860 pasan** en **209 suites** (la suma de los dos frentes no es 805+804: al integrar
+  entran los tests nuevos de las dos ramas y salen los del modelo de alias, que ya no existe).
+- `npm run test:hermetic`: 860/860 y la huella del almacén real **idéntica** antes y después.
+- `node tools/i18n-gate.mjs`: en orden, **695 claves por idioma**, 16 operaciones × 2 nombres.
+- `node tools/ascii-gate.mjs`: **8.353 caracteres heredados con tope 8.353**, **26/26** ficheros de primera parte
+  vigilados (los 24 del endurecimiento más `lib/localized-commands.mjs` y `lib/operations.mjs`, que entraron con
+  0 de deuda y sin clasificar hasta este acto).
+- `tests/update-real.e2e.test.mjs`: el último guion manual pasa a prueba descubierta, con mutación controlada
+  (retirar la comprobación de integridad de la base pone en rojo el caso 4 y sólo ese; restaurado, 5/5).
+- **No cumplido, y por eso no hay PASS ni publicación**: la prosa humana que vive fuera del catálogo en
+  `lib/audit.mjs`, `lib/security.mjs`, `lib/compiler.mjs` (`check`), `lib/vendor.mjs`, `lib/promote.mjs`,
+  `lib/review.mjs` y `lib/projection.mjs`. Medido con el binario en una copia del almacén: `audit` bajo
+  `DSH_LANG=en` imprime **9 líneas en español** («skills auditadas», «archivadas … no se auditan», los estados,
+  los `fixes:` y el detalle de la regla).
 
 ## [4.0.1] — 2026-10-23 · parche
 

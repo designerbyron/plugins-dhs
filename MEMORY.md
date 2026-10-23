@@ -30,10 +30,10 @@ medias, y el aviso del turno **cuenta por tipo y se retira**. **v2.0.0** publica
 calidad vigente, `audit`, `repair`/`promote` con los tres niveles de riesgo y la promoción automática
 **apagada** por defecto.
 
-**805 pruebas en verde** (196 suites), suite hermética en verde (huella del almacén real idéntica antes y
-después), `doctor` verde, y las puertas del repositorio en verde: i18n **572 claves por idioma** y ASCII
-**8.401 medidas con tope 8.401**, en **24/24** ficheros de primera parte vigilados. Es el estado medido el
-2026-10-23 al cerrar la rama `hardening/post-4.0.1` (local, sin push y sin release).
+**Estado del candidato v5.0.0** (rama local `release/v5.0.0`, **sin publicar**): **860 pruebas en verde** (209
+suites) y suite hermética en verde (huella del almacén real idéntica antes y después); i18n **695 claves por
+idioma** y 16 operaciones x 2 nombres; ASCII **8.353 medidas con tope 8.353** en **26/26** ficheros de primera
+parte. Los 805/8.401/24 de la rama `hardening/post-4.0.1` eran el estado de esa rama sola, no el integrado.
 
 ## Almacén: el objetivo del `DIAGNOSTICO-2026-10-15`, alcanzado
 
@@ -492,7 +492,8 @@ e2e, anfitrion) y uno documental: este, sin una linea de codigo.
 - **Sigue abierto**: la verificacion visual del menu (este puesto no tiene navegador), la prosa de
   `observado`/`umbral` y los `motivo` de bloqueo de `repair` (viajan como DATO), las dos retiradas declaradas
   (alias en 5.0.0; prosa del panel en 4.2.0, condicionada a que el anfitrion transporte el resultado) y
-  `tests/update-real.e2e.mjs`, que sigue siendo un guion manual como los otros dos lo eran.
+  `tests/update-real.e2e.mjs`, que entonces seguia siendo un guion manual (ya no: en el candidato v5.0.0 es
+  `tests/update-real.e2e.test.mjs`, descubierta por el runner y con mutacion demostrada).
 
 ## Prototipo 2026-10-23 - registro dinamico por idioma, en rama (NO publicado)
 
@@ -571,3 +572,44 @@ de `/skill-approve` a `/skill-aprobar` **sin reiniciar**), asi que se autorizo m
   dos idiomas (lo ven `/skill-propiedad` y `systems`, y por eso `skill-ownership` es una de las dos operaciones
   cuyo texto no cambia con el idioma: deuda declarada, con su fichero); y los nombres de **fila**
   (`skill-approve-<id>`) siguen en ingles en los dos idiomas a proposito (marcador de maquina del panel).
+
+## Candidato 2026-10-23 — v5.0.0 integrado, **sin publicar** (rama `release/v5.0.0`)
+
+Rama local desde `main` (`8393977`, el commit del tag `v4.0.1`); `main` y `origin/main` intactos, sin push, sin
+mover etiquetas, sin release. **Al cerrar el acto el arbol vuelve a `main`** (`8393977`): el plugin esta instalado
+por `link:` a esta carpeta, asi que lo que arrancara es el codigo publicado y no el candidato; la rama
+`release/v5.0.0` queda para revision.
+
+- **Los dos frentes estan integrados, sin perder nada**: `hardening/post-4.0.1` entro limpio (fast-forward
+  conceptual, sin conflictos) y `proto/i18n-live-commands` entro con diez conflictos, resueltos uno a uno con su
+  motivo escrito en el mensaje del merge. El criterio no fue «un lado»: los tests de endurecimiento y el test que
+  sustituye al del alias conviven; los del alias no vuelven porque el modelo esta retirado y la puerta ya no mide
+  esa regla.
+- **La cobertura ASCII estaba a medias en las dos ramas**: el endurecimiento vigilaba 24 ficheros y el prototipo
+  habia anadido dos modulos (`lib/localized-commands.mjs`, `lib/operations.mjs`) que **ninguna de las dos listas
+  clasificaba**. La puerta endurecida los caza como `ascii-sin-clasificar`; al clasificarlos, la linea base se
+  recalculo a lo medido: **8.353 con tope 8.353, 26/26**. Los 8.401 y 7.565 que circulaban eran estados
+  distintos, no una suma.
+- **Dos pruebas median un literal que el codigo ya no debe tener**: el `24` de ficheros vigilados y el numero de
+  clave del catalogo. Se cambiaron para que el numero **salga de la lista que lo gobierna**
+  (`primeraParte(RAIZ)`), y el texto esperado de las descripciones se lee del catalogo (`t(clave)`) en vez de
+  copiarse en la prueba.
+- **`update-real.e2e.mjs` deja de ser un guion manual**: cinco casos descubiertos por el runner, arena por caso,
+  CLI real y estado en disco; mutacion controlada (retirar la comprobacion de integridad de la base) pone en rojo
+  el caso 4 y solo ese; restaurado, 5/5.
+- **Medido**: `npm test` **860/860 en 209 suites** (855 al terminar el merge, +5 del e2e); `test:hermetic`
+  860/860 con huella del almacen real identica; i18n **695 claves por idioma** y 16 operaciones x 2 nombres.
+  `doctor` verde sobre una copia del almacen real (exit 0, «everything in place»). `audit`/`security` en solo
+  lectura sobre la misma copia: 44 skills,
+  PASS 43, WARN 1 (`absolute-path`, el preexistente), ERROR 0; `security` 0 bloqueos y cadena valida.
+- **Lo que impide el PASS de v5.0.0 (§5E del mandato, medido, no supuesto)**: la prosa humana que vive fuera del
+  catalogo sigue en espanol fijo. `audit` bajo `DSH_LANG=en` imprime **9 lineas en espanol** (cabecera
+  «skills auditadas», «archivadas … no se auditan», los nombres de estado, los `fixes:` y el detalle de la regla);
+  la misma deuda esta en `lib/security.mjs`, en los mensajes de integridad de `lib/compiler.mjs` (`check`),
+  `lib/vendor.mjs`, `lib/promote.mjs`, `lib/review.mjs` y `lib/projection.mjs`, y en la capa del modelo
+  (`lib/definitions.mjs`). Los catalogos no tienen ni una clave `audit.*`, `security.*`, `vendor.*`, `promote.*`
+  ni `review.*`. **Sin PASS no hay 5.0.0, ni tag, ni release.**
+- **Siguiente operacion exacta**: migrar esa prosa por audiencia y por modulo, empezando por `lib/audit.mjs`
+  (cabecera, estados, `fixes` y detalle) y `lib/security.mjs` (detalle y `fix` de cada regla), conservando el
+  DATO (`rule`, `observed`, `fix` como valor y el vocabulario del diario) y traduciendo solo en el punto de
+  presentacion, con la prueba en los dos idiomas sobre el texto real del binario.
