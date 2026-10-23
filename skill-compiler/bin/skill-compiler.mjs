@@ -70,8 +70,8 @@ import {
 } from '../lib/compiler.mjs';
 import { readProvenance, upstreamStatus, vendor } from '../lib/vendor.mjs';
 import {
-  MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeSistemas,
-  textoDelEstado,
+  MAQUINA, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, propiedadEnTexto,
+  textoDeSistemas, textoDelEstado,
 } from '../lib/scope.mjs';
 import { leerDiario, verificarCadena } from '../lib/security.mjs';
 
@@ -440,7 +440,7 @@ switch (command) {
       process.exit(2);
     }
     console.log(`Declarada la propiedad: «${respuesta}» (huella ${String(r.huella).slice(0, 12)})`);
-    console.log(`  ${PROPIEDADES[respuesta]}`);
+    console.log(`  ${propiedadEnTexto(respuesta)}`);
     process.exit(0);
   }
 

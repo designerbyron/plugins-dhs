@@ -42,8 +42,8 @@ import { scopeOf } from './definitions.mjs';
 import { t } from './i18n/index.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
 import {
-  MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeSistemas,
-  textoDelEstado,
+  MAQUINA, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, propiedadEnTexto,
+  textoDeSistemas, textoDelEstado,
 } from './scope.mjs';
 
 const ok = (text, extra = {}) => ({ kind: 'success', text, ...extra });
@@ -480,12 +480,10 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
     const r = declararPropiedad(ownership, { root, por: 'humano', esperadaHuella: antes.huella ?? undefined });
     if (!r.ok) return bad(r.reason);
     return ok([
-      `Declarada la propiedad: «${ownership}».`,
-      `  ${PROPIEDADES[ownership]}`,
+      t('cmd.ownership.declared', { ownership }),
+      `  ${propiedadEnTexto(ownership)}`,
       '',
-      ownership === MAQUINA
-        ? 'Desde ahora, proponer un id que ya vive en otro sistema se AVISA con su sitio, y nunca se sobrescribe lo ajeno.'
-        : 'Desde ahora, proponer un id que ya vive en otro sistema se RECHAZA con su sitio.',
+      ownership === MAQUINA ? t('cmd.ownership.now-machine') : t('cmd.ownership.now-dsh-only'),
     ].join('\n'));
   };
 
@@ -645,7 +643,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
     {
       name: AUTO_COMMAND,
-      description: 'Activa o desactiva que las skills y los parches propuestos en ESTA sesión se aprueben solos. La validación y el registro se siguen aplicando: delegas la confirmación, no la puerta.',
+      description: t('cmd.auto.description'),
       input: { hint: 'activar | desactivar' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
@@ -657,30 +655,28 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         if (decision === null) {
           const active = autoApproveFromEvents(agent?.session?.snapshotEvents?.() ?? []);
           return ok([
-            `Aprobación automática en esta sesión: ${active ? 'ACTIVA' : 'desactivada'}`,
+            t('cmd.auto.title', { estado: active ? t('cmd.auto.state-on') : t('cmd.auto.state-off') }),
             '',
-            active
-              ? 'Las propuestas (nuevas o parches) que pasen la validación se activan solas, sin esperar tu confirmación.'
-              : 'Nada se activa sin tu decisión.',
-            'La validación previa se aplica siempre: el modo no aprueba nada que no pase la puerta, ni un conflicto, ni un envío bloqueado.',
-            'Queda registrado en el log de esta sesión.',
+            active ? t('cmd.auto.on-body') : t('cmd.auto.off-body'),
+            t('cmd.auto.gate-note'),
+            t('cmd.auto.log-note'),
             '',
-            active ? 'Para pararlo: /skill-auto desactivar' : 'Para activarlo: /skill-auto activar',
+            active ? t('cmd.auto.stop-hint') : t('cmd.auto.start-hint'),
           ].join('\n'));
         }
 
         return ok(decision
           ? [
-            'Aprobación automática ACTIVA en esta sesión.',
+            t('cmd.auto.activated-title'),
             '',
-            'Desde ahora, cada skill o parche que se proponga y pase la validación se activa solo, y queda disponible en el acto.',
-            'Lo que NO cambia: la validación previa, el anti-solapamiento, el bloqueo de orígenes con contenido peligroso, y el registro — tu activación y todo lo aprobado quedan en el log de la sesión.',
-            'Se puede parar cuando quieras: /skill-auto desactivar',
+            t('cmd.auto.activated-body'),
+            t('cmd.auto.activated-same'),
+            t('cmd.auto.activated-stop'),
           ].join('\n')
           : [
-            'Aprobación automática desactivada.',
+            t('cmd.auto.deactivated-title'),
             '',
-            'Desde ahora nada se activa sin tu decisión: las propuestas esperan en /skill-proposals.',
+            t('cmd.auto.deactivated-body'),
           ].join('\n'));
       }),
     },
@@ -783,7 +779,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
     {
       name: 'skill-ownership',
-      description: 'Quién manda en el proceso de creación de skills de este puesto: sólo DSH o todo el PC. Sin argumento, dice lo declarado.',
+      description: t('cmd.ownership.description'),
       input: { hint: `${SOLO_DSH}|${MAQUINA}` },
       handler: guarded(({ rawInput }) => {
         const input = String(rawInput ?? '').trim();
@@ -793,19 +789,19 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
     {
       name: `skill-ownership-${SOLO_DSH}`,
-      description: 'Declara que este plugin escribe skills SÓLO mientras se trabaja con DSH: no compite con los demás sistemas del puesto.',
+      description: t('cmd.ownership.dsh-only.description'),
       handler: guarded(() => declararLaPropiedad(SOLO_DSH)),
     },
 
     {
       name: `skill-ownership-${MAQUINA}`,
-      description: 'Declara que este plugin se hace cargo del proceso de creación de skills en TODO el PC: mira los demás sistemas, avisa de cada choque de id y no sobrescribe lo ajeno.',
+      description: t('cmd.ownership.machine.description'),
       handler: guarded(() => declararLaPropiedad(MAQUINA)),
     },
 
     {
       name: 'skill-systems',
-      description: 'Los sistemas de skills de este puesto, sus almacenes, su estado real y los identificadores que viven en más de uno.',
+      description: t('cmd.systems.description'),
       handler: guarded(() => ok(textoDelInventario())),
     },
 

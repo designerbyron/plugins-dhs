@@ -1,10 +1,10 @@
 {
-  "generado": "2026-10-23T10:16:46.474Z",
+  "generado": "2026-10-23T10:33:56.162Z",
   "ficheros": {
     "lib/audit.mjs": 309,
     "lib/auto-approve.mjs": 170,
     "lib/auto-update.mjs": 287,
-    "lib/commands.mjs": 617,
+    "lib/commands.mjs": 583,
     "lib/compiler.mjs": 1767,
     "lib/definitions.mjs": 263,
     "lib/lock.mjs": 21,
@@ -13,7 +13,7 @@
     "lib/projection.mjs": 176,
     "lib/promote.mjs": 402,
     "lib/repair.mjs": 819,
-    "lib/scope.mjs": 639,
+    "lib/scope.mjs": 572,
     "lib/security.mjs": 474,
     "lib/i18n/codes.mjs": 11,
     "lib/i18n/en.mjs": 23,

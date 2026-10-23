@@ -4,8 +4,8 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 
 ## SHA y rama
 
-- HEAD de codigo: **`4a240c9`** (F1.2 grupo 3). Antes: `4f3a0d3` (grupo 2), `1a4b170` (grupo 1), `f9b8421` (F1.3), `eb9bbb4` (PROTOCOL).
-- Este documento se versiona en el commit siguiente y se empuja con el.
+- HEAD de codigo al entrar en esta sesion: **`1fbe4c6`** (checkpoint del grupo 4 inspeccionado). Antes: `4a240c9` (F1.2 grupo 3), `4f3a0d3` (grupo 2), `1a4b170` (grupo 1), `f9b8421` (F1.3), `eb9bbb4` (PROTOCOL).
+- Este documento se versiona en el mismo commit que el codigo (en esta sesion, sin push).
 - Rama `main`, remoto `designerbyron/plugins-dsh`, arbol limpio, divergencia **0/0**.
 - Version declarada: **3.9.3**. Sin tag `v4.0.0`: no se publica hasta cerrar F1.2, F1.1-menu, F2 y F4.
 
@@ -16,7 +16,7 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 | F0 | cerrada | `lib/i18n/{index,es,en}.mjs`, resolucion `DSH_LANG` -> `config.json` -> `en`, `lang` en CLI, `doctor` con idioma y fuente |
 | F1.1 | parcial | 16 comandos canonicos + 15 alias con `aliasOf`/`deprecatedIn`, mismo codigo y efecto (probado). **Menu real sin verificar** |
 | **F1.3** | **cerrada** | superficie completa congelada + texto visible al modelo en ASCII puro |
-| **F1.2** | **grupos 1-3 cerrados; grupo 4 inspeccionado** | 167 claves por idioma. Grupo 4 (ownership/systems/auto): inspeccion medida, sin editar |
+| **F1.2** | **grupos 1-4 cerrados; falta el 5** | 237 claves por idioma. Grupo 4 (ownership/systems/auto) migrado y probado ES/EN |
 | F1.4 | parcial | 18 casos en `definitions-schema` (antes 4), 5 en `i18n-comandos` (nuevo), 7 de la puerta i18n, paridad de catalogos |
 | F1.5 | cerrada | `docs/ANFITRION.md`: fallback de prosa en 4.0.0-4.1.x, retirada en **4.2.0** |
 | F2 | parcial | el panel lee `code`, `bulk_ids_hint` corregido, reserva `en` |
@@ -119,53 +119,45 @@ node --test tests/definitions-schema.test.mjs -> 18/18
 - Siguiente: **grupo 4** (ownership / systems / auto, cuya prosa vive en `lib/scope.mjs`) y **grupo 5**
   (mensajes humanos de `bin/`); despues F1.1-menu, F1.4, F2, F3 y F4.
 
-## Grupo 4 (ownership / systems / auto): inspeccion hecha, migracion NO empezada
+## Grupo 4 (ownership / systems / auto): cerrado
 
-El contexto se agoto antes de tocar codigo, asi que **no se edito nada** de este grupo: el arbol queda
-limpio y los gates en verde (167 claves, ASCII 8.614, 707/707). Lo que sigue es la inspeccion ya medida
-para que la proxima sesion no la repita.
+Base al entrar: `1fbe4c6`, arbol limpio, version 3.9.3, 167 claves por idioma, ASCII 8.614, suite 707/707.
+Todo lo que sigue esta medido despues de la migracion.
 
-### Estado verificado al entrar
+### Que se migro
 
-- HEAD `d3893de`, rama `main`, `origin/main` en 0/0, arbol limpio, version 3.9.3, sin tag `v4.0.0`.
-- `lib/scope.mjs`: 821 lineas, **639 caracteres no ASCII**.
+- `lib/scope.mjs`: `PROPIEDADES` era una constante evaluada al importar (congelaba el idioma). Pasa a
+  `propiedadEnTexto(owner)`, que resuelve con `t()` en **cada lectura**. Consumidores ajustados sin cambiar
+  semantica: `textoDelEstado`, `declararLaPropiedad` (commands.mjs) y el `ownership` del CLI.
+- `textoDeLaPregunta`, `textoDelEstado` y `textoDeSistemas` migrados con claves `scope.*`. Firmas intactas
+  (`textoDelEstado(estado)`, `textoDeSistemas({ datos, estado })`): `/skill-systems` y `systems` siguen
+  imprimiendo el mismo texto porque la traduccion entra por dentro, no por parametro.
+- `lib/commands.mjs`: descripciones de `/skill-ownership`, sus dos filas de un clic y `/skill-systems`; el
+  resultado de declarar; y el handler de `/skill-auto` (descripcion, informe sin argumento, activado,
+  desactivado).
+- **No** se tocaron los tokens de contrato: `activar`/`desactivar`, `ESTADOS_PROPIEDAD`, `SOLO_DSH`
+  (`dsh-only`), `MAQUINA` (`machine`), los `code` ni los nombres de comando. El texto nuevo es ASCII puro en
+  los dos idiomas; los separadores tipograficos (`·`, `—`, `«»`, `↔`) pasaron a guion, comillas rectas y ` / `.
 
-### Que es prosa visible (lo que hay que migrar) y donde
+### Mediciones
 
-| Bloque | Lineas | No ASCII | Consumidores |
-|---|---|---|---|
-| `PROPIEDADES` (mapa de las dos politicas) | 63-68 | 6 | `textoDelEstado`, `declararLaPropiedad` (commands.mjs) |
-| `textoDeLaPregunta` | 721-732 | 12 | `textoDelEstado` (estado `ausente`) |
-| `textoDelEstado` | 738-762 | 18 | `/skill-ownership` (commands.mjs:475) y CLI |
-| `textoDeSistemas` | 769-821 | 29 | `/skill-systems` (commands.mjs:493) y CLI `systems` |
-| handler de `auto` | desde commands.mjs:647 | 93 | `/skill-auto` |
-| `bin/skill-compiler.mjs` | todo | 722 | grupo 5, no este |
+- Catalogo: 167 -> **237 claves por idioma** (70 nuevas, mismas claves y placeholders).
+- ASCII: 8.614 -> **8.513** (`commands.mjs` 617 -> 583, `scope.mjs` 639 -> 572); la linea base se actualizo
+  al total nuevo y ningun fichero crecio.
+- `tests/i18n-comandos-grupo4.test.mjs`: 9 casos. Suite 707 -> **716/716**; hermetico en verde.
+- `DSH_LANG=es` fijado en `scope.test.mjs`, `scope-concurrencia.test.mjs` y `auto-approve.test.mjs`; las
+  aserciones con tilde se ajustaron a la prosa ASCII (no se debilito ninguna).
 
-### Trampas y riesgos ya identificados
+### Defectos conocidos, medidos y NO tocados en este grupo
 
-- **`PROPIEDADES` se evalua al importar** (linea 63): una constante con texto traducible congela el idioma
-  del arranque. Es la misma trampa que `NO_SCOPE` en el grupo 1: pasa a funcion (`propiedadEnTexto(owner)`)
-  y se ajustan sus dos consumidores.
-- **`textoDeLaPregunta` esta dentro del camino de LECTURA del estado**: `textoDelEstado` lo compone cuando
-  no hay declaracion. Cualquier cambio de firma afecta tambien a lo que lee el CLI.
-- **`textoDeSistemas` es compartido por comando y CLI** (`/skill-systems` y `systems` imprimen lo mismo, a
-  proposito): la firma `{ datos, estado }` se mantiene y la traduccion entra por dentro, no por parametro.
-- `tests/scope-concurrencia.test.mjs:162-164` afirma `textoDeSistemas`/`textoDelEstado` **en español**
-  (`/Propiedad: AUSENTE/`): ese fichero tendra que fijar `DSH_LANG=es`, como los de los grupos 1-3.
-- `ESTADOS_PROPIEDAD` (`ausente|declarada|invalida|ilegible`) y `SOLO_DSH`/`MAQUINA` **son datos, no prosa**:
-  no se traducen nunca (son las claves de almacenamiento y de politica).
-- El handler de `auto` usa `AUTO_COMMAND` y `parseAutoCommand` con `activar|desactivar` como **tokens de
-  comando**: son interfaz, no prosa libre, y cambiarlos es cambio de contrato; dejarlos y traducir solo las
-  respuestas.
+- Los `motivo`/`reason` de `lib/scope.mjs` (`leerPropiedad`, `declararPropiedad`, `inventario`) siguen en
+  espanol y se interpolan dentro del marco ya traducido: en ingles se lee `State: undeclared (nadie ha
+  respondido).` Son datos de diagnostico, no prosa de presentacion; migrarlos obliga a cambiar
+  `estado.motivo` y las aserciones de `scope.test.mjs`. Va con el grupo 5 / F4.
+- El prefijo de los alias (`Alias obsoleto de /X: se retira en 5.0.0.`) sigue en espanol en los dos idiomas;
+  `tests/f1-contrato.test.mjs` lo fija como contrato.
 
-### Proximo paso exacto (grupo 4)
+### Siguiente
 
-1. `lib/scope.mjs`: convertir `PROPIEDADES` en funcion traducida; migrar `textoDeLaPregunta`,
-   `textoDelEstado` y `textoDeSistemas` con claves `scope.*` (unas 45 claves nuevas por idioma).
-2. `lib/commands.mjs`: migrar el handler de `auto` (dos bloques de respuesta y la descripcion) y la
-   descripcion de `/skill-ownership` y de sus dos filas.
-3. `tests/i18n-comandos-grupo4.test.mjs`: ES/EN con el mismo `kind`, `code` y estado; la propiedad declarada
-   en un idioma se lee en el otro sin cambiar el fichero `ownership.json` ni su huella.
-4. Fijar `DSH_LANG=es` en `tests/scope-concurrencia.test.mjs` (y en cualquier otro que afirme esa prosa).
-5. Verificacion: `npm test`, `test:hermetic`, los dos gates, `definitions-schema`, y comprobar que la linea
-   base ASCII **no crece** (el texto se muda de `scope.mjs` al catalogo: lo esperable es 8.614 igual).
+Grupo 5: mensajes humanos de `bin/skill-compiler.mjs` (722 caracteres no ASCII), y despues F1.1-menu, F1.4,
+F2, F3 y F4.

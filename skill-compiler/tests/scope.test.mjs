@@ -32,6 +32,10 @@ import {
 } from '../lib/scope.mjs';
 import { cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
 
+// Este fichero afirma la prosa de la propiedad y del inventario (y los motivos que la acompanan, aun sin
+// migrar): se fija el idioma para que la prueba no dependa de la configuracion del puesto.
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';
@@ -289,7 +293,7 @@ describe('identidad: la huella informa, la procedencia decide', () => {
       return;
     }
     assert.equal(datos.nombresEquivalentes.length, 1);
-    assert.match(textoDeSistemas({ datos, estado: leerPropiedad({ root: s.root }) }), /sólo difieren en mayúsculas/);
+    assert.match(textoDeSistemas({ datos, estado: leerPropiedad({ root: s.root }) }), /solo difieren en mayusculas/);
   });
 });
 
@@ -435,7 +439,7 @@ describe('los comandos y el CLI dicen lo mismo', () => {
     // Con la declaración rota, el comando no dice «sin declarar»: dice que existe y no sirve.
     escribirDeclaracion(s.root, '{ roto');
     const roto = byName['skill-ownership'].handler(agente);
-    assert.match(roto.text, /EXISTE y no dice una respuesta válida/);
+    assert.match(roto.text, /EXISTE y no dice una respuesta valida/);
     assert.match(roto.text, /estado: invalida/);
   });
 
@@ -456,7 +460,7 @@ describe('los comandos y el CLI dicen lo mismo', () => {
     const r = conAlmacenDeclarado(ajeno, () => byName['skill-systems'].handler({}));
     assert.equal(r.kind, 'success');
     assert.match(r.text, /Sistemas de skills del puesto/);
-    assert.match(r.text, /medida-ocupada — contenido distinto/);
+    assert.match(r.text, /medida-ocupada - contenido distinto/);
     assert.match(r.text, /Propiedad: AUSENTE/);
   });
 });

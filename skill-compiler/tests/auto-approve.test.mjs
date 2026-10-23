@@ -27,6 +27,9 @@ import { approve, projectKey } from '../lib/compiler.mjs';
 import { autoApproveIfAsked, skillPropose, skillVendor } from '../lib/definitions.mjs';
 import { buenaRevision, cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
 
+// Este fichero afirma la prosa del comando `/skill-auto`: se fija el idioma para no depender del puesto.
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';
@@ -90,15 +93,15 @@ describe('modo automático · el comando', () => {
 
     const on = auto(s.root).handler({ agent: { session: { header: { cwd: CWD }, snapshotEvents: () => WITH_MODE_ON } }, rawInput: '' });
     assert.match(on.text, /ACTIVA/);
-    assert.match(on.text, /La validación previa se aplica siempre/);
+    assert.match(on.text, /La validacion previa se aplica siempre/);
   });
 
   it('activa y desactiva diciendo lo que se delega y lo que no', () => {
     const s = sandbox();
     const turningOn = auto(s.root).handler({ agent: { session: { header: { cwd: CWD } } }, rawInput: 'activar' });
     assert.equal(turningOn.kind, 'success');
-    assert.match(turningOn.text, /Aprobación automática ACTIVA/);
-    assert.match(turningOn.text, /la validación previa, el anti-solapamiento, el bloqueo de orígenes/);
+    assert.match(turningOn.text, /Aprobacion automatica ACTIVA/);
+    assert.match(turningOn.text, /la validacion previa, el anti-solapamiento, el bloqueo de origenes/);
 
     const turningOff = auto(s.root).handler({ agent: { session: { header: { cwd: CWD } } }, rawInput: 'desactivar' });
     assert.match(turningOff.text, /desactivada/);

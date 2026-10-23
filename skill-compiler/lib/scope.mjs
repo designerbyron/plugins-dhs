@@ -45,6 +45,8 @@ import {
 import { homedir } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 
+import { t } from './i18n/index.mjs';
+
 // Este módulo **no** importa de `compiler.mjs`: la raíz del almacén y la biblioteca curada las pasa quien
 // llama (que es quien las conoce: `defaultRoot()` vive allí y sigue siendo la única fuente). Así no hay
 // ciclo entre los dos ficheros y cada uno tiene una responsabilidad.
@@ -59,11 +61,17 @@ export const ESTADOS_PROPIEDAD = Object.freeze(['ausente', 'declarada', 'invalid
 /** Los únicos campos que el contrato admite. Un campo de más es un contrato distinto: no se presume. */
 export const CAMPOS_PROPIEDAD = Object.freeze(['ownership', 'declaredAt', 'declaredBy']);
 
-/** El nombre con el que se declara cada una, para textos y validación. */
-export const PROPIEDADES = Object.freeze({
-  [SOLO_DSH]: 'Sólo se trabaja con DSH: el plugin escribe en su almacén y en la biblioteca curada, y rechaza los ids que ya vivan fuera de DSH.',
-  [MAQUINA]: 'Todo el PC: el plugin se declara dueño del proceso, mira los demás sistemas, avisa de cada choque y no sobrescribe nada ajeno.',
-});
+/**
+ * El nombre con el que se declara cada una, para textos y validacion.
+ *
+ * Es **funcion y no constante**: una constante se evalua al importar y congelaria el idioma del arranque; el
+ * idioma se resuelve en cada lectura, que es lo que permite cambiar de lengua sin reiniciar.
+ */
+export function propiedadEnTexto(owner) {
+  if (owner === SOLO_DSH) return t('scope.propiedad.dsh-only');
+  if (owner === MAQUINA) return t('scope.propiedad.machine');
+  return '';
+}
 
 /** Dónde vive la declaración. */
 export function rutaDePropiedad(root) {
@@ -717,47 +725,50 @@ export function proyectosConocidos({ root } = {}) {
   return [...proyectos].sort();
 }
 
-/** El texto de la pregunta, para que se lea igual en el comando, en el menú y en la documentación. */
+/** El texto de la pregunta, para que se lea igual en el comando, en el menu y en la documentacion. */
 export function textoDeLaPregunta() {
   return [
-    'Este plugin aprende skills y las escribe en SU almacén. En este puesto hay más sistemas que escriben skills',
-    '(la biblioteca curada del harness, y los almacenes de otros agentes o editores). Nadie ha declarado quién manda.',
+    t('scope.question.intro'),
+    t('scope.question.intro-2'),
     '',
-    `  · ${SOLO_DSH}  — sólo se trabaja con DSH: escribe en su almacén y en la biblioteca curada de DSH, y rechaza los ids que ya vivan fuera.`,
-    `  · ${MAQUINA}  — todo el PC: el plugin se declara dueño del proceso, MIRA los demás sistemas, avisa de cada choque de id`,
-    '                  y puede traer lo ajeno como propuesta con procedencia. Nunca sobrescribe nada que no sea suyo.',
+    t('scope.question.dsh-only', { nombre: SOLO_DSH }),
+    t('scope.question.machine', { nombre: MAQUINA }),
+    t('scope.question.machine-2'),
     '',
-    `Respuesta: /skill-propiedad ${SOLO_DSH}  ·  /skill-propiedad ${MAQUINA}`,
+    t('scope.question.answer', { dshOnly: SOLO_DSH, machine: MAQUINA }),
   ].join('\n');
 }
 
 /**
- * El estado de la declaración, en texto: una respuesta, la pregunta, o el motivo por el que la respuesta
+ * El estado de la declaracion, en texto: una respuesta, la pregunta, o el motivo por el que la respuesta
  * que hay no se puede usar. Los tres casos se leen distinto porque son distintos.
  */
 export function textoDelEstado(estado) {
   if (estado.estado === 'declarada') {
     return [
-      `Propiedad del proceso de creación de skills: «${estado.ownership}»`,
-      `  ${PROPIEDADES[estado.ownership]}`,
-      `  declarada por ${estado.declaredBy ?? '(sin autor)'} el ${estado.declaredAt ?? '(sin fecha)'}`,
-      `  huella ${corte(estado.huella)} · ${estado.ruta}`,
+      t('scope.state.declared-title', { ownership: estado.ownership }),
+      `  ${propiedadEnTexto(estado.ownership)}`,
+      t('scope.state.declared-by', {
+        autor: estado.declaredBy ?? t('scope.state.no-author'),
+        fecha: estado.declaredAt ?? t('scope.state.no-date'),
+      }),
+      t('scope.state.trace', { huella: corte(estado.huella), ruta: estado.ruta }),
     ].join('\n');
   }
   if (estado.estado === 'ausente') {
-    return [textoDeLaPregunta(), '', `Estado: sin declarar (${estado.motivo}).`].join('\n');
+    return [textoDeLaPregunta(), '', t('scope.state.undeclared', { motivo: estado.motivo })].join('\n');
   }
   const problema = estado.estado === 'invalida'
-    ? 'La declaración de propiedad EXISTE y no dice una respuesta válida.'
-    : 'La declaración de propiedad EXISTE y no se pudo leer.';
+    ? t('scope.state.invalid-title')
+    : t('scope.state.unreadable-title');
   return [
     problema,
-    `  estado: ${estado.estado} — ${estado.motivo}`,
-    `  fichero: ${estado.ruta}`,
-    '  Mientras esté así NO se presume ninguna política: se aplica la de «sólo DSH» y se declara el motivo.',
+    t('scope.state.line', { estado: estado.estado, motivo: estado.motivo }),
+    t('scope.state.file', { ruta: estado.ruta }),
+    t('scope.state.no-policy'),
     estado.estado === 'invalida'
-      ? `  Arréglalo declarando otra vez: /skill-propiedad ${SOLO_DSH}  ·  /skill-propiedad ${MAQUINA}`
-      : '  Arréglalo dándole permiso de lectura a ese fichero, o declarando la propiedad otra vez.',
+      ? t('scope.state.fix-invalid', { dshOnly: SOLO_DSH, machine: MAQUINA })
+      : t('scope.state.fix-unreadable'),
   ].join('\n');
 }
 
@@ -767,55 +778,97 @@ export function textoDelEstado(estado) {
  * «no existe» con «no se pudo leer», y **no afirma que no hay choques cuando no pudo mirarlo todo**.
  */
 export function textoDeSistemas({ datos, estado }) {
-  const lineas = [`Sistemas de skills del puesto (existen ${datos.totales.existentes} de ${datos.totales.sistemas} · ${datos.totales.accesibles} leídos enteros):`];
+  const lineas = [t('scope.systems.header', {
+    existentes: datos.totales.existentes,
+    sistemas: datos.totales.sistemas,
+    accesibles: datos.totales.accesibles,
+  })];
   for (const sistema of datos.sistemas) {
-    const marca = sistema.existe ? '·' : '·(no existe)';
-    const cola = sistema.estado === 'accesible' ? '' : ` · ${sistema.estado}: ${sistema.motivo}`;
-    const enlace = sistema.enlace ? (sistema.enlaceRoto ? ' [enlace roto]' : ' [enlace]') : '';
-    lineas.push(`  ${marca}${enlace} ${sistema.nombre} — ${sistema.ids.length} skill(s)${sistema.nuestro ? ' [nuestro]' : ''}${cola}`);
-    lineas.push(`      ${sistema.ruta ?? '(sin ruta)'}`);
+    const marca = sistema.existe ? '-' : t('scope.systems.missing');
+    const cola = sistema.estado === 'accesible'
+      ? ''
+      : t('scope.systems.row-detail', { estado: sistema.estado, motivo: sistema.motivo });
+    const enlace = sistema.enlace ? (sistema.enlaceRoto ? t('scope.systems.link-broken') : t('scope.systems.link')) : '';
+    lineas.push(t('scope.systems.row', {
+      marca,
+      enlace,
+      nombre: sistema.nombre,
+      n: sistema.ids.length,
+      nuestro: sistema.nuestro ? t('scope.systems.ours') : '',
+      cola,
+    }));
+    lineas.push(`      ${sistema.ruta ?? t('scope.systems.no-path')}`);
   }
 
   lineas.push('');
   lineas.push(estado.estado === 'declarada'
-    ? `Propiedad: «${estado.ownership}» — declarada por ${estado.declaredBy ?? '(sin autor)'} el ${estado.declaredAt ?? '(sin fecha)'} (huella ${corte(estado.huella)})`
-    : `Propiedad: ${estado.estado.toUpperCase()} — ${estado.motivo}`);
+    ? t('scope.systems.ownership-declared', {
+      ownership: estado.ownership,
+      autor: estado.declaredBy ?? t('scope.state.no-author'),
+      fecha: estado.declaredAt ?? t('scope.state.no-date'),
+      huella: corte(estado.huella),
+    })
+    : t('scope.systems.ownership-state', { estado: estado.estado.toUpperCase(), motivo: estado.motivo }));
   if (estado.estado !== 'declarada') {
-    lineas.push(`  Respuesta: /skill-propiedad ${SOLO_DSH}  ·  /skill-propiedad ${MAQUINA}`);
+    lineas.push(t('scope.systems.answer', { dshOnly: SOLO_DSH, machine: MAQUINA }));
   }
 
   const choques = Object.entries(datos.colisiones);
   if (choques.length > 0) {
-    lineas.push('', `Choques de id (${choques.length}) — el mismo identificador en más de un sistema:`);
+    lineas.push('', t('scope.systems.collisions-header', { n: choques.length }));
     for (const [id, identidad] of choques) {
-      const clases = { 'distinto-contenido': 'contenido distinto', 'misma-copia': 'mismo contenido, procedencia no demostrada', 'no-determinable': 'sin poder confirmar' };
-      lineas.push(`  · ${id} — ${clases[identidad.clase] ?? identidad.clase} (${identidad.sitios.length} copias)`);
-      for (const sitio of identidad.sitios) lineas.push(`      ${sitio.sistema}${sitio.nuestro ? ' [nuestro]' : ''}${sitio.huella ? ` · ${String(sitio.huella).slice(0, 12)}` : ' · sin huella (no se pudo leer)'}`);
+      const clases = {
+        'distinto-contenido': t('scope.systems.class-different'),
+        'misma-copia': t('scope.systems.class-same-copy'),
+        'no-determinable': t('scope.systems.class-undetermined'),
+      };
+      lineas.push(t('scope.systems.collision-row', {
+        id,
+        clase: clases[identidad.clase] ?? identidad.clase,
+        copias: identidad.sitios.length,
+      }));
+      for (const sitio of identidad.sitios) {
+        const huella = sitio.huella
+          ? t('scope.systems.site-hash', { huella: String(sitio.huella).slice(0, 12) })
+          : t('scope.systems.site-no-hash');
+        lineas.push(`      ${sitio.sistema}${sitio.nuestro ? t('scope.systems.ours') : ''}${huella}`);
+      }
     }
   } else if (datos.completo) {
-    lineas.push('', 'Sin choques de id entre sistemas.');
+    lineas.push('', t('scope.systems.no-collisions'));
   } else {
-    lineas.push('', 'Sin choques COMPROBADOS — y no se puede afirmar que no haya: hay fuentes que no se pudieron leer.');
+    lineas.push('', t('scope.systems.unproven'));
   }
 
   const propias = Object.keys(datos.copiasPropias);
   if (propias.length > 0) {
-    lineas.push('', `Copias propias publicadas (${propias.length}) — mismo contenido en la curada y en el almacén: son NUESTRAS, no un choque:`);
+    lineas.push('', t('scope.systems.own-copies-header', { n: propias.length }));
     lineas.push(`  ${propias.join(', ')}`);
   }
 
   if (datos.nombresEquivalentes.length > 0) {
-    lineas.push('', 'Nombres que sólo difieren en mayúsculas (el mismo fichero en Windows, dos en Linux):');
-    for (const par of datos.nombresEquivalentes) lineas.push(`  · ${par.ids.join(' ↔ ')} — en ${par.sistema}`);
+    lineas.push('', t('scope.systems.equivalent-header'));
+    for (const par of datos.nombresEquivalentes) {
+      lineas.push(t('scope.systems.equivalent-row', { ids: par.ids.join(' / '), sistema: par.sistema }));
+    }
   }
 
   if (!datos.completo) {
-    lineas.push('', `Barrido INCOMPLETO (${datos.sinLeer.length}) — un choque puede estar aquí sin que nadie lo vea:`);
-    for (const fuente of datos.sinLeer) lineas.push(`  · ${fuente.nombre} — ${fuente.estado}: ${fuente.motivo}`);
+    lineas.push('', t('scope.systems.incomplete-header', { n: datos.sinLeer.length }));
+    for (const fuente of datos.sinLeer) {
+      lineas.push(t('scope.systems.incomplete-row', {
+        nombre: fuente.nombre,
+        estado: fuente.estado,
+        motivo: fuente.motivo,
+      }));
+    }
   }
 
   if (datos.totales.colisiones === 0 && datos.completo) {
-    lineas.push('', `Barrido completo sobre ${datos.totales.existentes} fuentes existentes: ${datos.totales.ids} identificadores, ninguno repetido entre sistemas.`);
+    lineas.push('', t('scope.systems.complete', {
+      fuentes: datos.totales.existentes,
+      ids: datos.totales.ids,
+    }));
   }
   return lineas.join('\n');
 }

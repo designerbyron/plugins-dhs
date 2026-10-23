@@ -28,6 +28,10 @@ import { conCerrojo, rutaDelCerrojo } from '../lib/lock.mjs';
 import { declararPropiedad, inventario, leerPropiedad, textoDeSistemas, textoDelEstado } from '../lib/scope.mjs';
 import { cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
 
+// Las aserciones de este fichero afirman la prosa de la propiedad y del inventario: se fija el idioma para que
+// no dependan de la configuracion del puesto. El CLI hereda la variable, y por eso comando y CLI siguen iguales.
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';
@@ -152,7 +156,7 @@ describe('el CLI y el comando dicen lo mismo', () => {
     assert.match(salida, /Declarada la propiedad: «dsh-only»/);
     assert.match(salida, /huella/);
     assert.equal(leerPropiedad({ root: s.root }).ownership, 'dsh-only');
-    assert.match(skillCommands({ root: s.root }).find((c) => c.name === 'skill-ownership').handler({}).text, /«dsh-only»/);
+    assert.match(skillCommands({ root: s.root }).find((c) => c.name === 'skill-ownership').handler({}).text, /"dsh-only"/);
   });
 
   it('el estado del inventario y su texto salen de la misma función que usa el CLI', () => {
