@@ -54,6 +54,14 @@ que sirve (`16 operaciones y 16 filas en <idioma>`), construidas desde el mapa y
 mano. Lo que sigue **sin verificar sin pantalla** es el dibujo del menú en sí: se infiere del evento y de la
 invalidación, y se declara como tal.
 
+**Cómo re-medirlo, con el registro de verdad y sin dobles:** `node scripts/vertical-idioma-real.mjs <dir>`,
+donde `<dir>` es la carpeta `dsh/node_modules` extraída del `app.asar` instalado (con `scripts/asar-read.py`).
+Levanta un `Context` real, monta el plugin de comandos del anfitrión, registra las 16 operaciones reales y las
+invoca por `registry.execute()` —la ruta del humano, con `command/run`/`command/done`—: comprueba 16 filas por
+idioma, que el nombre del otro idioma **no resuelve** (`execute` devuelve `undefined`), tres operaciones (lista,
+lectura y aprobación de verdad, con `approved/` en disco) por cada nombre, y cinco cambios que no acumulan. No
+lo corre `npm test`: necesita el build instalado, y la suite no depende de la máquina.
+
 ## 2 · Qué se implementó para no depender de esa capacidad
 
 1. **Tres caminos de montaje con motivo distinto.** `inject`, hijo montado y registro directo; el aviso dice
