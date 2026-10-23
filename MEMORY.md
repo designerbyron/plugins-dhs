@@ -340,5 +340,14 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
 - **F1.2 grupo 1 hecho** (proposals/pending/show + ayudantes compartidos): catálogo 34 → 74 claves por idioma.
   El inglés nuevo es ASCII. Las aserciones de prosa existentes se conservan fijando `DSH_LANG=es` en sus seis
   ficheros: así cada una prueba también la traducción española.
-- Pendiente de F1.2: grupos 2 a 5 (approve/publish/scope · reject/disable/enable/retire/retired ·
-  ownership/systems/auto · `bin/`).
+- Pendiente de F1.2: grupos 3 a 5 (reject/disable/enable/retire/retired · ownership/systems/auto · `bin/`).
+
+## v4.0.0 (en curso) — grupo 2: approve, publish y scope (2026-10-23, `4f3a0d3`)
+
+- Catalogo **74 -> 131 claves**. No se movieron los `code` ni las líneas del lote (`ok`/`FALLO` + `—`): la
+  tarjeta las parsea con `/^FALLO\s+(\S+)\s+—/`, son marcadores técnicos y traducirlas la rompería en silencio.
+- **Defecto real**: `/skill-scope` llamaba a `ambito()` sin importarlo. El `guarded` lo convertía en «No se
+  pudo completar: ambito is not defined», así que el cambio de ámbito desde la sesión **nunca funcionó** y
+  ninguna prueba lo ejercitaba (`ambito.test.mjs` prueba el motor, no el comando). Arreglado y con prueba.
+- Lección: un `try` alrededor de una función no importada convierte un fallo de código en un aviso de datos;
+  la única prueba que lo ve es la que ejecuta **el comando**, no la función.
