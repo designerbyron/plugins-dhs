@@ -12,6 +12,7 @@ se comporta en cada caso. Todo lo de la primera tabla está medido contra la com
 | Registro de comandos **por agente** (filas por propuesta en el menú «/») | **no** | tres caminos probados, tres motivos (abajo) |
 | Ejecutar una orden desde la interfaz (`runCommand` con texto) | **sí**, con **texto con barra** | el panel aprobó 10 propuestas reales: 3 + 7, 0 fallos |
 | Listar los comandos existentes (`listCommands`) | **sí** | el panel mide el efecto contra esa lista |
+| Alias del nombre viejo en el menú «/» | **sí, y no se pueden ocultar** | el descriptor que sirve el anfitrión no lleva `aliasOf` (abajo) |
 | Eventos de sesión (`session.snapshotEvents()`) | **sí** | `/skill-auto` se pliega de los `command/run` |
 | Catálogo de skills por proyecto (`~/.dsh/skills`, `approved/`) | **sí** | 12 activas, 3 publicadas, servidas sin reiniciar |
 
@@ -28,6 +29,25 @@ que declara su propio `inject: ['commands']`»). El plugin la intenta y **el anf
 
 Conclusión: en esta compilación, el servicio de comandos **no está en el ámbito del contexto del agente**. No es
 un defecto del plugin y no hay variante de llamada que lo arregle.
+
+### El menú «/» no distingue un alias de un comando canónico
+
+Composición medida en la compilación instalada, leyendo sus dos paquetes:
+
+1. `ctx.commands.register({ name, description, input, handler })` pasa por `normalizeDefinition`, que construye
+   el descriptor con **lista cerrada**: `{definitionId?, name, description, input?}`. Lo que no esté ahí no viaja.
+2. La interfaz pide el catálogo con `ctx.remote.commands.list(sessionId)` (`CommandRuntime.list`, ordenado por
+   nombre) y compone cada fila del menú con `name`, `description` e `input.hint`.
+3. La única condición que oculta una fila es no declarar `hint` cuando el cursor no está al principio de la
+   línea (`req.position === 'leading' || c.hint === undefined`). No hay campo de ocultación.
+
+Consecuencia para los alias: `aliasOf` y `deprecatedIn` **no llegan a la interfaz** (0 apariciones de esos dos
+nombres en todo el `app.asar`), así que el menú anuncia las 16 filas canónicas **más** los 15 alias, y la
+descripción del alias es lo único que dice cuál es su canónico y cuándo se retira. Retirar el registro para
+ocultarlos les quitaría la invocabilidad, que es justamente lo que el humano usa hasta `5.0.0`. Por eso `doctor`
+cuenta las 31 filas en voz alta (`15 de 31 filas del menu (16 canonicos)`) y la tabla de alias se comprueba con
+`aliasProblems()`, para que no pueda mentir en silencio. Qué la cerraría: un descriptor con marca de ocultación,
+o un `aliasOf` que el menú lea.
 
 ## 2 · Qué se implementó para no depender de esa capacidad
 

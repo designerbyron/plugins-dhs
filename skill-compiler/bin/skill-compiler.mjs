@@ -735,6 +735,26 @@ switch (command) {
       line(false, tr('cli.doctor.commands-failed', { message: error.message }), tr('cli.doctor.commands-failed-remedy'));
     }
 
+    // -- Los alias: 15 nombres espanoles que siguen funcionando, y lo que el menu va a ensenar ------
+    //
+    // Medido en el build instalado: `@deepseek-ai/dsh-commands` recorta el descriptor a
+    // {definitionId, name, description, input} antes de servirlo, y `dsh-client-ui-commands` compone cada
+    // fila del menu con name + description + input.hint. Ni `aliasOf` ni `deprecatedIn` llegan a la
+    // interfaz (0 apariciones en todo el app.asar), asi que el menu anuncia las filas canonicas MAS los
+    // alias. No registrarlos para ocultarlos les quitaria la invocabilidad, que es justo lo que el humano
+    // usa hasta la retirada: por eso se cuentan en voz alta y se comprueban sus metadatos.
+    try {
+      const { skillCommands, aliasProblems, aliasSummary } = await import(pathToFileURL(join(packageRoot, 'lib', 'commands.mjs')).href);
+      const declaradas = skillCommands({ root });
+      const problemas = aliasProblems(declaradas);
+      const resumen = aliasSummary(declaradas);
+      line(problemas.length === 0,
+        tr('cli.doctor.alias-ok', { alias: resumen.alias, filas: resumen.filas, canonicos: resumen.canonicos }),
+        problemas.map((p) => `${p.regla} ${p.alias}: ${p.detalle}`).join('; ') || tr('cli.doctor.alias-remedy'));
+    } catch (error) {
+      line(false, tr('cli.doctor.alias-failed', { message: error.message }), tr('cli.doctor.alias-failed-remedy'));
+    }
+
     // -- Las filas de pendientes: la superficie que convierte aprobar en elegir --------------------
     //
     // Medido con el usuario delante: veia la lista de pendientes y no encontraba como elegir una, porque

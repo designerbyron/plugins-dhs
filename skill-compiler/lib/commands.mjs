@@ -372,6 +372,116 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
 }
 
 /**
+ * Los alias funcionales de los nombres antiguos, y su retirada declarada.
+ *
+ * Renombrar un comando **es cambiar el contrato**: los comandos de sesion pasaron a nombre ingles y el
+ * nombre espanol sigue funcionando hasta `RETIRADA_DE_ALIAS` como alias del canonico, mismo handler,
+ * mismos argumentos, misma puerta y mismos efectos.
+ *
+ * El alias se declara con **metadatos** (`aliasOf`, `deprecatedIn`) y no por el texto, para que una
+ * superficie pueda ocultarlo por dato. Medido en el harness instalado (`@deepseek-ai/dsh-commands`): el
+ * registro recorta el descriptor a `{definitionId, name, description, input}` antes de servirlo, y el menu
+ * `/` (`dsh-client-ui-commands`) compone sus filas con `name` + `description` + `input.hint`; no hay campo
+ * de ocultacion ni conoce `aliasOf`. Por eso hoy el menu ensena los 31 (16 canonicos + 15 alias): retirar
+ * el registro para ocultarlos les quitaria la invocabilidad. Lo que si se puede hacer -y se hace- es que la
+ * descripcion diga el canonico y la retirada, y que `aliasProblems()` deje el dato comprobable en `doctor`.
+ */
+export const ALIAS_ESPERADOS = Object.freeze({
+  'skill-propuestas': 'skill-proposals',
+  'skill-pendientes': 'skill-pending',
+  'skill-ver': 'skill-show',
+  'skill-aprobar': 'skill-approve',
+  'skill-globalizar': 'skill-publish',
+  'skill-ambito': 'skill-scope',
+  'skill-deshabilitar': 'skill-disable',
+  'skill-habilitar': 'skill-enable',
+  'skill-eliminar': 'skill-retire',
+  'skill-retiradas': 'skill-retired',
+  'skill-propiedad': 'skill-ownership',
+  'skill-propiedad-dsh-only': 'skill-ownership-dsh-only',
+  'skill-propiedad-machine': 'skill-ownership-machine',
+  'skill-sistemas': 'skill-systems',
+  'skill-rechazar': 'skill-reject',
+});
+
+/** La version en la que los alias dejan de existir. Es un dato: viaja a la descripcion y a `doctor`. */
+export const RETIRADA_DE_ALIAS = '5.0.0';
+
+/**
+ * Los problemas de los alias, medidos sobre las definiciones que se van a registrar.
+ *
+ * Existe porque el defecto silencioso de una tabla de alias es el `continue`: un destino mal escrito deja el
+ * alias sin registrar y no lo dice nadie. Devuelve una lista vacia cuando todo esta en su sitio; cada
+ * problema nombra la regla, el alias y que se esperaba.
+ *
+ * @param definiciones - lo que devuelve `skillCommands(...)`, ya construido.
+ * @param esperados - la tabla esperada (se puede sustituir en una prueba para medir el rechazo).
+ */
+export function aliasProblems(definiciones = [], esperados = ALIAS_ESPERADOS) {
+  const lista = Array.isArray(definiciones) ? definiciones : [];
+  const problemas = [];
+  const porNombre = new Map();
+  for (const c of lista) {
+    if (porNombre.has(c?.name)) {
+      problemas.push({ regla: 'alias-duplicado', alias: String(c?.name), detalle: 'el nombre se registra dos veces' });
+    }
+    porNombre.set(c?.name, c);
+  }
+  const nombresCanonicos = new Set(lista.filter((c) => c?.aliasOf === undefined).map((c) => c.name));
+  for (const [viejo, nuevo] of Object.entries(esperados)) {
+    if (!nombresCanonicos.has(nuevo)) {
+      problemas.push({ regla: 'alias-destino', alias: viejo, detalle: `su canonico "${nuevo}" no esta registrado` });
+      continue;
+    }
+    const alias = porNombre.get(viejo);
+    if (alias === undefined) {
+      problemas.push({ regla: 'alias-ausente', alias: viejo, detalle: `no se registro como alias de "${nuevo}"` });
+      continue;
+    }
+    if (alias.aliasOf !== nuevo) {
+      problemas.push({ regla: 'alias-destino', alias: viejo, detalle: `declara aliasOf "${alias.aliasOf}" y se esperaba "${nuevo}"` });
+    }
+    if (!/^\d+\.\d+\.\d+$/.test(String(alias.deprecatedIn ?? ''))) {
+      problemas.push({ regla: 'alias-retirada', alias: viejo, detalle: `deprecatedIn "${alias.deprecatedIn}" no es una version` });
+    }
+    if (typeof alias.handler !== 'function') {
+      problemas.push({ regla: 'alias-handler', alias: viejo, detalle: 'el alias no tiene handler: no se puede invocar' });
+    }
+    if (typeof alias.description !== 'string' || alias.description.trim() === '') {
+      problemas.push({ regla: 'alias-descripcion', alias: viejo, detalle: 'sin descripcion: el menu no puede explicar que hace' });
+    }
+  }
+  for (const c of lista) {
+    if (c?.aliasOf === undefined) continue;
+    if (esperados[c.name] === undefined) {
+      problemas.push({ regla: 'alias-sobrante', alias: c.name, detalle: 'se registra como alias y no esta en la tabla' });
+    }
+    if (c.aliasOf === c.name) {
+      problemas.push({ regla: 'alias-ciclo', alias: c.name, detalle: 'se declara alias de si mismo' });
+    }
+  }
+  return problemas;
+}
+
+/**
+ * Lo que el menu va a ensenar, contado sobre las definiciones reales.
+ *
+ * El numero importa porque el harness no filtra los alias: si un dia el menu ensena 31 filas, es esto, y el
+ * humano lo lee en `doctor` en vez de descubrirlo buscando su comando entre los obsoletos.
+ */
+export function aliasSummary(definiciones = [], esperados = ALIAS_ESPERADOS) {
+  const lista = Array.isArray(definiciones) ? definiciones : [];
+  const alias = lista.filter((c) => c?.aliasOf !== undefined);
+  return {
+    canonicos: lista.length - alias.length,
+    alias: alias.length,
+    filas: lista.length,
+    esperados: Object.keys(esperados).length,
+    aliasNames: alias.map((c) => c.name).sort(),
+  };
+}
+
+/**
  * Crea los comandos del plugin.
  *
  * @param root - raíz del almacén.
@@ -830,26 +940,8 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
   // argumentos, misma puerta y mismos efectos. El alias se declara con metadatos (`aliasOf`, `deprecatedIn`),
   // no por el texto: así el menú puede ocultarlo por dato y `doctor` puede contarlos.
   // La retirada de los alias es una fecha declarada, no una frase suelta en la descripcion.
-  const RETIRADA_DE_ALIAS = '5.0.0';
-  const ALIASES = {
-    'skill-propuestas': 'skill-proposals',
-    'skill-pendientes': 'skill-pending',
-    'skill-ver': 'skill-show',
-    'skill-aprobar': 'skill-approve',
-    'skill-globalizar': 'skill-publish',
-    'skill-ambito': 'skill-scope',
-    'skill-deshabilitar': 'skill-disable',
-    'skill-habilitar': 'skill-enable',
-    'skill-eliminar': 'skill-retire',
-    'skill-retiradas': 'skill-retired',
-    'skill-propiedad': 'skill-ownership',
-    'skill-propiedad-dsh-only': 'skill-ownership-dsh-only',
-    'skill-propiedad-machine': 'skill-ownership-machine',
-    'skill-sistemas': 'skill-systems',
-    'skill-rechazar': 'skill-reject',
-  };
   const porNombre = new Map(definiciones.map((c) => [c.name, c]));
-  for (const [viejo, nuevo] of Object.entries(ALIASES)) {
+  for (const [viejo, nuevo] of Object.entries(ALIAS_ESPERADOS)) {
     const canonico = porNombre.get(nuevo);
     if (canonico === undefined) continue;
     definiciones.push({

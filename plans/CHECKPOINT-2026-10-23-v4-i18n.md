@@ -295,3 +295,45 @@ Medido con el binario (`node bin/skill-compiler.mjs doctor`), `DSH_HOME` en la a
   Traducirlas es cambiar el DATO, no el texto: pide su tabla de representacion, como se hizo con `scope.mjs`.
 - El **motivo de bloqueo de `repair`**: `sinReparacion[].motivo` es prosa literal del motor
   (`lib/repair.mjs` lineas 390, 394 y 413) y se imprime tal cual en los dos idiomas.
+## F1.1 · alias y menu: cerrado con lo que se pudo medir
+
+### Lo que el harness instalado hace (medido, no deducido)
+
+| Capa | Artefacto | Que hace |
+|---|---|---|
+| Registro | `@deepseek-ai/dsh-commands/lib/index.js` (`normalizeDefinition`) | valida nombre, descripcion no vacia, handler funcion e `input.hint`; guarda la `definition` con `recordInput`/`definitionId` y publica un `descriptor` de **lista cerrada**: `{definitionId?, name, description, input?}` |
+| Despacho | mismo paquete, `execute(agent, line, ...)` | parte la linea por el primer espacio, busca el nombre en la capa fusionada, anota `command/run` (con `args`, salvo `recordInput: false`), llama al handler y sella `command/done`; un handler que lanza o se cancela cierra como `error` |
+| Menu `/` | `@deepseek-ai/dsh-client-ui-commands/lib/client.js` (`candidates`) | `ctx.remote.commands.list(sessionId)` -> una fila por descriptor con `name` + `description` + `input.hint`; oculta solo las filas con `hint` cuando el cursor no esta al principio de la linea; consulta vacia -> secciones Add/Commands, consulta escrita -> `rankByName` |
+
+- **No interpreta `aliasOf` ni `deprecatedIn`**: ninguno de esos dos nombres aparece en el `app.asar` (barrido de
+  los ~18.300 ficheros: 0 coincidencias), y el descriptor no los lleva porque se pierden en
+  `normalizeDefinition`.
+- Por tanto **no hay punto de integracion donde filtrar sin perder la invocabilidad**: el menu compone lo que
+  esta registrado y `execute` resuelve por nombre, asi que no registrar un alias lo deja sin despacho. No se
+  invento ninguna API para simular un filtro que el anfitrion no tiene.
+
+### Lo que se implemento
+
+- `ALIAS_ESPERADOS` y `RETIRADA_DE_ALIAS` pasan del ambito de `skillCommands` al del modulo y se exportan: el
+  dato se puede medir desde `doctor` y desde las pruebas.
+- `aliasProblems(definiciones, esperados)` mide: destino inexistente, alias ausente, `aliasOf` que apunta a otro
+  sitio, `deprecatedIn` que no es version, handler que no es funcion, descripcion vacia, alias fuera de la tabla,
+  nombre duplicado y alias de si mismo. Cierra el defecto silencioso del `continue`.
+- `aliasSummary(definiciones)` cuenta canonicos, alias y filas del menu.
+- `doctor` gana una linea de alias: `los alias estan declarados y son coherentes: 15 de 31 filas del menu (16
+  canonicos); el harness no filtra por metadatos...`. Cuenta, no presume.
+- `docs/ANFITRION.md`: seccion nueva con la composicion del menu y su consecuencia, y su fila en la tabla de
+  capacidades medidas.
+
+### Pruebas nuevas
+
+`tests/alias-menu.test.mjs` (9 casos): los 15 alias existen con metadatos coherentes; cada alias **invocado de
+verdad** devuelve el mismo `kind` y el mismo `code` que su canonico (dos arenas distintas); las definiciones
+reales no tienen ningun problema y el menu anuncia 31 filas; los rechazos de `aliasProblems`; `doctor` con el
+recuento, en los dos idiomas. Suite **730 -> 739**.
+
+### Lo que NO se pudo observar desde aqui
+
+- **Las filas visibles del menu**: en este entorno no hay navegador ni sesion interactiva, asi que no se vio el
+  menu pintado. Lo comprobado es el registro (descriptores reales), el despacho (`execute` sobre la linea), los
+  metadatos y la invocabilidad por handler; lo no comprobado es el pixel. No se afirma.
