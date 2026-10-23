@@ -32,6 +32,7 @@ import { dirname, join } from 'node:path';
 
 import { AUTO_COMMAND, autoApproveFromEvents, parseAutoCommand } from './auto-approve.mjs';
 import {
+  ambito,
   approve, checkProposal, curatedLibraryRoot, defaultRoot, disable, enable, listForProject, locate, move, pending, sugerenciaDeId,
   projectKey, reject, retire, retired,
 } from './compiler.mjs';
@@ -141,7 +142,7 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
 export function aprobarLote({ root, key, ids = [], scope = 'project', force = false, catalog } = {}) {
   if (key === null) return bad(noScope());
   const limpios = [...new Set(ids.map((x) => String(x ?? '').trim()).filter(Boolean))];
-  if (limpios.length === 0) return bad('No hay ids que aprobar.');
+  if (limpios.length === 0) return bad(t('cmd.batch.no-ids'));
   const resultados = [];
   for (const id of limpios) {
     const r = approveProposal({ root, key, id, force, scope, catalog: null });
@@ -151,11 +152,13 @@ export function aprobarLote({ root, key, ids = [], scope = 'project', force = fa
   const mal = resultados.length - bien;
   if (bien > 0) catalog?.notify();
   const texto = [
-    `Lote de ${resultados.length}: ${bien} aprobada(s) · ${mal} con fallo`,
-    `Ámbito: ${scope === 'global' ? 'biblioteca de usuario (todos los proyectos)' : `este proyecto (${key})`}`,
+    t('cmd.batch.title', { n: resultados.length, done: bien, failed: mal }),
+    t('cmd.batch.scope', {
+      scope: scope === 'global' ? t('cmd.batch.scope-global') : t('cmd.batch.scope-local', { key }),
+    }),
     '',
     ...resultados.map((r) => `${r.ok ? 'ok   ' : 'FALLO'} ${r.id} — ${r.primera}`),
-    ...(mal > 0 ? ['', 'Los que fallaron no se movieron; su motivo está en su línea.'] : []),
+    ...(mal > 0 ? ['', t('cmd.batch.failed-hint')] : []),
   ].join('\n');
   return bien === resultados.length ? ok(texto) : bad(texto);
 }
@@ -199,7 +202,7 @@ const diarioDelProyecto = (root, key) => join(root, 'projects', key, 'journal.js
 export function approveProposal({ root = defaultRoot(), key, id, force = false, scope = 'project', catalog, preservarEstado = false } = {}) {
   if (key === null) return bad(noScope());
   const wanted = String(id ?? '').trim();
-  if (wanted === '') return bad('Falta el id. Uso: /skill-approve <id> [--force]');
+  if (wanted === '') return bad(t('cmd.approve.missing-id'));
   const noEsId = idNoUtilizable(wanted);
   if (noEsId !== null) return noEsId;
 
@@ -208,22 +211,22 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   const where = locate(wanted, key, { root });
   if (scope === 'global' && (where === 'global' || where === 'published')) {
     return ok([
-      `Ya estaba publicada: ${wanted} en la biblioteca de usuario`,
-      'No se ha cambiado nada.',
+      t('code.already-published', { id: wanted }),
+      t('cmd.approve.no-change'),
       ...remaining(root, key),
     ].join('\n'), { code: 'already-published', params: { id: wanted } });
   }
   if (where === 'approved') {
     return ok([
-      `Ya estaba activa: ${wanted} [${key}]`,
-      'No se ha cambiado nada.',
+      t('cmd.approve.already-active', { id: wanted, key }),
+      t('cmd.approve.no-change'),
       ...remaining(root, key),
     ].join('\n'), { code: 'already-active', params: { id: wanted } });
   }
   if (where === 'rejected') {
     return bad([
-      `«${wanted}» está apartada en ${key}, no pendiente de aprobación.`,
-      'Su copia sigue en rejected/: recuperarla es un acto manual, y a propósito.',
+      t('cmd.approve.rejected-dir', { id: wanted, key }),
+      t('cmd.approve.rejected-dir-hint'),
     ].join('\n'));
   }
   if (where === null) return noEstáElId(wanted, key, root);
@@ -232,17 +235,17 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   const check = checkProposal(wanted, key, { root });
   if (!check.ok) {
     return bad([
-      `Aprobación RECHAZADA: la propuesta ${wanted} no pasa la puerta.`,
-      ...check.errors.map((e) => `  FALLO  ${e}`),
-      'No se ha movido nada. Corrige la propuesta y repite.',
+      t('cmd.approve.gate-failed', { id: wanted }),
+      ...check.errors.map((e) => t('cmd.approve.gate-error', { error: e })),
+      t('cmd.approve.gate-hint'),
     ].join('\n'), { code: 'gate-failed', params: { id: wanted, errors: check.errors } });
   }
   if (check.warnings.length > 0 && !force) {
     return bad([
-      `La propuesta ${wanted} tiene avisos:`,
-      ...check.warnings.map((w) => `  aviso  ${w}`),
+      t('cmd.approve.warnings', { id: wanted }),
+      ...check.warnings.map((w) => t('cmd.approve.warning-line', { aviso: w })),
       '',
-      `Si los aceptas: /skill-approve ${wanted} --force`,
+      t('cmd.approve.force-hint', { id: wanted }),
     ].join('\n'), { code: 'with-warnings', params: { id: wanted, warnings: check.warnings } });
   }
 
@@ -256,10 +259,13 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
   // importa es dónde se sirve —o se dejaría de servir—.
   const estadoOrigen = ['approved', 'disabled'].find((estado) => existsSync(join(root, 'projects', key, estado, wanted))) ?? locate(wanted, key, { root });
   if (preservarEstado && estadoOrigen !== 'disabled') {
-    return bad(`--preserve-state sólo tiene sentido con una skill apagada: «${wanted}» está en ${estadoOrigen ?? 'ningún estado vivo'}.`, { code: 'invalid-flag', params: { flag: '--preserve-state', id: wanted } });
+    return bad(
+      t('cmd.approve.preserve-invalid', { id: wanted, estado: estadoOrigen ?? t('cmd.approve.no-live-state') }),
+      { code: 'invalid-flag', params: { flag: '--preserve-state', id: wanted } },
+    );
   }
   const moved = approve(wanted, key, { root, scope, esperada: huellaAntes, ...(preservarEstado ? { estado: 'disabled' } : {}) });
-  if (!moved.ok) return bad(`No se pudo aprobar ${wanted}: ${moved.reason}`);
+  if (!moved.ok) return bad(t('cmd.approve.move-failed', { id: wanted, reason: moved.reason }));
 
   // El catálogo acaba de cambiar: sin este aviso, la skill no llega al agente hasta reiniciar.
   catalog?.notify();
@@ -288,23 +294,27 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
     const ficheros = (() => { try { return ficherosQueDifieren(check.dir, destino); } catch { return []; } })();
     const vuelta = move(root, key, wanted, 'approved', 'proposed');
     return bad([
-      `NO se aprobó ${wanted}: el contenido activado no es el que validaste (${huellaAntes.slice(0, 12)} → ${huellaDespues.slice(0, 12)}).`,
-      ...(ficheros.length ? [`  difiere: ${ficheros.join(', ')}`] : []),
-      vuelta.ok ? '  Se devolvió a propuestas: no queda activa. Vuelve a validarla con /skill-show y decide otra vez.' : `  No se pudo devolver a propuestas (${vuelta.reason}): revísala a mano antes de usarla.`,
-      '  La versión anterior, si la había, sigue apartada en superseded/ y se recupera a mano.',
+      t('cmd.approve.drift', { id: wanted, antes: huellaAntes.slice(0, 12), despues: huellaDespues.slice(0, 12) }),
+      ...(ficheros.length ? [t('cmd.approve.drift-files', { ficheros: ficheros.join(', ') })] : []),
+      vuelta.ok
+        ? t('cmd.approve.drift-returned')
+        : t('cmd.approve.drift-return-failed', { reason: vuelta.reason }),
+      t('cmd.approve.drift-superseded'),
     ].join('\n'));
   }
 
   return ok([
-    preservarEstado ? `Actualizada (sigue apagada): ${wanted} [${key}]` : `Activa: ${wanted} [${key}]`,
-    `  ${moved.path}`,
-    ...(moved.superseded ? [`  versión anterior apartada en ${moved.superseded}`] : []),
-    ...(check.warnings.length > 0 ? ['', 'Aprobada con avisos:', ...check.warnings.map((w) => `  · ${w}`)] : []),
-    '',
     preservarEstado
-      ? 'Sigue apagada: no se sirve al modelo. Se enciende con /skill-enable cuando lo decidas.'
-      : 'Ya la sirve el catálogo de este proyecto: el agente la ve en su siguiente paso, sin reiniciar.',
-    `Invocarla tú: /${wanted}`,
+      ? t('code.updated-disabled', { id: wanted, key })
+      : t('code.activated', { id: wanted, key }),
+    t('cmd.approve.path', { path: moved.path }),
+    ...(moved.superseded ? [t('cmd.approve.superseded', { path: moved.superseded })] : []),
+    ...(check.warnings.length > 0
+      ? ['', t('cmd.approve.with-warnings-header'), ...check.warnings.map((w) => t('cmd.approve.warning-bullet', { aviso: w }))]
+      : []),
+    '',
+    preservarEstado ? t('cmd.approve.still-off') : t('cmd.approve.now-served'),
+    t('cmd.approve.invoke', { id: wanted }),
     ...remaining(root, key),
   ].join('\n'), scope === 'global'
     ? { code: 'published', params: { id: wanted, key } }
@@ -534,7 +544,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
     {
       name: 'skill-approve',
-      description: 'Activa una skill propuesta, si pasa la puerta de validación: en este proyecto, o para todos los tuyos si lo dices. Sin decir dónde, pregunta. Aprobar es tuyo: el modelo no puede.',
+      description: t('cmd.approve.description'),
       input: { hint: '<id> [--global|--local] [--force]' },
       handler: guarded(({ agent, rawInput }, montaje) => {
         const { key } = scopeOfAgent(agent);
@@ -550,13 +560,13 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         if (ids.length > 1) {
           if (!global && !local) {
             return ok([
-              `¿Dónde quieres que vivan estas ${ids.length}?`,
+              t('cmd.batch.ask', { n: ids.length }),
               '',
-              `  · En ESTE proyecto (${key}): /skill-approve ${ids.join(',')} --local`,
-              `  · Para TODOS tus proyectos: /skill-approve ${ids.join(',')} --global`,
+              t('cmd.batch.ask-local', { key, ids: ids.join(',') }),
+              t('cmd.batch.ask-global', { ids: ids.join(',') }),
               '',
-              'Es un lote: cada una pasa por la misma puerta y el informe dice cuál falló.',
-            ].join('\n'));
+              t('cmd.batch.ask-hint'),
+            ].join('\n'), { code: 'scope-ask', params: { ids } });
           }
           return aprobarLote({ root, key, ids, scope: global ? 'global' : 'project', force, catalog });
         }
@@ -565,15 +575,15 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         // humano. «Local» no es un defecto que se esconde: es una de las dos respuestas.
         if (!global && !local && locate(id, key, { root }) === 'proposed') {
           return ok([
-            `¿Dónde quieres que viva «${id}»?`,
+            t('cmd.scope.ask', { id }),
             '',
-            `  · En ESTE proyecto (${key}): /skill-approve ${id} --local`,
-            '      la sirve el plugin sólo en las sesiones de este proyecto.',
-            `  · Para TODOS tus proyectos: /skill-approve ${id} --global`,
-            '      se publica en la biblioteca de usuario y la sirve el harness en cualquier sesión.',
+            t('cmd.scope.ask-local', { key, id }),
+            t('cmd.scope.ask-local-hint'),
+            t('cmd.scope.ask-global', { id }),
+            t('cmd.scope.ask-global-hint'),
             '',
-            'También valen sus filas del menú «/»: «skill-approve-<id>» y «skill-publish-<id>».',
-            'Con «--force» si la propuesta viene con avisos.',
+            t('cmd.scope.ask-rows'),
+            t('cmd.scope.ask-force'),
           ].join('\n'), { code: 'scope-ask', params: { id } });
         }
 
@@ -581,15 +591,15 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const result = approveProposal({ root, key, id, force, scope, catalog });
         if (result?.kind !== 'ok') return result;
         const nota = scope === 'global'
-          ? `Se sirve en toda sesión de esta máquina (biblioteca de usuario). Para dejarla sólo en este proyecto: /skill-scope ${id} --local`
-          : `Se sirve al modelo sólo en este proyecto. Para que la vean todos: /skill-approve ${id} --global`;
+          ? t('cmd.approve.note-global', { id })
+          : t('cmd.approve.note-local', { id });
         return ok([result.text, '', nota].join('\n'));
       }),
     },
 
     {
       name: 'skill-publish',
-      description: 'Activa una skill propuesta para TODOS tus proyectos: la publica en la biblioteca de usuario, que el harness sirve en cualquier sesión.',
+      description: t('cmd.publish.description'),
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
@@ -600,32 +610,32 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const id = bruto.replace(/(?:\s+--force)+$/, '').trim();
         const result = approveProposal({ root, key, id, force, scope: 'global', catalog });
         if (result?.kind !== 'ok') return result;
-        return ok([result.text, '', `Para dejarla sólo en este proyecto: /skill-scope ${id} --local`].join('\n'));
+        return ok([result.text, '', t('cmd.publish.note-local', { id })].join('\n'));
       }),
     },
 
     {
       name: 'skill-scope',
-      description: 'Cambia dónde vive una skill ya aprobada: en este proyecto o en la biblioteca de usuario, en las dos direcciones.',
+      description: t('cmd.scope.description'),
       input: { hint: '<id> --global | --local' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
         const input = String(rawInput ?? '').trim();
         const to = /(?:^|\s)--global(?:\s|$)/.test(input) ? 'global' : /(?:^|\s)--local(?:\s|$)/.test(input) ? 'project' : null;
         const id = input.replace(/(?:\s+--(?:global|local))+$/, '').trim();
-        if (id === '') return bad('Falta el id. Uso: /skill-scope <id> --global|--local');
+        if (id === '') return bad(t('cmd.scope.missing-id'));
         const moved = ambito(id, key, { root, to });
-        if (!moved.ok) return bad(`No se pudo cambiar el ámbito: ${moved.reason}`);
+        if (!moved.ok) return bad(t('cmd.scope.move-failed', { reason: moved.reason }));
         catalog?.notify();
         return ok([
           moved.scope === 'global'
-            ? `Ahora «${id}» vive en la biblioteca de usuario: la ven TODOS tus proyectos.`
-            : `Ahora «${id}» vive en este proyecto (${key}).`,
-          `  ${moved.path}`,
-          `  huella: ${moved.sha256}`,
+            ? t('cmd.scope.now-global', { id })
+            : t('cmd.scope.now-local', { id, key }),
+          t('cmd.scope.path', { path: moved.path }),
+          t('cmd.scope.hash', { sha: moved.sha256 }),
           moved.scope === 'global'
-            ? `Volver a este proyecto: /skill-scope ${id} --local`
-            : `Publicarla para todos: /skill-scope ${id} --global`,
+            ? t('cmd.scope.back-local', { id })
+            : t('cmd.scope.to-global', { id }),
         ].join('\n'));
       }),
     },

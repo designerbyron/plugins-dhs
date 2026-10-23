@@ -17,6 +17,9 @@ import { approve, disable, propose, projectKey } from '../lib/compiler.mjs';
 import { reparar } from '../lib/repair.mjs';
 import { cleanupSandboxes, sandbox } from './helpers.mjs';
 
+// La prosa de este fichero se afirma en español: el idioma se fija explícitamente (el base es `en`).
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';
@@ -190,6 +193,10 @@ describe('CLI real (subproceso, arena) · una propuesta con avisos', () => {
 describe('CLI real (subproceso, arena) · idioma del plugin', () => {
   it('sin preferencia dice en y de dónde sale; fijarlo persiste y se lee en el proceso siguiente', () => {
     const arena = sandbox();
+    // Este caso mide el idioma POR DEFECTO, así que corre sin `DSH_LANG`: el resto del fichero lo fija a
+    // `es` para poder afirmar la prosa española de los comandos.
+    const guardado = process.env.DSH_LANG;
+    delete process.env.DSH_LANG;
     const antes = cli(arena, 'lang');
     assert.equal(antes.code, 0, antes.salida);
     assert.match(antes.salida, /^language: en \(source: default\)$/m);
@@ -200,6 +207,8 @@ describe('CLI real (subproceso, arena) · idioma del plugin', () => {
 
     const despues = cli(arena, 'lang');
     assert.match(despues.salida, /^idioma: es \(fuente: config\)$/m);
+    if (guardado === undefined) delete process.env.DSH_LANG;
+    else process.env.DSH_LANG = guardado;
   });
 
   it('un idioma no admitido sale con código 2 y no crea configuración', () => {
@@ -224,9 +233,14 @@ describe('CLI real (subproceso, arena) · idioma del plugin', () => {
 
   it('doctor publica el idioma con su fuente', () => {
     const arena = sandbox();
+    // Este caso mide la fuente `config`: corre sin `DSH_LANG`, que el resto del fichero fija a `es`.
+    const guardado = process.env.DSH_LANG;
+    delete process.env.DSH_LANG;
     cli(arena, 'lang', 'es');
     const r = cli(arena, 'doctor');
     assert.match(r.salida, /idioma: es \(fuente: config\)/);
+    if (guardado === undefined) delete process.env.DSH_LANG;
+    else process.env.DSH_LANG = guardado;
   });
 
   it('el ajuste conserva claves ajenas del config', () => {
