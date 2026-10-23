@@ -735,50 +735,65 @@ window.__ModuleLoader__.load({
 
     function createPendingStore() {
       let foto = { ids: null, avisos: new Map(), medible: false, failure: '', at: 0, seq: 0 };
-      let enVuelo = null;
+      // Generacion del estado: sube con cada invalidacion. Una lectura que empezo antes de una invalidacion
+      // pertenece a la generacion vieja y **no puede contestar** por el estado nuevo ni pisar su foto.
+      let generacion = 0;
+      let enVuelo = null; // { generacion, promesa }
       let lector = null;
       const oyentes = new Set();
       const avisar = () => { for (const oyente of [...oyentes]) oyente(foto); };
       return {
         /** La foto actual. `ids === null` significa "todavia no se ha podido leer". */
         foto: () => foto,
-        /** Quien sabe leer: lo pone la tarjeta en cada render (runCommand/listCommands son del host). */
+        /** Quien sabe leer: lo pone la tarjeta en cada render (runCommand es del host). */
         usarLector: (fn) => { if (typeof fn === 'function') lector = fn; },
         suscribir(fn) { oyentes.add(fn); return () => oyentes.delete(fn); },
-        /** La foto deja de servir: la proxima lectura pregunta al almacen aunque este dentro de la ventana. */
-        invalidar() { foto = { ...foto, at: 0 }; },
+        /** La foto deja de servir: sube la generacion y la proxima lectura pregunta al almacen de verdad. */
+        invalidar() { generacion += 1; foto = { ...foto, at: 0 }; },
         /**
          * La foto, leyendola si hace falta. Devuelve SIEMPRE la foto (con `failure` si no se pudo leer), para
          * que quien llama no tenga que distinguir "no hay nada" de "no pude mirar": son cosas distintas y el
          * panel las dice distintas.
+         *
+         * Single-flight **solo dentro de la misma generacion**: dos lecturas del mismo estado comparten la
+         * ejecucion; una lectura forzada despues de una decision arranca la suya, porque la que iba en camino
+         * se pidio antes de que el almacen cambiara.
          */
         async leer({ force = false } = {}) {
           const ahora = Date.now();
           if (!force && foto.at > 0 && ahora - foto.at < ESPERA_FOTO_MS) return foto;
-          if (enVuelo !== null) return enVuelo;
-          enVuelo = (async () => {
+          if (enVuelo !== null && enVuelo.generacion === generacion) return enVuelo.promesa;
+          const mia = generacion;
+          const promesa = (async () => {
+            let leida = null;
+            let fallo = null;
             try {
               if (lector === null) throw new Error('sin lector');
-              const leida = await lector();
-              foto = {
+              leida = await lector();
+            } catch (error) {
+              fallo = error;
+            }
+            // Una lectura de una generacion anterior que termina tarde no escribe: su foto es de antes de la
+            // decision. Es la carrera que este contador cierra.
+            if (mia !== generacion) return foto;
+            foto = fallo === null
+              ? {
                 ids: Array.isArray(leida?.ids) ? leida.ids : [],
                 avisos: leida?.avisos instanceof Map ? leida.avisos : new Map(),
                 medible: leida?.medible === true,
                 failure: '',
                 at: Date.now(),
                 seq: foto.seq + 1,
-              };
-            } catch (error) {
+              }
               // Un fallo de lectura no se convierte en "no hay nada": la foto conserva lo que sabia y dice el
               // motivo. `at` a 0 para que la proxima llamada lo reintente de verdad.
-              foto = { ...foto, failure: String(error?.message ?? error), at: 0, seq: foto.seq + 1 };
-            } finally {
-              enVuelo = null;
-              avisar();
-            }
+              : { ...foto, failure: String(fallo?.message ?? fallo), at: 0, seq: foto.seq + 1 };
+            if (enVuelo !== null && enVuelo.promesa === promesa) enVuelo = null;
+            avisar();
             return foto;
           })();
-          return enVuelo;
+          enVuelo = { generacion: mia, promesa };
+          return promesa;
         },
       };
     }
@@ -822,36 +837,32 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = React.useState(false);
 
       /**
-       * Lo que el store usa para leer: el comando del plugin primero (existe siempre), las filas del menu
-       * como respaldo. Se registra en cada render porque `runCommand`/`listCommands` son del host.
+       * Lo que el store usa para leer: `/skill-pending` y nada mas. Es la unica fuente **independiente del tipo
+       * de tarjeta** -el verbo de las filas del menu depende del comando, y una lectura compartida no puede
+       * cambiar de significado segun cual se pinto la ultima-. Las filas del host siguen siendo la presentacion
+       * de cada tarjeta (`filas`, mas abajo), no la foto comun.
        */
       const leerPendientes = async () => {
-        try {
-          const r = await runCommand(sessionId, '/skill-pending');
-          const texto = String(r?.text ?? '');
-          const linea = /^ids:\s*(.*)$/m.exec(texto);
-          if (linea !== null) {
-            const ids = linea[1].trim() === '' ? [] : linea[1].split(',').map((x) => x.trim()).filter(Boolean);
-            const avisos = new Map();
-            for (const m of texto.matchAll(/^aviso:\s*(\S+)\s*·\s*(.*)$/gm)) {
-              if (!avisos.has(m[1])) avisos.set(m[1], []);
-              avisos.get(m[1]).push(m[2]);
-            }
-            return { ids, medible: true, avisos };
-          }
-        } catch {
-          /* sin el comando se sigue por las filas */
+        const r = await runCommand(sessionId, '/skill-pending');
+        const texto = String(r?.text ?? '');
+        const linea = /^ids:\s*(.*)$/m.exec(texto);
+        if (linea === null) return { ids: [], medible: false, avisos: new Map() };
+        const ids = linea[1].trim() === '' ? [] : linea[1].split(',').map((x) => x.trim()).filter(Boolean);
+        const avisos = new Map();
+        for (const m of texto.matchAll(/^aviso:\s*(\S+)\s*·\s*(.*)$/gm)) {
+          if (!avisos.has(m[1])) avisos.set(m[1], []);
+          avisos.get(m[1]).push(m[2]);
         }
-        const encontradas = rowIds(await listCommands(sessionId), listVerbFor(node?.name));
-        return { ids: encontradas, medible: encontradas.length > 0, avisos: new Map() };
+        return { ids, medible: true, avisos };
       };
       store.usarLector(leerPendientes);
 
       React.useEffect(() => {
         const baja = store.suscribir(setFoto);
         setFoto(store.foto());
-        // Una lectura por sesion y compartida: si otra tarjeta ya leyo hace un instante, esto no ejecuta nada.
-        store.leer().catch(() => {});
+        // NO se lee al montar: leer es ejecutar `/skill-pending` y cada lectura deja una notificacion en el
+        // flujo. La tarjeta ya trae su lista del comando que la abrio; la foto se pide cuando hay algo que
+        // decidir (antes de mandar la orden) y cuando hay que medir el efecto (despues).
         return baja;
       }, [store]);
 
@@ -882,8 +893,12 @@ window.__ModuleLoader__.load({
 
       // Una propuesta suelta se ofrece solo si de verdad sigue pendiente: si la foto dice que ya se decidio, el
       // bloque queda como registro y no ofrece botones. Es el defecto que se vio en pantalla: publicar arriba y
-      // seguir ofreciendo publicar abajo.
-      const yaDecidida = !bulk && foto.ids !== null && foto.medible && reading !== '' && !foto.ids.includes(reading);
+      // seguir ofreciendo publicar abajo. La foto comun es la de PENDIENTES, asi que esta regla vale para las
+      // listas de pendientes; la de apagadas pregunta otra cosa (su verbo es otro) y su comprobacion la hace el
+      // paso previo a decidir.
+      const listaDeApagadas = ['skill-retired', 'skill-retiradas'].includes(String(node?.name ?? ''));
+      const yaDecidida = !bulk && !listaDeApagadas && foto.ids !== null && foto.medible
+        && reading !== '' && !foto.ids.includes(reading);
       const ids = bulk
         ? (foto.ids !== null && foto.medible ? foto.ids : filas)
         : (yaDecidida ? [] : (reading === '' ? [] : [reading]));
@@ -1047,7 +1062,7 @@ window.__ModuleLoader__.load({
         // para el mismo dato, y el panel contaba como "fallo" lo que ya se habia decidido en otra tarjeta.
         let antes = null;
         try { antes = await pendientesAhora(); } catch { antes = null; }
-        if (!forzar && antes !== null) {
+        if (!forzar && antes !== null && antes.medible) {
           const conAvisos = [...picked].filter((id) => (antes.avisos?.get(id)?.length ?? 0) > 0);
           if (conAvisos.length > 0) {
             const texto = conAvisos
@@ -1061,8 +1076,9 @@ window.__ModuleLoader__.load({
         }
         let pendientes = [...picked];
         // Lo que la tarjeta muestra puede ser viejo (otra sesion, otra decision). Lo que ya no esta pendiente se
-        // dice como tal -no como un fallo del comando, que era un callejon sin salida-.
-        if (antes !== null) {
+        // dice como tal -no como un fallo del comando, que era un callejon sin salida-. Solo se juzga si la
+        // lectura fue MEDIBLE: sin poder mirar no se declara que algo desaparecio.
+        if (antes !== null && antes.medible) {
           const vivos = pendientes.filter((id) => antes.ids.includes(id));
           for (const id of pendientes) {
             if (!vivos.includes(id)) failed.push({ id, reason: 'ya no está pendiente en el almacén: la tarjeta estaba desactualizada' });

@@ -4,6 +4,38 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [No publicado] — rama `fix/panel-lecturas-concurrentes` · parche
+
+**Tres defectos mas del panel de pendientes, medidos con la release 5.0.1 ya instalada.** No sube
+`package.json`: la publicada sigue siendo la 5.0.1 y esto describe lo que aun no ha salido.
+
+1. **Un comando de lista dejaba un bloque de mas.** La 5.0.1 leia la foto al montar cada tarjeta, asi que
+   `/skill-proposals` —que ya trae su lista— ejecutaba ademas un `/skill-pending` y dejaba dos bloques en el
+   flujo. Ahora **no se lee al montar**: la tarjeta pinta la lista del comando que la abrio, y la foto se pide
+   cuando hay algo que decidir (antes de mandar la orden) y cuando hay que medir el efecto (despues). Cero
+   lecturas para listar.
+2. **Una lectura forzada podia aceptar la foto de antes de la decision.** El single-flight devolvia la lectura
+   en vuelo sin mirar cuando se habia pedido: si la tarjeta estaba leyendo cuando el humano decido, la
+   comprobacion del efecto reutilizaba esa lectura vieja y podia decir «sigue pendiente» de algo ya publicado.
+   Hay **generacion** en el store: `invalidar()` la sube, la lectura forzada arranca la suya, y una lectura de
+   una generacion anterior que termina tarde **no escribe**. El single-flight se conserva dentro de la misma
+   generacion.
+3. **El lector compartido dependia de que tarjeta se pintó la ultima.** El respaldo leia las filas del menu con
+   el verbo de la tarjeta (`approve`/`retire`), asi que dos tarjetas de la misma sesion con operaciones distintas
+   podian dejar una foto con otro significado. Ahora la foto comun sale **solo** de `/skill-pending` —fuente
+   independiente del verbo— y las filas del host se quedan como presentacion de cada tarjeta. Cuando la lectura
+   no es medible no se juzga nada: no se abre la pantalla de avisos ni se declara que algo desaparecio.
+
+### Medido
+
+- `tests/panel-pendientes.test.mjs`: **13 casos** (antes 9). Los nuevos: la lectura que empezo antes de decidir
+  **no** puede ser la foto final (`invalidar` + `force` ejecutan su propio lector y la vieja no pisa la nueva —
+  rojo antes del cambio, verde despues—), dos `force` de la misma generacion siguen compartiendo una ejecucion,
+  dos tarjetas con operaciones distintas ven la foto nueva tras decidir en una, y el lector comun no menciona el
+  verbo de la tarjeta.
+- `npm test` (hermetico): **902 pruebas, 902 pasan, 224 suites**; gates i18n (938 claves) y ASCII (8.289 con tope
+  8.289, 26/26) en verde. Huella del almacen real identica antes y despues.
+
 ## [5.0.1] — 2026-10-23 · parche
 
 **El panel preguntaba «¿qué está pendiente?» cinco veces por decisión, y una tarjeta seguía ofreciendo aprobar

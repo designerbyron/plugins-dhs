@@ -365,7 +365,10 @@ describe('artefacto de interfaz · el informe del lote se comprueba contra el ef
     assert.match(client, /ok: v\.fallos\.size === 0 && idsPedidos\.every\(\(id\) => v\.hechos\.has\(id\)\)/);
     assert.equal(/resultado\?\.kind === 'success'\)?\s*return \{ ok: true/.test(client), false, 'no se cree al kind');
     // Las filas quedan como comprobación de respaldo, y su ausencia es un estado de primera clase.
-    assert.match(client, /medible: encontradas\.length > 0/);
+    // La foto comun sólo es medible si `/skill-pending` contesto con su linea de ids: sin eso no se declara
+    // nada (un fallo de lectura no es «no hay nada»).
+    assert.match(client, /if \(linea === null\) return \{ ids: \[\], medible: false, avisos: new Map\(\) \}/);
+    assert.match(client, /return \{ ids, medible: true, avisos \}/);
     assert.match(client, /if \(observado === true\) \{/);
   });
 
@@ -513,8 +516,9 @@ describe('artefacto de interfaz · la puerta pide decisión, la tarjeta la ofrec
 describe('artefacto de interfaz · preguntar antes, no después del fallo', () => {
   it('los avisos se leen del almacén y la pantalla se abre SIN haber mandado la orden', () => {
     assert.match(client, /for \(const m of texto\.matchAll\(\/\^aviso:/);
-    // Una sola lectura antes de decidir: sirve para los avisos y para saber si el id sigue pendiente.
-    assert.match(client, /if \(!forzar && antes !== null\) \{/);
+    // Una sola lectura antes de decidir: sirve para los avisos y para saber si el id sigue pendiente. Y sólo
+    // si fue medible: sin poder mirar no se abre la pantalla de avisos ni se juzga que algo desaparecio.
+    assert.match(client, /if \(!forzar && antes !== null && antes\.medible\) \{/);
     assert.match(client, /const conAvisos = \[\.\.\.picked\]\.filter\(\(id\) => \(antes\.avisos\?\.get\(id\)\?\.length \?\? 0\) > 0\)/);
     assert.match(client, /setStage\('avisos'\);\s*\n\s*return;/, 'se detiene antes de ejecutar');
   });

@@ -128,6 +128,45 @@ describe('store de pendientes · todas las tarjetas ven la misma foto', () => {
     }
   });
 
+  it('dos tarjetas de la misma sesion, con operaciones distintas: decide una y la otra ve la foto nueva', async () => {
+    const { createPendingStore } = cargarStore();
+    const store = createPendingStore();
+    const llamadas = { a: 0, b: 0 };
+    // La tarjeta A (aprobar) instala su lector y despues la B (publicar) instala el suyo: la ultima gana como
+    // lector, y aun asi la decision de A tiene que dejar la foto nueva para las dos.
+    store.usarLector(async () => { llamadas.a += 1; return { ids: ['x'], medible: true, avisos: new Map() }; });
+    store.usarLector(async () => { llamadas.b += 1; return { ids: ['x'], medible: true, avisos: new Map() }; });
+    const vistas = {};
+    store.suscribir((foto) => { vistas.aprobar = foto; });
+    store.suscribir((foto) => { vistas.publicar = foto; });
+
+    await store.leer();
+    assert.equal(llamadas.a + llamadas.b, 1, 'una sola ejecucion para las dos tarjetas');
+    assert.deepEqual(vistas.aprobar.ids, ['x']);
+    assert.deepEqual(vistas.publicar.ids, ['x']);
+
+    // La tarjeta A decide: invalida y comprueba el efecto con su lector.
+    store.invalidar();
+    store.usarLector(async () => { llamadas.b += 1; return { ids: [], medible: true, avisos: new Map() }; });
+    await store.leer({ force: true });
+
+    for (const [nombre, foto] of Object.entries(vistas)) {
+      assert.deepEqual(foto.ids, [], `la tarjeta de ${nombre} sigue ofreciendo lo ya decidido`);
+    }
+  });
+
+  it('el lector comun no depende del verbo de la tarjeta (el fallback no cambia de significado)', () => {
+    // El verbo de las filas del menu es por comando (`approve`/`retire`); si el lector compartido lo usara, la
+    // foto cambiaria segun cual se pinto la ultima. El lector solo habla con `/skill-pending`.
+    const ini = cliente.indexOf('const leerPendientes = async () => {');
+    assert.notEqual(ini, -1);
+    const fin = cliente.indexOf('store.usarLector(leerPendientes);', ini);
+    const cuerpo = cliente.slice(ini, fin);
+    assert.equal(/listVerbFor\(/.test(cuerpo), false, 'la foto comun no puede depender del verbo de la tarjeta');
+    assert.equal(/rowIds\(/.test(cuerpo), false, 'la foto comun no puede depender de las filas del menu');
+    assert.match(cuerpo, /runCommand\(sessionId, '\/skill-pending'\)/);
+  });
+
   it('quien se suscribe recibe la foto al momento y puede darse de baja', async () => {
     const { createPendingStore } = cargarStore();
     const store = createPendingStore();
@@ -147,6 +186,50 @@ describe('store de pendientes · todas las tarjetas ven la misma foto', () => {
     const { pendingStoreFor } = cargarStore();
     assert.equal(pendingStoreFor('s1'), pendingStoreFor('s1'), 'la misma sesión tiene que compartir');
     assert.notEqual(pendingStoreFor('s1'), pendingStoreFor('s2'), 'dos sesiones no pueden compartir la foto');
+  });
+});
+
+describe('store de pendientes · una lectura que empezo antes de decidir no puede ser la foto final', () => {
+  it('invalidar + force no aceptan como estado final la foto en vuelo de antes de la decision', async () => {
+    const { createPendingStore } = cargarStore();
+    const store = createPendingStore();
+    let soltarVieja;
+    const viejaEnVuelo = new Promise((listo) => { soltarVieja = listo; });
+    let llamadas = 0;
+    store.usarLector(async () => {
+      llamadas += 1;
+      if (llamadas === 1) {
+        await viejaEnVuelo;
+        return { ids: ['agent-team'], medible: true, avisos: new Map() };
+      }
+      return { ids: [], medible: true, avisos: new Map() };
+    });
+
+    // La tarjeta monta y empieza a leer. Ese lector arranco ANTES de que el humano decida.
+    const primera = store.leer();
+    // El humano decide: el estado del almacen cambia y se invalida la foto.
+    store.invalidar();
+    // La comprobacion del efecto pide una lectura forzada (no se espera aqui: la vieja sigue en vuelo).
+    const forzada = store.leer({ force: true });
+    // La vieja termina tarde, despues de la decision.
+    soltarVieja();
+    const [fotoForzada] = await Promise.all([forzada, primera]);
+
+    assert.equal(llamadas, 2, 'la lectura forzada tiene que ejecutar su propio lector');
+    assert.deepEqual(fotoForzada.ids, [], 'la lectura forzada acepto la foto anterior a la decision');
+    assert.deepEqual(store.foto().ids, [], 'una lectura vieja sobrescribio la foto posterior a la decision');
+  });
+
+  it('dos force concurrentes de la MISMA generacion comparten una sola ejecucion', async () => {
+    const { createPendingStore } = cargarStore();
+    const store = createPendingStore();
+    let llamadas = 0;
+    store.usarLector(async () => {
+      llamadas += 1;
+      return { ids: [], medible: true, avisos: new Map() };
+    });
+    await Promise.all([store.leer({ force: true }), store.leer({ force: true }), store.leer({ force: true })]);
+    assert.equal(llamadas, 1, 'sin invalidacion de por medio, el single-flight se conserva');
   });
 });
 
