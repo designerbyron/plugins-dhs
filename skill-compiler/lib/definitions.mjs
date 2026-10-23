@@ -30,7 +30,7 @@ export const PROVIDER_RANK = 150;
  * propósito, y sin repetir nada de `AGENTS.md`, que ya se inyecta por su cuenta.
  *
  * Presupuesto, medido (2026-10-16, con la vara del propio harness: `CHARS_PER_TOKEN = 4` + `BLOCK_OVERHEAD
- * = 4`, las constantes de `@deepseek-ai/dsh-token-meter`): **1.121 caracteres · 281 tokens**, contra el tope
+ * = 4`, las constantes de `@deepseek-ai/dsh-token-meter`): **1.006 caracteres · 252 tokens**, contra el tope
  * de 1.200 caracteres que exige `tests/definitions.test.mjs`. Antes de la propiedad del puesto: 941
  * caracteres · 240 tokens, y antes de aquella fase 1.175 · 298. Lo que se recortó entonces fue la
  * **redundancia** con la descripción de `skill_vendor` —que ya explica el proceso de vendorizado entero—,
@@ -38,20 +38,21 @@ export const PROVIDER_RANK = 150;
  * agente no puede deducir del resto: que existe una propiedad del puesto que hay que declarar.
  */
 export const PROTOCOL = [
-  '## Aprendizaje progresivo (skill-compiler)',
+  '## Progressive learning (skill-compiler)',
   '',
-  'Propón (`skill_propose`) con **evidencia**: un contrato, una trampa ya pagada, un orden operativo, un',
-  'valor exacto que reutilizarás. No basta «podría reutilizarse», ni una consulta resuelta, ni repetir',
-  '`AGENTS.md`.',
+  'Propose (`skill_propose`) with **evidence**: a contract, a trap already paid for, an order, an exact value',
+  'you will reuse. "Could be reused" is not enough, nor a solved query, nor repeating `AGENTS.md`.',
   '',
-  '- **Nuevo** → procedimiento, no relato: el detalle que hace la diferencia (valor, orden, bandera, ruta);',
-  '  lo pesado va a `references/`.',
-  '- **Ya existe y esto lo supera** → `skill_propose` **con el mismo id**: es una actualización, no un duplicado;',
-  '  al aprobarla, la anterior queda apartada, nunca borrada. Consulta `skill_review` y di con qué lo mediste.',
-  '- **De un repositorio** → `skill_vendor`: nuestra versión; un origen con secretos u órdenes al agente **se bloquea**.',
+  '- **New** -> a procedure, not a story: the detail that makes the difference (value, order, flag, path);',
+  '  heavy material goes to `references/`.',
+  '- **It exists and this beats it** -> `skill_propose` **with the same id**: an update, not a duplicate;',
+  '  approving sets the previous aside, never deletes it. Check `skill_review` and say how you measured it.',
+  '- **From a repository** -> `skill_vendor`: our version; a source with secrets or instructions to the agent',
+  '  **is blocked**.',
   '',
-  'Si otra skill cubre el tema, se rechaza y dice con cuál choca. **Nada se activa solo**: espera aprobación',
-  'humana; di cómo se aprueba. La **propiedad del puesto** (sólo DSH o todo el PC): `/skill-ownership`.',
+  'If another skill covers the topic, it is rejected and says which it clashes with.',
+  '**Nothing activates by itself**: it waits for human approval; say how. **Ownership** (DSH only or the whole',
+  'PC): `/skill-ownership`.',
 ].join('\n');
 
 /** El cwd de la sesión es el único origen válido del ámbito: el modelo no lo declara. */

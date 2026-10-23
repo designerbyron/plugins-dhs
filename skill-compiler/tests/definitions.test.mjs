@@ -26,8 +26,8 @@ describe('PROTOCOL', () => {
   it('nombra las dos vías, exige el ámbito de proyecto y avisa de que nada se activa solo', () => {
     assert.match(PROTOCOL, /skill_propose/, 'la vía del conocimiento propio');
     assert.match(PROTOCOL, /skill_vendor/, 'la vía de una skill de repositorio');
-    assert.match(PROTOCOL, /nada se activa solo/i);
-    assert.match(PROTOCOL, /bloquea/i, 'el bloqueo por contenido ajeno tiene que estar dicho');
+    assert.match(PROTOCOL, /nothing activates by itself/i);
+    assert.match(PROTOCOL, /is blocked/i, 'el bloqueo por contenido ajeno tiene que estar dicho');
   });
 
   it('es corto: entra en el prompt de todas las sesiones y se paga entero cada vez', () => {
@@ -51,13 +51,13 @@ describe('PROTOCOL', () => {
    * nombran salen de los casos reales del almacén, no de una lista inventada.
    */
   it('nombra las cuatro evidencias que justifican proponer', () => {
-    assert.match(PROTOCOL, /contrato/, 'un contrato descubierto a base de pruebas');
-    assert.match(PROTOCOL, /trampa ya pagada/);
-    assert.match(PROTOCOL, /orden operativo/);
-    assert.match(PROTOCOL, /valor exacto/);
+    assert.match(PROTOCOL, /contract/i, 'un contrato descubierto a base de pruebas');
+    assert.match(PROTOCOL, /trap already paid for/i);
+    assert.match(PROTOCOL, /an order/i);
+    assert.match(PROTOCOL, /exact value/i);
     // Y el freno explícito al criterio flojo: una posibilidad no es una evidencia.
-    assert.match(PROTOCOL, /podría reutilizarse/);
-    assert.match(PROTOCOL, /No basta/, 'el freno tiene que estar dicho, no insinuado');
+    assert.match(PROTOCOL, /could be reused/i);
+    assert.match(PROTOCOL, /is not enough/i, 'el freno tiene que estar dicho, no insinuado');
   });
 
   it('no repite lo que ya explica la descripción de skill_vendor', () => {
@@ -77,9 +77,9 @@ describe('PROTOCOL', () => {
    * actualiza. Una capacidad que nadie sabe que existe es una capacidad que no existe.
    */
   it('declara la vía de actualización, que es la que el modelo no estaba usando', () => {
-    assert.match(PROTOCOL, /con el mismo id/, 'el protocolo tiene que decir cómo se actualiza: mismo id');
-    assert.match(PROTOCOL, /actualización, no un duplicado/);
-    assert.match(PROTOCOL, /apartada, nunca borrada/, 'y qué pasa con la versión anterior al aprobarla');
+    assert.match(PROTOCOL, /with the same id/i, 'el protocolo tiene que decir cómo se actualiza: mismo id');
+    assert.match(PROTOCOL, /an update, not a duplicate/i);
+    assert.match(PROTOCOL, /sets the previous aside, never deletes it/i, 'y qué pasa con la versión anterior al aprobarla');
     assert.match(PROTOCOL, /skill_review/, 'y cómo consultar lo que ya hay antes de proponer');
   });
 
