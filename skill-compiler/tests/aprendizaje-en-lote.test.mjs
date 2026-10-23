@@ -34,6 +34,9 @@ import { reparar } from '../lib/repair.mjs';
 import { skillPropose } from '../lib/definitions.mjs';
 import { cleanupSandboxes, sandbox } from './helpers.mjs';
 
+// La prosa de este fichero se afirma en español: el idioma se fija explícitamente (el base es `en`).
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';

@@ -38,6 +38,7 @@ import {
 import { anotarEntradaEnDiario, ficherosQueDifieren, huellaDeContenido, motivoDeIdInseguro } from './security.mjs';
 import { medirAutoActualizacion } from './auto-update.mjs';
 import { scopeOf } from './definitions.mjs';
+import { t } from './i18n/index.mjs';
 import { pendingRowsFor } from './pending-rows.mjs';
 import {
   MAQUINA, PROPIEDADES, SOLO_DSH, declararPropiedad, inventario, leerPropiedad, proyectosConocidos, textoDeSistemas,
@@ -52,15 +53,21 @@ const guarded = (run) => (invocation, ...rest) => {
   try {
     return run(invocation, ...rest);
   } catch (error) {
-    return bad(`No se pudo completar: ${error.message}`);
+    return bad(t('code.internal-error', { message: error.message }), { code: 'internal-error', params: { message: error.message } });
   }
 };
 
 // Una pendiente que actualiza algo activo se anuncia como tal: el mismo id en dos listas, sin decirlo,
 // se lee como que la aprobación anterior no sirvió de nada.
-const bullet = (rows) => rows.map((row) => `  · ${row.id} — ${row.description ?? '(sin descripción)'}${row.updatesActive ? ' · actualización de la versión activa' : ''}${row.auto ? ` · ${row.auto}` : ''}`).join('\n');
+const bullet = (rows) => rows.map((row) => t('cmd.bullet.row', {
+  id: row.id,
+  description: row.description ?? t('cmd.bullet.no-description'),
+  updates: row.updatesActive ? t('cmd.bullet.updates') : '',
+  auto: row.auto ? ` · ${row.auto}` : '',
+})).join('\n');
 
-const NO_SCOPE = 'Sin ámbito: esta sesión no tiene un directorio de trabajo utilizable.';
+/** Sin ámbito: se traduce en cada llamada, porque el idioma se resuelve en el momento, no al importar. */
+const noScope = () => t('cmd.no-scope');
 
 /**
  * El estado de la lista, pegado al resultado de decidir: así el humano ve el efecto de lo que acaba de
@@ -71,8 +78,8 @@ const remaining = (root, key) => {
   const waiting = pending({ root, key });
   return [
     '',
-    `Pendientes de tu aprobación (${waiting.length}):`,
-    waiting.length ? bullet(waiting) : '  · ninguna',
+    t('cmd.pending.header', { n: waiting.length }),
+    waiting.length ? bullet(waiting) : t('cmd.bullet.none'),
   ];
 };
 
@@ -93,28 +100,28 @@ export function scopeOfAgent(agent) {
  * sobre una propuesta sería decidir a ciegas.
  */
 export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
-  if (key === null) return bad(NO_SCOPE);
+  if (key === null) return bad(noScope());
   const wanted = String(id ?? '').trim();
-  if (wanted === '') return bad('Falta el id. Uso: /skill-show <id>');
+  if (wanted === '') return bad(t('cmd.show.missing-id'));
 
   const proposal = pending({ root, key }).find((row) => row.id === wanted);
   const active = listForProject(cwd, { root }).find((row) => row.id === wanted);
   const chose = proposal ?? active;
-  if (chose === undefined) return noEstáElId(wanted, key, root, { que: 'skill aprendida' });
+  if (chose === undefined) return noEstáElId(wanted, key, root, { que: 'learned-skill' });
 
   if (proposal === undefined) {
-    return ok([`Activa en este proyecto: ${wanted}`, `${chose.path}`, '', readFileSync(chose.path, 'utf8')].join('\n'));
+    return ok([t('cmd.show.active', { id: wanted }), `${chose.path}`, '', readFileSync(chose.path, 'utf8')].join('\n'));
   }
 
   const check = checkProposal(wanted, key, { root });
   return ok([
-    `Propuesta pendiente de aprobación: ${wanted}`,
+    t('cmd.show.pending', { id: wanted }),
     `${chose.path}`,
     '',
-    check.ok ? 'Puerta de validación: pasa.' : 'Puerta de validación: NO pasa todavía.',
-    ...check.errors.map((e) => `  FALLO  ${e}`),
-    ...check.warnings.map((w) => `  aviso  ${w}`),
-    ...(check.warnings.length > 0 ? ['', `Aprobarla con estos avisos exige decirlo: /skill-approve ${wanted} --force`] : []),
+    check.ok ? t('cmd.show.gate-ok') : t('cmd.show.gate-fail'),
+    ...check.errors.map((e) => t('cmd.show.gate-error', { error: e })),
+    ...check.warnings.map((w) => t('cmd.show.gate-warning', { aviso: w })),
+    ...(check.warnings.length > 0 ? ['', t('cmd.show.force-hint', { id: wanted })] : []),
     '',
     readFileSync(chose.path, 'utf8'),
   ].join('\n'));
@@ -132,7 +139,7 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
  *   necesita que alguien lo mire, y un `success` lo escondería).
  */
 export function aprobarLote({ root, key, ids = [], scope = 'project', force = false, catalog } = {}) {
-  if (key === null) return bad(NO_SCOPE);
+  if (key === null) return bad(noScope());
   const limpios = [...new Set(ids.map((x) => String(x ?? '').trim()).filter(Boolean))];
   if (limpios.length === 0) return bad('No hay ids que aprobar.');
   const resultados = [];
@@ -170,24 +177,27 @@ function idNoUtilizable(wanted) {
   const motivo = motivoDeIdInseguro(wanted);
   return motivo === null
     ? null
-    : bad([`«${wanted}» no es un id utilizable: ${motivo}.`, 'Los ids son kebab-case ASCII, sin puntos ni separadores.'].join('\n'));
+    : bad([
+      t('cmd.ids.unsafe', { id: wanted, motivo }),
+      t('cmd.ids.unsafe-hint'),
+    ].join('\n'), { code: 'unsafe-id', params: { id: wanted, motivo } });
 }
 
-function noEstáElId(wanted, key, root, { que = 'propuesta' } = {}) {
+function noEstáElId(wanted, key, root, { que = 'proposal' } = {}) {
   const cerca = sugerenciaDeId(wanted, key, { root });
   return bad([
-    `No hay ninguna ${que} «${wanted}» en ${key}.`,
+    t('cmd.ids.missing', { que: t(`cmd.noun.${que}`), id: wanted, key }),
     ...(cerca
-      ? [`¿Querías decir «${cerca}»? Con ese id sí hay algo: repite el comando con él.`, 'Y para verlo todo: /skill-proposals.']
-      : ['Míralas con /skill-proposals.']),
-  ].join('\n'));
+      ? [t('cmd.ids.suggestion', { cerca }), t('cmd.ids.see-all')]
+      : [t('cmd.ids.see-list')]),
+  ].join('\n'), { code: 'no-proposal', params: { id: wanted, key } });
 }
 
 /** El diario del proyecto: una sola ruta, para que tres caminos no inventen tres. */
 const diarioDelProyecto = (root, key) => join(root, 'projects', key, 'journal.jsonl');
 
 export function approveProposal({ root = defaultRoot(), key, id, force = false, scope = 'project', catalog, preservarEstado = false } = {}) {
-  if (key === null) return bad(NO_SCOPE);
+  if (key === null) return bad(noScope());
   const wanted = String(id ?? '').trim();
   if (wanted === '') return bad('Falta el id. Uso: /skill-approve <id> [--force]');
   const noEsId = idNoUtilizable(wanted);
@@ -305,7 +315,7 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
 
 /** Aparta una propuesta sin borrarla: queda en `rejected/`, recuperable. */
 export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) {
-  if (key === null) return bad(NO_SCOPE);
+  if (key === null) return bad(noScope());
   const wanted = String(id ?? '').trim();
   if (wanted === '') return bad('Falta el id. Uso: /skill-reject <id>');
   const noEsId = idNoUtilizable(wanted);
@@ -378,7 +388,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
    */
   const listar = ({ agent, montaje = { ok: true } } = {}) => {
         const { cwd, key } = scopeOfAgent(agent);
-        if (key === null) return bad(NO_SCOPE);
+        if (key === null) return bad(noScope());
 
         // Antes de listar, asegurar las filas: si el humano mira las pendientes, es que va a decidir.
         onListed?.();
@@ -390,12 +400,14 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const MAX_MEDIDAS = 6;
         for (const fila of waiting) {
           if (!fila.updatesActive) continue;
-          if (waiting.indexOf(fila) >= MAX_MEDIDAS) { fila.auto = 'no medido en esta lista (hay más de ' + MAX_MEDIDAS + ' actualizaciones)'; continue; }
+          if (waiting.indexOf(fila) >= MAX_MEDIDAS) { fila.auto = t('cmd.list.auto-none', { max: MAX_MEDIDAS }); continue; }
           try {
             const v = medirAutoActualizacion(fila.id, key, { root, curated: curatedLibraryRoot(), cwd });
-            fila.auto = v.apto ? `auto-actualizable (${v.medidas.length} medidas en verde)` : `exige humano: ${v.fallan.slice(0, 2).join(', ')}`;
+            fila.auto = v.apto
+              ? t('cmd.list.auto-ok', { n: v.medidas.length })
+              : t('cmd.list.auto-human', { fallan: v.fallan.slice(0, 2).join(', ') });
           } catch (error) {
-            fila.auto = `no se pudo medir: ${error.message}`;
+            fila.auto = t('cmd.list.auto-fail', { message: error.message });
           }
         }
         const active = listForProject(cwd, { root });
@@ -406,10 +418,10 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const rows = pendingRowsFor({ root, cwd });
 
         return ok([
-          `Aprendizaje de ${cwd} [${key}]`,
+          t('cmd.list.title', { cwd, key }),
           '',
-          `Pendientes de tu aprobación (${waiting.length}):`,
-          waiting.length ? bullet(waiting) : '  · ninguna',
+          t('cmd.pending.header', { n: waiting.length }),
+          waiting.length ? bullet(waiting) : t('cmd.bullet.none'),
           ...rows.map((row) => `      /${row.name}`),
           // La orden exacta, siempre: con filas o sin ellas. Depender del menú para decidir era depender de
           // un servicio que este anfitrión no compone en el contexto del agente (tres caminos medidos). Una
@@ -417,29 +429,29 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           ...(waiting.length > 0
             ? [
               '',
-              `Una orden para todas: /skill-approve ${waiting.map((fila) => fila.id).join(',')} --local`,
-              'Una a una: /skill-approve <id> --local · para todos tus proyectos: --global · aceptando avisos: --force',
+              t('cmd.list.order-all', { ids: waiting.map((fila) => fila.id).join(',') }),
+              t('cmd.list.order-one'),
             ]
             : []),
-          ...(rows.length > 0 ? ['', 'Sin teclear: escribe «/» y elige la fila; es la misma orden.'] : []),
+          ...(rows.length > 0 ? ['', t('cmd.list.no-typing')] : []),
           '',
-          `Aprobadas y activas (${active.length}):`,
-          active.length ? bullet(active) : '  · ninguna',
+          t('cmd.active.header', { n: active.length }),
+          active.length ? bullet(active) : t('cmd.bullet.none'),
           '',
-          `Apagadas (${fueraDeServicio.length}) — no se sirven al modelo, se conservan enteras:`,
-          fueraDeServicio.length ? bullet(fueraDeServicio) : '  · ninguna',
-          ...(fueraDeServicio.length > 0 ? [`  Para devolver una: /skill-enable <id>, o elige su fila en el menú «/». Para retirarla del todo: /skill-retire <id> --yes`] : []),
+          t('cmd.disabled.header', { n: fueraDeServicio.length }),
+          fueraDeServicio.length ? bullet(fueraDeServicio) : t('cmd.bullet.none'),
+          ...(fueraDeServicio.length > 0 ? [t('cmd.disabled.hint')] : []),
           '',
-          `Aprobación automática en esta sesión: ${auto ? 'ACTIVA' : 'desactivada'}`,
-          auto ? '  (las propuestas que pasen la validación se activan solas; /skill-auto desactivar para pararlo)' : '  (actívala con /skill-auto activar)',
+          auto ? t('cmd.list.auto-on') : t('cmd.list.auto-off'),
+          auto ? t('cmd.list.auto-on-hint') : t('cmd.list.auto-off-hint'),
           '',
           // Sin pendientes no hay nada que anunciar: el aviso sólo aparece cuando de verdad hay una fila
           // que el menú podría ofrecer y no ofrece. Con la lista vacía era ruido en cada consulta.
           ...(montaje.ok || waiting.length === 0 ? [] : [
-            `Aviso: este anfitrión no anuncia filas por propuesta en el menú «/» (${montaje.motivo}).`,
-            '  No hay nada que corregir por tu parte: la orden de arriba las decide todas, y el panel de esta tarjeta también.',
+            t('cmd.list.mount-warning', { motivo: montaje.motivo }),
+            t('cmd.list.mount-hint'),
           ]),
-          'Con un id a mano: /skill-show <id> · /skill-approve <id> [--force] · /skill-reject <id>',
+          t('cmd.list.with-id'),
         ].join('\n'));
   };
 
@@ -485,7 +497,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       description: 'Los ids que esperan decisión, en una línea: lo que la tarjeta consulta antes de decidir.',
       handler: guarded(({ agent }) => {
         const { key } = scopeOfAgent(agent);
-        if (key === null) return bad(NO_SCOPE);
+        if (key === null) return bad(noScope());
         const waiting = pending({ root, key });
         // Los avisos viajan con los ids para que la tarjeta pueda **preguntar antes** de mandar la orden: si
         // no, la primera orden se niega y el anfitrión pinta un «failed» que el humano no ha provocado.
@@ -624,7 +636,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       input: { hint: 'activar | desactivar' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
-        if (key === null) return bad(NO_SCOPE);
+        if (key === null) return bad(noScope());
 
         const decision = parseAutoCommand(rawInput);
 
@@ -670,7 +682,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
-        if (key === null) return bad(NO_SCOPE);
+        if (key === null) return bad(noScope());
         const id = String(rawInput ?? '').trim();
         if (id === '') return bad('Dime cuál: /skill-disable <id>. Las activas están en /skill-proposals.');
         if (!existsSync(join(root, 'projects', key, 'approved', id))) {
@@ -691,7 +703,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
-        if (key === null) return bad(NO_SCOPE);
+        if (key === null) return bad(noScope());
         const id = String(rawInput ?? '').trim();
         if (id === '') return bad('Dime cuál: /skill-enable <id>. Lo apagado está en /skill-retired.');
         const moved = enableSkill(id, key, { root });
@@ -706,7 +718,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       input: { hint: '<id> [--yes]' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
-        if (key === null) return bad(NO_SCOPE);
+        if (key === null) return bad(noScope());
         const input = String(rawInput ?? '').trim();
         const yes = /(?:^|\s)--yes$/.test(input);
         const id = input.replace(/(?:\s+--yes)?$/, '').trim();
@@ -725,7 +737,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       description: 'Qué está apagado en este proyecto y qué se retiró ya, con su fecha.',
       handler: guarded(({ agent }) => {
         const { cwd, key } = scopeOfAgent(agent);
-        if (key === null) return bad(NO_SCOPE);
+        if (key === null) return bad(noScope());
         const lista = retired(key, { root });
         if (lista.length === 0) return ok(`Nada apagado ni retirado en ${cwd} [${key}].`);
         return ok([
@@ -844,7 +856,7 @@ export function targetCommands({ root = defaultRoot(), catalog, rows = [] } = {}
     description: row.description,
     handler: guarded(({ agent }) => {
       const { cwd, key } = scopeOfAgent(agent);
-      if (key === null) return bad(NO_SCOPE);
+      if (key === null) return bad(noScope());
       if (key !== row.key) {
         return bad([
           `«${row.id}» está pendiente en ${row.project}, no en esta sesión.`,

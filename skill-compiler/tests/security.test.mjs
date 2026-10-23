@@ -19,6 +19,9 @@ import { escanear, huellaDeArbol, huellaDeEntrada, huellaDeLaCola, motivoDeIdIns
 import { anotarEnDiario, diarioDe, leerDiario } from '../lib/promote.mjs';
 import { cleanupSandboxes, goodInput, sandbox } from './helpers.mjs';
 
+// La prosa de este fichero se afirma en español: el idioma se fija explícitamente (el base es `en`).
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';

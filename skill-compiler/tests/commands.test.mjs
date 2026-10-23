@@ -24,6 +24,9 @@ import { approve, disable, pending, projectKey, propose } from '../lib/compiler.
 import { pendingRowsFor } from '../lib/pending-rows.mjs';
 import { cleanupSandboxes, fakeExec, goodInput, patchInput, sandbox } from './helpers.mjs';
 
+// La prosa de este fichero se afirma en español: el idioma se fija explícitamente (el base es `en`).
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';

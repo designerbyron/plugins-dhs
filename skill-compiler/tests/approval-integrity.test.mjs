@@ -21,6 +21,9 @@ import { approve, checkProposal, projectKey, propose } from '../lib/compiler.mjs
 import { huellaDeContenido } from '../lib/security.mjs';
 import { cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
 
+// La prosa de este fichero se afirma en español: el idioma se fija explícitamente (el base es `en`).
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const clave = (s) => projectKey(s.base);
