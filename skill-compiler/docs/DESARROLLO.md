@@ -105,6 +105,33 @@ Una puerta que se pudiera olvidar no sería una puerta. `tests/gates-obligatorio
 defecto (clave que falta, código sin texto, placeholders inconsistentes, no-ASCII nuevo, alias inválido,
 contrato de herramientas alterado) en una **copia** del paquete y exige que la puerta se ponga roja.
 
+### La puerta ASCII y su inventario
+
+La línea base fija un tope por fichero, y el inventario decide **qué ficheros tienen tope**: todo fichero de
+primera parte —`lib/` y `bin/` recorridos enteros, más `index.js` y `client.js`— tiene que estar en
+`FICHEROS` o en `EXCLUIDOS` **con su motivo escrito**. Un módulo nuevo sin clasificar es un fallo
+(`ascii-sin-clasificar`), y un fichero que la línea base vigilaba y ya no existe también (`ascii-ausente`):
+un renombrado dejaba de estar vigilado en silencio. `--update` no sube el tope de un fichero ya vigilado
+(`ascii-tope-sube`); subirlo exige `--allow-raise`, que lo dice en voz alta. Un fichero **nuevo** en
+`FICHEROS` sí entra con su medida: eso es cobertura, no deuda.
+
+El 2026-10-23, al cerrar la 4.0.1, la lista era cerrada y tres módulos entregados quedaban fuera. Este es el
+antes y el después, medido fichero por fichero:
+
+| Fichero | Antes | Después | Por qué cambia |
+|---|---:|---:|---|
+| `lib/vendor.mjs` | fuera de la puerta | 546 | entregado sin vigilar; entra con lo que ya tenía |
+| `lib/catalog-signal.mjs` | fuera de la puerta | 214 | ídem |
+| `lib/review.mjs` | fuera de la puerta | 75 | ídem |
+| `lib/pending-rows.mjs` | 306 | 305 | el tope tenía 1 de holgura sobre lo medido: se retira |
+| los otros 20 ficheros | sin cambio | sin cambio | — |
+| **total vigilado** | **7.580 de tope / 7.579 medidos** | **8.414 de tope / 8.414 medidos** | +835 de cobertura, −1 de holgura |
+
+El aumento es **exactamente los caracteres que ya existían en ficheros antes no vigilados**
+(546 + 214 + 75 = 835) y **cero caracteres nuevos**: `7.579 + 835 = 8.414`. No se subió ningún tope para
+tapar texto: el único fichero que se movió de los veinte ya vigilados **bajó** un carácter, y las pruebas
+siembran un acento en cada uno de los tres módulos nuevos para exigir el rojo.
+
 - `tests/output-contract.test.mjs` — **el valor de cada herramienta contra el esquema que el harness
   valida**, en todas las ramas de su `execute`, con `validateJsonSchemaValue` (el juez real) y el esquema
   compilado por `defineTool`. Nació del defecto de la 1.3.0: `skill_propose` devolvía un campo no declarado y
