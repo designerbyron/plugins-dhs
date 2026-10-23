@@ -300,7 +300,11 @@ describe('reparar: prepara, no activa', () => {
     assert.match(r.reason, /criterio humano/i);
     const check = checkProposal('descripcion-demasiado-corta', KEY, { root: arena.root, curated: arena.curated });
     assert.equal(check.ok, false, 'y no hay propuesta que aprobar');
-    assert.match(String(check.errors[0]), /no existe una propuesta/);
+    // La frase de la puerta se compone del catalogo (idioma base sin DSH_LANG): lo que se fija aqui es que dice
+    // QUE no hay propuesta con ese id, no la redaccion.
+    assert.equal(check.errors.length, 1);
+    assert.match(String(check.errors[0]), /descripcion-demasiado-corta/);
+    assert.match(String(check.errors[0]), /propuesta|proposal/);
   });
 
   it('una skill conforme no tiene nada que reparar y lo dice sin escribir', () => {

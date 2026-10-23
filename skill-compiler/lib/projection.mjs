@@ -36,6 +36,7 @@
  */
 import { z } from 'zod';
 
+import { t } from './i18n/index.mjs';
 import { DECISION_KINDS, OUTCOMES, PHASES, applyLearning, initialLearning, learningView } from './presentation.mjs';
 
 /** La clave de la proyección. El cliente la lee con `useProjection('skillCompiler')`: no puede cambiar
@@ -111,13 +112,21 @@ export function learningProjection() {
 /** Estados imposibles que pueden llegar desde un punto de control: ninguno puede tumbar la lectura. */
 const CORRUPT_STATES = Object.freeze([null, undefined, 42, 'texto', [], {}, { pending: 'no' }, { created: 'muchos' }]);
 
-/** Lo que un esquema que no valida parece por fuera: ni `parse`, ni forma de saberlo hasta leer. */
+/** Lo que un esquema que no valida parece por fuera: ni `parse`, ni forma de saberlo hasta leer.
+ *
+ *  Devuelve la CLAVE de la frase, no la frase: quien la interpola la compone en el idioma de la sesion. */
 const describeSchema = (schema) => {
-  if (schema === null || typeof schema !== 'object') return typeof schema;
-  if (typeof schema.parse === 'function') return 'Zod (valida con parse)';
-  if (typeof schema === 'function') return 'una función que no valida con parse (¿schemastery?)';
-  return 'un objeto sin parse';
+  if (schema === null || typeof schema !== 'object') return 'other';
+  if (typeof schema.parse === 'function') return 'zod';
+  if (typeof schema === 'function') return 'function';
+  return 'object';
 };
+
+/** La frase de un problema de la proyeccion, en el idioma de la sesion. */
+const problema = (clave, params = {}) => t(`projection.problem.${clave}`, params);
+
+/** El tipo de un esquema, ya dicho: es lo que se interpola en la frase del problema. */
+const tipoDe = (schema) => t(`projection.schema.${describeSchema(schema)}`, { tipo: typeof schema });
 
 /**
  * Comprueba el contrato que el registro de proyecciones **no** comprueba, y devuelve la lista de
@@ -141,20 +150,20 @@ export function projectionContractProblems(definition) {
   const wire = definition?.wire;
 
   if (typeof definition?.key !== 'string' || definition.key === '') {
-    problems.push('key: falta o no es una cadena no vacía');
+    problems.push(problema('key'));
   }
   if (!Number.isSafeInteger(definition?.stateVersion) || definition.stateVersion < 0) {
-    problems.push(`stateVersion: tiene que ser un entero no negativo, y es ${String(definition?.stateVersion)}`);
+    problems.push(problema('state-version', { valor: String(definition?.stateVersion) }));
   }
   if (typeof definition?.stateSchema?.parse !== 'function') {
-    problems.push(`stateSchema: el registro llama stateSchema.parse(...) y esto es ${describeSchema(definition?.stateSchema)}`);
+    problems.push(problema('state-schema', { tipo: tipoDe(definition?.stateSchema) }));
   }
   if (typeof wire?.viewSchema?.parse !== 'function') {
-    problems.push(`wire.viewSchema: el registro llama wire.viewSchema.parse(...) y esto es ${describeSchema(wire?.viewSchema)}`);
+    problems.push(problema('view-schema', { tipo: tipoDe(wire?.viewSchema) }));
   }
-  if (typeof definition?.init !== 'function') problems.push('init: no es una función');
-  if (typeof definition?.apply !== 'function') problems.push('apply: no es una función');
-  if (typeof wire?.view !== 'function') problems.push('wire.view: no es una función');
+  if (typeof definition?.init !== 'function') problems.push(problema('init'));
+  if (typeof definition?.apply !== 'function') problems.push(problema('apply'));
+  if (typeof wire?.view !== 'function') problems.push(problema('view'));
 
   // A partir de aquí hay que ejecutar la unidad; con las piezas ausentes, no tiene sentido.
   if (problems.length > 0) return problems;
@@ -164,14 +173,14 @@ export function projectionContractProblems(definition) {
     initial = definition.init({}, 0);
     definition.stateSchema.parse(initial);
   } catch (error) {
-    problems.push(`el estado inicial no pasa su propio esquema: ${error.message}`);
+    problems.push(problema('initial', { detalle: error.message }));
   }
 
   for (const corrupt of CORRUPT_STATES) {
     try {
       definition.stateSchema.parse(corrupt);
     } catch (error) {
-      problems.push(`un punto de control corrupto (${JSON.stringify(corrupt) ?? 'undefined'}) lanzaría al restaurar: ${error.message}`);
+      problems.push(problema('corrupt', { valor: JSON.stringify(corrupt) ?? 'undefined', detalle: error.message }));
       break;
     }
   }
@@ -179,10 +188,10 @@ export function projectionContractProblems(definition) {
   if (initial !== undefined) {
     try {
       const next = definition.apply(initial, { type: 'evento/ajeno' });
-      if (next instanceof Promise) problems.push('apply devolvió una promesa: el registro lo exige síncrono');
-      else if (next !== initial) problems.push('apply devolvió un estado nuevo para un evento que no le concierne: eso rompe la puerta Object.is del registro');
+      if (next instanceof Promise) problems.push(problema('apply-async'));
+      else if (next !== initial) problems.push(problema('apply-new-state'));
     } catch (error) {
-      problems.push(`apply lanzó con un evento ajeno: ${error.message}`);
+      problems.push(problema('apply-threw', { detalle: error.message }));
     }
   }
 
@@ -190,12 +199,12 @@ export function projectionContractProblems(definition) {
     try {
       const raw = wire.view(state);
       if (raw instanceof Promise) {
-        problems.push('wire.view devolvió una promesa: el contrato exige una vista síncrona');
+        problems.push(problema('view-async'));
         break;
       }
       wire.viewSchema.parse(raw);
     } catch (error) {
-      problems.push(`la vista no valida para un estado inesperado (${JSON.stringify(state) ?? 'undefined'}): ${error.message}`);
+      problems.push(problema('view-invalid', { valor: JSON.stringify(state) ?? 'undefined', detalle: error.message }));
       break;
     }
   }

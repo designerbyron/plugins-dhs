@@ -164,8 +164,10 @@ describe('actualización · la versión base', () => {
     writeFileSync(aprobada, `${readFileSync(aprobada, 'utf8')}\nCambio hecho por otra vía.\n`);
     const check = checkProposal(ID, KEY(), { root: s.root, curated: s.curated });
     assert.equal(check.ok, false);
-    assert.match(errores(check), /la versión vigente cambió desde que se preparó esta corrección/);
-    assert.match(errores(check), /vuelve a proponer sobre la versión nueva/);
+    // La frase se compone del catalogo en el idioma de la sesion (`en` sin DSH_LANG): se fija la frase de cada
+    // idioma, no la redaccion de un modulo. El DATO -las dos huellas- viaja dentro.
+    assert.match(errores(check), /la version vigente cambio desde que se preparo esta correccion|the current version changed since this correction was prepared/);
+    assert.match(errores(check), /vuelve a proponer sobre la version nueva|propose it again on top of the new version/);
   });
 
   it('modificación concurrente: dos correcciones sobre la misma base, la segunda ya no vale', () => {
@@ -192,8 +194,8 @@ describe('actualización · la versión base', () => {
     rmSync(join(s.root, 'projects', KEY(), 'approved', ID), { recursive: true, force: true });
     const check = checkProposal(ID, KEY(), { root: s.root, curated: s.curated });
     assert.equal(check.ok, false);
-    assert.match(errores(check), /ya no está/);
-    assert.match(errores(check), /vuelve a proponerla sobre lo que haya ahora/);
+    assert.match(errores(check), /ya no esta|is no longer there/);
+    assert.match(errores(check), /vuelve a proponerla sobre lo que haya ahora|propose it again on top of whatever is there now/);
   });
 });
 

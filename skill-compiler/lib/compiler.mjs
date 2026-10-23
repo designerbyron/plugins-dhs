@@ -25,6 +25,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { conCerrojo } from './lock.mjs';
+import { t } from './i18n/index.mjs';
 import { anotarEntradaEnDiario, esIdSeguro, ficherosQueDifieren, huellaDeArbol, huellaDeContenido, motivoDeIdInseguro, escanear, revisarArbol } from './security.mjs';
 import {
   MAQUINA, SOLO_DSH, dondeMasViveEseId, leerPropiedad, politicaAplicable, proyectosConocidos, propiedadSinCambios,
@@ -266,7 +267,10 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
         observed: ruta,
         threshold: REFERENCE_DIR,
         message: `references: «${item?.path ?? ''}» tiene que ser una ruta relativa que empiece por «${REFERENCE_DIR}» (por ejemplo «${REFERENCE_DIR}contratos.md»)`,
+        messageParams: { valor: item?.path ?? '', dir: REFERENCE_DIR, ejemplo: `${REFERENCE_DIR}contratos.md` },
         fix: `Mueve el material a «${REFERENCE_DIR}…» (una ruta relativa dentro de la carpeta de la skill)`,
+        fixCode: 'finding.reference-path.fix',
+        fixParams: { dir: REFERENCE_DIR },
       });
       continue;
     }
@@ -275,6 +279,7 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
         rule: 'reference-escape',
         observed: ruta,
         message: `references: «${ruta}» sale de la carpeta de la skill («..»): una referencia sólo puede vivir dentro`,
+        messageParams: { ruta },
         fix: 'Quita el «..»: una referencia no puede apuntar fuera de la carpeta de la skill',
       });
       continue;
@@ -284,6 +289,7 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
         rule: 'reference-not-a-file',
         observed: ruta,
         message: `references: «${ruta}» es una carpeta, no un fichero: aporta el fichero concreto`,
+        messageParams: { ruta },
         fix: 'Aporta el fichero con su nombre completo, no la carpeta',
       });
       continue;
@@ -293,6 +299,7 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
         rule: 'reference-duplicate',
         observed: ruta,
         message: `references: «${ruta}» está repetida: dos contenidos distintos en la misma ruta`,
+        messageParams: { ruta },
         fix: 'Deja una sola entrada por ruta, con el contenido que deba quedarse',
       });
       continue;
@@ -303,6 +310,7 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
         observed: ruta,
         threshold: 1,
         message: `references: «${ruta}» va vacía: una referencia sin contenido no conserva nada, quita el vínculo del cuerpo o aporta el material`,
+        messageParams: { ruta },
         fix: 'Aporta el contenido del material, o quita del cuerpo el enlace a esa ruta',
       });
       continue;
@@ -324,6 +332,7 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
         rule: 'link-escape',
         observed: ruta,
         message: `el cuerpo declara «${ruta}», que sale de la carpeta de la skill: corrige la ruta`,
+        messageParams: { ruta },
         fix: 'Corrige la ruta del cuerpo para que apunte dentro de la carpeta de la skill',
       });
       continue;
@@ -333,6 +342,7 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
         rule: 'link-is-directory',
         observed: ruta,
         message: `el cuerpo declara «${ruta}», que es un directorio y no un fichero: enlaza el fichero concreto`,
+        messageParams: { ruta },
         fix: 'Enlaza el fichero concreto dentro de esa carpeta',
       });
       continue;
@@ -344,6 +354,7 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
           rule: 'link-unverifiable',
           observed: ruta,
           message: `no se pudo comprobar el vínculo «${ruta}»: la carpeta «${ciega}» no se pudo leer`,
+          messageParams: { ruta, carpeta: ciega },
           fix: 'Revisa los permisos de esa carpeta y vuelve a auditar',
         });
         continue;
@@ -353,7 +364,10 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
         observed: ruta,
         threshold: 'fichero existente',
         message: `el cuerpo declara «${ruta}» y ese fichero no está: aporta su contenido en «references» o corrige la ruta (un vínculo roto es conocimiento que se pierde)`,
+        messageParams: { ruta },
         fix: `Aporta «${ruta}» con su contenido, o corrige la ruta del cuerpo`,
+        fixCode: 'finding.link-missing.fix',
+        fixParams: { ruta },
       });
     }
   }
@@ -364,6 +378,7 @@ export function checkReferences({ body = '', proposed = [], present = [], dirs =
       observed: files.length,
       threshold: links.length,
       message: `la skill lleva ${files.length} referencia(s) de ${links.length} declarada(s): el cuerpo corto se paga entero, el material pesado sólo cuando se necesita`,
+      messageParams: { ficheros: files.length, enlaces: links.length },
       fix: 'Nada: es informativo',
     });
   }
@@ -382,21 +397,21 @@ export function validateInput(input, { references = [], cwd = null, present = []
   const whenToUse = typeof input?.whenToUse === 'string' ? input.whenToUse.trim() : '';
   const body = typeof input?.body === 'string' ? input.body.trim() : '';
 
-  if (!ID_RE.test(id)) add('error', { rule: 'id-format', observed: id, message: 'id debe ser kebab-case y empezar por letra: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$', fix: 'Renombra la skill a kebab-case, por ejemplo «medir-antes-de-decidir»' });
-  if (id.length > 64) add('error', { rule: 'id-max', observed: id.length, threshold: 64, message: 'id demasiado largo (máximo 64)', fix: 'Acorta el id a 64 caracteres o menos' });
-  if (description.length < MIN_DESCRIPTION) add('error', { rule: 'description-min', observed: description.length, threshold: MIN_DESCRIPTION, message: `description demasiado corta (mínimo ${MIN_DESCRIPTION} caracteres): es lo que el modelo lee para elegir, y por debajo de eso no distingue nada`, fix: `Reescribe la descripción con al menos ${MIN_DESCRIPTION} caracteres: qué automatiza y cuándo se usa` });
-  if (description.length > MAX_DESCRIPTION) add('error', { rule: 'description-max', observed: description.length, threshold: MAX_DESCRIPTION, message: `description demasiado larga (máximo ${MAX_DESCRIPTION}): es lo que el modelo lee al elegir`, fix: `Recorta la descripción a ${MAX_DESCRIPTION} caracteres o menos` });
-  if (/[\r\n]/.test(description)) add('error', { rule: 'description-multiline', observed: 'salto de línea', message: 'description debe ser una sola línea', fix: 'Quita el salto de línea de la descripción' });
-  if (whenToUse.length < MIN_WHEN_TO_USE) add('error', { rule: 'whenToUse-min', observed: whenToUse.length, threshold: MIN_WHEN_TO_USE, message: `whenToUse es obligatorio (mínimo ${MIN_WHEN_TO_USE} caracteres): es el campo con el que el harness decide cuándo aparece esta skill`, fix: `Escribe el disparador de la skill (mínimo ${MIN_WHEN_TO_USE} caracteres)` });
-  if (/[\r\n]/.test(whenToUse)) add('error', { rule: 'whenToUse-multiline', observed: 'salto de línea', message: 'whenToUse debe ser una sola línea', fix: 'Quita el salto de línea de whenToUse' });
-  if (body.length < MIN_BODY) add('error', { rule: 'body-min', observed: body.length, threshold: MIN_BODY, message: `body demasiado corto (mínimo ${MIN_BODY} caracteres): una skill es un procedimiento, no un titular`, fix: 'Escribe el procedimiento completo: pasos, contratos y trampas' });
-  if (body.length > BODY_MAX) add('error', { rule: 'body-max', observed: body.length, threshold: BODY_MAX, message: `body demasiado largo (${body.length} > ${BODY_MAX} caracteres): lo pesado va a «${REFERENCE_DIR}» y el cuerpo lo enlaza — así el detalle se conserva y no se paga en cada carga`, fix: `Mueve el material de consulta a «${REFERENCE_DIR}…» y enlázalo desde el cuerpo` });
-  else if (body.length > BODY_BUDGET) add('warn', { rule: 'body-budget', observed: body.length, threshold: BODY_BUDGET, message: `body de ${body.length} caracteres: se carga entero cada vez que la skill se invoca; lo que sea material de consulta gana en «${REFERENCE_DIR}»`, fix: `Lo que sea de consulta, a «${REFERENCE_DIR}…»` });
+  if (!ID_RE.test(id)) add('error', { rule: 'id-format', observed: id, message: 'id debe ser kebab-case y empezar por letra: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$', messageParams: {}, fix: 'Renombra la skill a kebab-case, por ejemplo «medir-antes-de-decidir»' });
+  if (id.length > 64) add('error', { rule: 'id-max', observed: id.length, threshold: 64, message: 'id demasiado largo (máximo 64)', messageParams: { maximo: 64 }, fix: 'Acorta el id a 64 caracteres o menos', fixCode: 'finding.id-max.fix', fixParams: { maximo: 64 } });
+  if (description.length < MIN_DESCRIPTION) add('error', { rule: 'description-min', observed: description.length, threshold: MIN_DESCRIPTION, message: `description demasiado corta (mínimo ${MIN_DESCRIPTION} caracteres): es lo que el modelo lee para elegir, y por debajo de eso no distingue nada`, messageParams: { minimo: MIN_DESCRIPTION }, fix: `Reescribe la descripción con al menos ${MIN_DESCRIPTION} caracteres: qué automatiza y cuándo se usa`, fixCode: 'finding.description-min.fix', fixParams: { minimo: MIN_DESCRIPTION } });
+  if (description.length > MAX_DESCRIPTION) add('error', { rule: 'description-max', observed: description.length, threshold: MAX_DESCRIPTION, message: `description demasiado larga (máximo ${MAX_DESCRIPTION}): es lo que el modelo lee al elegir`, messageParams: { maximo: MAX_DESCRIPTION }, fix: `Recorta la descripción a ${MAX_DESCRIPTION} caracteres o menos`, fixCode: 'finding.description-max.fix', fixParams: { maximo: MAX_DESCRIPTION } });
+  if (/[\r\n]/.test(description)) add('error', { rule: 'description-multiline', observed: 'salto de línea', message: 'description debe ser una sola línea', messageParams: {}, fix: 'Quita el salto de línea de la descripción' });
+  if (whenToUse.length < MIN_WHEN_TO_USE) add('error', { rule: 'whenToUse-min', observed: whenToUse.length, threshold: MIN_WHEN_TO_USE, message: `whenToUse es obligatorio (mínimo ${MIN_WHEN_TO_USE} caracteres): es el campo con el que el harness decide cuándo aparece esta skill`, messageParams: { minimo: MIN_WHEN_TO_USE }, fix: `Escribe el disparador de la skill (mínimo ${MIN_WHEN_TO_USE} caracteres)`, fixCode: 'finding.whenToUse-min.fix', fixParams: { minimo: MIN_WHEN_TO_USE } });
+  if (/[\r\n]/.test(whenToUse)) add('error', { rule: 'whenToUse-multiline', observed: 'salto de línea', message: 'whenToUse debe ser una sola línea', messageParams: {}, fix: 'Quita el salto de línea de whenToUse' });
+  if (body.length < MIN_BODY) add('error', { rule: 'body-min', observed: body.length, threshold: MIN_BODY, message: `body demasiado corto (mínimo ${MIN_BODY} caracteres): una skill es un procedimiento, no un titular`, messageParams: { minimo: MIN_BODY }, fix: 'Escribe el procedimiento completo: pasos, contratos y trampas' });
+  if (body.length > BODY_MAX) add('error', { rule: 'body-max', observed: body.length, threshold: BODY_MAX, message: `body demasiado largo (${body.length} > ${BODY_MAX} caracteres): lo pesado va a «${REFERENCE_DIR}» y el cuerpo lo enlaza — así el detalle se conserva y no se paga en cada carga`, messageParams: { n: body.length, maximo: BODY_MAX, dir: REFERENCE_DIR }, fix: `Mueve el material de consulta a «${REFERENCE_DIR}…» y enlázalo desde el cuerpo`, fixCode: 'finding.body-max.fix', fixParams: { dir: REFERENCE_DIR } });
+  else if (body.length > BODY_BUDGET) add('warn', { rule: 'body-budget', observed: body.length, threshold: BODY_BUDGET, message: `body de ${body.length} caracteres: se carga entero cada vez que la skill se invoca; lo que sea material de consulta gana en «${REFERENCE_DIR}»`, messageParams: { n: body.length, dir: REFERENCE_DIR }, fix: `Lo que sea de consulta, a «${REFERENCE_DIR}…»`, fixCode: 'finding.body-budget.fix', fixParams: { dir: REFERENCE_DIR } });
 
   const encabezados = (body.match(/^##[^#\n]/gm) ?? []).length;
-  if (encabezados === 0) add('error', { rule: 'body-no-sections', observed: 0, threshold: 1, message: 'el body no tiene ninguna sección («## …»): un procedimiento se lee por partes, y sin secciones no hay dónde buscar el detalle', fix: 'Añade secciones «## …» al cuerpo' });
-  else if (encabezados < 2 && body.length > SMALL_BODY) add('error', { rule: 'body-sections-min', observed: encabezados, threshold: 2, message: `el body tiene ${encabezados} sección(es) y ${body.length} caracteres: a partir de ${SMALL_BODY} hacen falta al menos 2 («## …»), para que el detalle sea localizable`, fix: 'Divide el cuerpo en al menos dos secciones «## …»' });
-  else if (encabezados < 2) add('warn', { rule: 'body-sections-soft', observed: encabezados, threshold: 2, message: `body corto (${body.length} caracteres) con una sola sección: se admite, pero una segunda sección lo hace localizable cuando crezca`, fix: 'Opcional: una segunda sección' });
+  if (encabezados === 0) add('error', { rule: 'body-no-sections', observed: 0, threshold: 1, message: 'el body no tiene ninguna sección («## …»): un procedimiento se lee por partes, y sin secciones no hay dónde buscar el detalle', messageParams: {}, fix: 'Añade secciones «## …» al cuerpo' });
+  else if (encabezados < 2 && body.length > SMALL_BODY) add('error', { rule: 'body-sections-min', observed: encabezados, threshold: 2, message: `el body tiene ${encabezados} sección(es) y ${body.length} caracteres: a partir de ${SMALL_BODY} hacen falta al menos 2 («## …»), para que el detalle sea localizable`, messageParams: { n: encabezados, caracteres: body.length, pequeno: SMALL_BODY }, fix: 'Divide el cuerpo en al menos dos secciones «## …»' });
+  else if (encabezados < 2) add('warn', { rule: 'body-sections-soft', observed: encabezados, threshold: 2, message: `body corto (${body.length} caracteres) con una sola sección: se admite, pero una segunda sección lo hace localizable cuando crezca`, messageParams: { caracteres: body.length }, fix: 'Opcional: una segunda sección' });
 
   const haystack = `${description}\n${whenToUse}\n${body}`;
   // Las etiquetas de tema son **identificadores**, no prosa: van en kebab-case ASCII, sin acentos, como el
@@ -410,7 +425,11 @@ export function validateInput(input, { references = [], cwd = null, present = []
         observed: String(etiqueta),
         threshold: canonica,
         message: `la etiqueta «${etiqueta}» no está en su forma canónica: los identificadores van en kebab-case ASCII, sin acentos ni mayúsculas`,
+        messageCode: 'finding.tag-no-canonico.message',
+        messageParams: { etiqueta: String(etiqueta), canonica },
         fix: `Escríbela como «${canonica}»`,
+        fixCode: 'finding.tag-no-canonico.fix',
+        fixParams: { canonica },
       });
     }
   }
@@ -428,9 +447,11 @@ export function validateInput(input, { references = [], cwd = null, present = []
     body: String(input?.body ?? ''),
     ficheros: Object.fromEntries((Array.isArray(references) ? references : []).map((r) => [String(r?.path ?? ''), String(r?.content ?? '')])),
   });
-  for (const h of seguridad.bloqueos) add('error', { rule: h.rule, observed: h.observed, threshold: null, message: h.message, fix: h.fix });
-  for (const h of seguridad.avisos) add('warn', { rule: h.rule, observed: h.observed, threshold: null, message: h.message, fix: h.fix });
-  for (const [re, label] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) add('error', { rule: 'personal-path', observed: label, message: `contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`, fix: 'Sustituye la ruta personal por $DSH_HOME o una ruta relativa' });
+  // La prosa de la capa de seguridad viaja con su codigo: aqui solo se reetiqueta la severidad, no se reescribe
+  // la frase (si se perdiera el codigo, `audit`/`check` volverian a pintar el espanol del motor).
+  for (const h of seguridad.bloqueos) add('error', { rule: h.rule, observed: h.observed, threshold: null, message: h.message, messageCode: h.messageCode, messageParams: h.messageParams, fix: h.fix, fixCode: h.fixCode, fixParams: h.fixParams });
+  for (const h of seguridad.avisos) add('warn', { rule: h.rule, observed: h.observed, threshold: null, message: h.message, messageCode: h.messageCode, messageParams: h.messageParams, fix: h.fix, fixCode: h.fixCode, fixParams: h.fixParams });
+  for (const [re, label] of PERSONAL_PATH_SHAPES) if (re.test(haystack)) add('error', { rule: 'personal-path', observed: label, message: `contiene una ruta personal de la máquina (${label}): usa $DSH_HOME o una ruta relativa`, messageParams: { etiqueta: label }, fix: 'Sustituye la ruta personal por $DSH_HOME o una ruta relativa' });
   // Las rutas absolutas, por **contexto**: una ruta que se usa (prosa) avisa; un ejemplo o una cita se
   // ven en el informe como `info` sin pedir nada. Así el aviso sigue significando algo —y una ruta
   // escapada ( «letra:» + separador + camino`, típica de un JSON) se declara ambigua en vez de callarse—.
@@ -438,12 +459,12 @@ export function validateInput(input, { references = [], cwd = null, present = []
   for (const hallazgo of rutasAbsolutasEn(haystack)) {
     if (hallazgo.clase === 'prosa' && !rutaAvisada) {
       rutaAvisada = true;
-      add('warn', { rule: 'absolute-path', observed: hallazgo.muestra, message: `contiene una ruta absoluta en la línea ${hallazgo.linea} («${hallazgo.muestra}»): si la skill debe viajar, parametrízala`, fix: 'Parametriza la ruta absoluta o documéntala como del puesto' });
+      add('warn', { rule: 'absolute-path', observed: hallazgo.muestra, message: `contiene una ruta absoluta en la línea ${hallazgo.linea} («${hallazgo.muestra}»): si la skill debe viajar, parametrízala`, messageParams: { linea: hallazgo.linea, muestra: hallazgo.muestra }, fix: 'Parametriza la ruta absoluta o documéntala como del puesto' });
       continue;
     }
     if (hallazgo.clase === 'ambigua' && !rutaAvisada) {
       rutaAvisada = true;
-      add('warn', { rule: 'absolute-path-ambigua', observed: hallazgo.muestra, message: `«${hallazgo.muestra}» (línea ${hallazgo.linea}) parece una ruta absoluta con la barra escapada: si es una ruta real, parametrízala; si es un ejemplo dentro de una cadena, ignóralo`, fix: 'Parametriza la ruta real, o escribe el ejemplo de forma que se lea como tal' });
+      add('warn', { rule: 'absolute-path-ambigua', observed: hallazgo.muestra, message: `«${hallazgo.muestra}» (línea ${hallazgo.linea}) parece una ruta absoluta con la barra escapada: si es una ruta real, parametrízala; si es un ejemplo dentro de una cadena, ignóralo`, messageParams: { muestra: hallazgo.muestra, linea: hallazgo.linea }, fix: 'Parametriza la ruta real, o escribe el ejemplo de forma que se lea como tal' });
       continue;
     }
     add('info', {
@@ -452,6 +473,7 @@ export function validateInput(input, { references = [], cwd = null, present = []
       message: hallazgo.clase === 'ejemplo'
         ? `ruta absoluta dentro de un bloque de código (línea ${hallazgo.linea}): es un ejemplo, no un destino — no pide nada`
         : `ruta absoluta dentro de código en línea (línea ${hallazgo.linea}): es una cita, no un destino — no pide nada`,
+      messageParams: { linea: hallazgo.linea },
       fix: 'Nada: si algún día se usa como destino, la regla volverá a avisar',
     });
   }
@@ -473,6 +495,7 @@ export function validateInput(input, { references = [], cwd = null, present = []
       rule: 'evidence-missing',
       observed: perdidas.join(', '),
       message: `la evidencia no está en el proyecto: ${perdidas.join(', ')} — se conserva igual, pero una ruta que no existe no prueba nada`,
+      messageParams: { rutas: perdidas.join(', ') },
       fix: 'Aporta la evidencia declarada o corrige su ruta',
     });
   }
@@ -856,7 +879,13 @@ export function auditarCarpeta(dir, { cwd = null, id = null } = {}) {
   };
   const file = join(dir, 'SKILL.md');
   if (!existsSync(file)) {
-    anota('error', { rule: 'skill-missing', observed: dir, message: `no hay SKILL.md en ${dir}`, fix: 'La carpeta no es una skill: retírala o aporta su SKILL.md' });
+    anota('error', {
+      rule: 'skill-missing',
+      observed: dir,
+      message: `no hay SKILL.md en ${dir}`,
+      messageParams: { dir },
+      fix: 'La carpeta no es una skill: retírala o aporta su SKILL.md',
+    });
     return { findings, errors, warnings, meta: null, unreadable: false, references: [], links: [] };
   }
   let texto = null;
@@ -869,7 +898,11 @@ export function auditarCarpeta(dir, { cwd = null, id = null } = {}) {
       rule: 'unreadable',
       observed: error.code ?? error.message,
       message: `no se pudo leer el SKILL.md: ${error.message}`,
+      messageCode: 'finding.unreadable.skill.message',
+      messageParams: { detalle: error.message },
       fix: 'Revisa los permisos de ese fichero (y que no sea una carpeta)',
+      fixCode: 'finding.unreadable.skill.fix',
+      fixParams: {},
     });
     return { findings, errors, warnings, meta: null, unreadable: true, references: [], links: [] };
   }
@@ -888,7 +921,11 @@ export function auditarCarpeta(dir, { cwd = null, id = null } = {}) {
       rule: 'unreadable',
       observed: `${problema.ruta || '.'} (${problema.code})`,
       message: `no se pudo leer «${problema.ruta || 'la carpeta de la skill'}»: ${problema.code}`,
+      messageCode: 'finding.unreadable.folder.message',
+      messageParams: { ruta: problema.ruta || 'la carpeta de la skill', codigo: problema.code },
       fix: 'Revisa los permisos de esa carpeta (y que no sea un fichero donde se espera una carpeta)',
+      fixCode: 'finding.unreadable.folder.fix',
+      fixParams: {},
     });
   }
   const description = typeof data.description === 'string' ? data.description : '';
@@ -920,14 +957,31 @@ export function auditarCarpeta(dir, { cwd = null, id = null } = {}) {
   for (const ref of meta?.references ?? []) {
     const ruta = normalizeRel(ref.path);
     if (!arbol.files.includes(ruta)) {
-      anota('error', { rule: 'reference-missing-file', observed: ruta, message: `la referencia «${ruta}» ya no está en la carpeta de la skill`, fix: `Repón «${ruta}» o quita el vínculo del cuerpo` });
+      anota('error', {
+        rule: 'reference-missing-file',
+        observed: ruta,
+        message: `la referencia «${ruta}» ya no está en la carpeta de la skill`,
+        messageParams: { ruta },
+        fix: `Repón «${ruta}» o quita el vínculo del cuerpo`,
+        fixCode: 'finding.reference-missing-file.fix',
+        fixParams: { ruta },
+      });
       continue;
     }
     let sha = null;
     try {
       sha = createHash('sha256').update(readFileSync(join(dir, ruta))).digest('hex').slice(0, 16);
     } catch (error) {
-      anota('error', { rule: 'unreadable', observed: error.code ?? error.message, message: `no se pudo leer la referencia «${ruta}»: ${error.message}`, fix: 'Revisa los permisos de ese fichero' });
+      anota('error', {
+        rule: 'unreadable',
+        observed: error.code ?? error.message,
+        message: `no se pudo leer la referencia «${ruta}»: ${error.message}`,
+        messageCode: 'finding.unreadable.reference.message',
+        messageParams: { ruta, detalle: error.message },
+        fix: 'Revisa los permisos de ese fichero',
+        fixCode: 'finding.unreadable.reference.fix',
+        fixParams: {},
+      });
       continue;
     }
     if (sha !== ref.sha256) {
@@ -936,7 +990,10 @@ export function auditarCarpeta(dir, { cwd = null, id = null } = {}) {
         observed: `${ruta} ${sha}`,
         threshold: `${ruta} ${ref.sha256}`,
         message: `la referencia «${ruta}» cambió después de proponerse (huella distinta)`,
+        messageParams: { ruta },
         fix: `Vuelve a proponer la skill con el material actual, o repón «${ruta}»`,
+        fixCode: 'finding.reference-integrity.fix',
+        fixParams: { ruta },
       });
     }
   }
@@ -1993,7 +2050,19 @@ export function retired(key, { root = defaultRoot(), backupRoot = null } = {}) {
 export function checkProposal(id, key, { root = defaultRoot(), curated = curatedLibraryRoot() } = {}) {
   const dir = join(root, 'projects', key, 'proposed', id);
   const file = join(dir, 'SKILL.md');
-  if (!existsSync(file)) return { ok: false, errors: [`no existe una propuesta ${id} en ${key}`], warnings: [], findings: [], meta: null };
+  if (!existsSync(file)) {
+    // La frase se compone del catalogo: una sola copia, y el idioma de la sesion. `errors` la lleva en texto
+    // (lo que ya leian los consumidores de `checkProposal`) y `errorLines` en clave+parametros para la CLI.
+    const texto = t('gate.integrity.no-proposal.message', { id, key });
+    return {
+      ok: false,
+      errors: [texto],
+      warnings: [],
+      findings: [],
+      meta: null,
+      errorLines: [{ code: 'gate.integrity.no-proposal.message', params: { id, key }, texto }],
+    };
+  }
   // La puerta mira el disco, no la petición: así caza además lo que se editó a mano después de proponer.
   // Y es **la misma** función que audita una skill guardada: una regla, una implementación.
   const { findings, errors, warnings, meta } = auditarCarpeta(dir, { id });
@@ -2004,21 +2073,29 @@ export function checkProposal(id, key, { root = defaultRoot(), curated = curated
   // esperaba —otra aprobación, una edición a mano, un cambio de ámbito—, aplicarla encima sería
   // aplicar un cambio que ya no describe la realidad: se rechaza y se pide reconciliar.
   const integridad = [];
+  const errorLines = [];
+  // La frase de la integridad se compone del catalogo (no hay una segunda copia en espanol aqui): viaja a la vez
+  // como texto para `errors` —lo que ya leian los consumidores— y como clave+parametros para la CLI.
+  const anotaIntegridad = (code, params) => {
+    const texto = t(code, params);
+    errorLines.push({ code, params, texto });
+    integridad.push(texto);
+  };
   if (meta?.base) {
     const vigente = vigenteDe(id, key, { root, curated });
     if (vigente === null) {
-      integridad.push(`la versión sobre la que se preparó esta corrección (${meta.base.state}, huella ${meta.base.hash}) ya no está: vuelve a proponerla sobre lo que haya ahora`);
+      anotaIntegridad('gate.integrity.base-gone.message', { estado: meta.base.state, hash: meta.base.hash });
     } else if (vigente.hash !== meta.base.hash) {
-      integridad.push(`la versión vigente cambió desde que se preparó esta corrección (base ${meta.base.hash} ≠ vigente ${vigente.hash}): vuelve a proponer sobre la versión nueva, o la corrección se aplicaría sobre algo que ya no existe`);
+      anotaIntegridad('gate.integrity.base-changed.message', { base: meta.base.hash, vigente: vigente.hash });
     }
   }
   // Y si la propuesta elimina material, la justificación tiene que seguir ahí (se pueda leer).
   if ((meta?.diff?.references?.eliminadas?.length ?? 0) > 0 && (meta?.revision?.removed ?? '').trim().length === 0) {
-    integridad.push('esta propuesta elimina material y no lleva la justificación exigida («revision.removed»): no se aprueba sin decir por qué');
+    anotaIntegridad('gate.integrity.removed-material.message', {});
   }
 
   const todos = [...errors, ...integridad];
-  return { ok: todos.length === 0, errors: todos, warnings, findings, file, dir, meta };
+  return { ok: todos.length === 0, errors: todos, warnings, findings, file, dir, meta, errorLines };
 }
 
 /**
