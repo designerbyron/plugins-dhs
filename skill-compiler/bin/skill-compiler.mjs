@@ -758,24 +758,24 @@ switch (command) {
       line(false, tr('cli.doctor.commands-failed', { message: error.message }), tr('cli.doctor.commands-failed-remedy'));
     }
 
-    // -- Los alias: 15 nombres espanoles que siguen funcionando, y lo que el menu va a ensenar ------
+    // -- Los nombres del menu: uno por operacion, en el idioma resuelto -------------------------------
     //
-    // Medido en el build instalado: `@deepseek-ai/dsh-commands` recorta el descriptor a
-    // {definitionId, name, description, input} antes de servirlo, y `dsh-client-ui-commands` compone cada
-    // fila del menu con name + description + input.hint. Ni `aliasOf` ni `deprecatedIn` llegan a la
-    // interfaz (0 apariciones en todo el app.asar), asi que el menu anuncia las filas canonicas MAS los
-    // alias. No registrarlos para ocultarlos les quitaria la invocabilidad, que es justo lo que el humano
-    // usa hasta la retirada: por eso se cuentan en voz alta y se comprueban sus metadatos.
+    // Antes habia 15 alias y el menu anunciaba 31 filas (16 canonicos + 15 alias), porque el harness no
+    // filtra por metadatos. Ya no hay alias: el conjunto activo tiene **una fila por operacion**, con el
+    // nombre del idioma resuelto, y el nombre del otro idioma no se registra (no es invocable). Lo que se
+    // cuenta aqui es lo que el registro va a servir, construido desde el mapa, no un numero escrito a mano.
     try {
-      const { skillCommands, aliasProblems, aliasSummary } = await import(pathToFileURL(join(packageRoot, 'lib', 'commands.mjs')).href);
-      const declaradas = skillCommands({ root });
-      const problemas = aliasProblems(declaradas);
-      const resumen = aliasSummary(declaradas);
-      line(problemas.length === 0,
-        tr('cli.doctor.alias-ok', { alias: resumen.alias, filas: resumen.filas, canonicos: resumen.canonicos }),
-        problemas.map((p) => `${p.regla} ${p.alias}: ${p.detalle}`).join('; ') || tr('cli.doctor.alias-remedy'));
+      const { skillCommands } = await import(pathToFileURL(join(packageRoot, 'lib', 'commands.mjs')).href);
+      const { createLocalizedSet, LOCALIZED_OPERATIONS } = await import(pathToFileURL(join(packageRoot, 'lib', 'localized-commands.mjs')).href);
+      const idioma = resolveLang({ root, fresh: true }).lang;
+      const conjunto = createLocalizedSet({ definitions: skillCommands({ root }) });
+      const filas = conjunto.namesFor(idioma);
+      const unNombrePorIdioma = conjunto.operations.every((op) => typeof op.byLang.en.name === 'string' && typeof op.byLang.es.name === 'string');
+      line(unNombrePorIdioma && filas.length === LOCALIZED_OPERATIONS.length,
+        tr('cli.doctor.names-ok', { n: LOCALIZED_OPERATIONS.length, filas: filas.length, lang: idioma, names: filas.join(', ') }, { lang: idioma }),
+        tr('cli.doctor.names-remedy', {}, { lang: idioma }));
     } catch (error) {
-      line(false, tr('cli.doctor.alias-failed', { message: error.message }), tr('cli.doctor.alias-failed-remedy'));
+      line(false, tr('cli.doctor.names-failed', { message: error.message }), tr('cli.doctor.names-failed-remedy'));
     }
 
     // -- Las filas de pendientes: la superficie que convierte aprobar en elegir --------------------

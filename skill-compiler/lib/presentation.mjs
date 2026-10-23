@@ -22,6 +22,8 @@
  *      `command/done`, que ya existen: la guía de DSH prohíbe añadir tipos de evento propios.
  */
 
+import { localizedNamesOf } from './localized-commands.mjs';
+
 /** Fases visibles. `idle` no pinta nada. Congeladas: son la fuente de verdad del esquema de la vista. */
 export const PHASES = Object.freeze(['idle', 'analyzing', 'done']);
 
@@ -35,23 +37,27 @@ export const OUTCOMES = Object.freeze(['', 'created', 'updated', 'none', 'reject
 export const TOOLS = { skill_propose: 'propose', skill_vendor: 'vendor' };
 
 /**
- * Los comandos humanos que **cambian el almacén**, por prefijo de nombre. El prefijo cubre las dos
- * formas de invocarlos, porque son el mismo acto: `skill-aprobar` (con argumento) y `skill-approve-<id>`
- * (la fila del menú, sin argumentos).
+ * Las operaciones humanas que **cambian el almacen**, por **id interno de operacion** -no por nombre-.
+ *
+ * El nombre de un comando depende del idioma (`skill-approve` / `skill-aprobar`), asi que una tabla de prefijos
+ * con nombres volveria a saber espanol en un solo idioma: aqui se declara la operacion y el nombre se resuelve
+ * en el mapa localizado. El prefijo cubre las dos formas de invocarla, porque son el mismo acto: el comando
+ * (`skill-approve`, `skill-aprobar`) y la fila del menu, que lleva el verbo y el id (`skill-approve-<id>`).
  */
-export const DECISION_COMMANDS = Object.freeze([
-  Object.freeze({ prefix: 'skill-approve', kind: 'aprobar' }),
+export const DECISION_OPERATIONS = Object.freeze([
+  Object.freeze({ id: 'approve', kind: 'aprobar' }),
   // Publicar es una aprobación más: cuenta como decisión propia, y el feedback lo dice así.
-  Object.freeze({ prefix: 'skill-publish', kind: 'aprobar' }),
-  Object.freeze({ prefix: 'skill-scope', kind: 'aprobar' }),
-  Object.freeze({ prefix: 'skill-reject', kind: 'rechazar' }),
+  Object.freeze({ id: 'publish', kind: 'aprobar' }),
+  Object.freeze({ id: 'scope', kind: 'aprobar' }),
+  Object.freeze({ id: 'reject', kind: 'rechazar' }),
 ]);
 
 /** El verbo de decisión de un comando: `aprobar`, `rechazar`, o `''` si ese comando no decide nada. */
 export function decisionKindOf(name) {
   const clean = String(name ?? '');
-  for (const entry of DECISION_COMMANDS) {
-    if (clean === entry.prefix || clean.startsWith(`${entry.prefix}-`)) return entry.kind;
+  for (const entry of DECISION_OPERATIONS) {
+    const nombres = localizedNamesOf(entry.id);
+    if (nombres.some((nombre) => clean === nombre || clean.startsWith(`${nombre}-`))) return entry.kind;
   }
   return '';
 }
@@ -149,7 +155,7 @@ export function applyLearning(state, event) {
 }
 
 /** Los verbos de decisión válidos; la vista de la proyección deriva su enum de aquí, como PHASES. */
-export const DECISION_KINDS = Object.freeze(['', ...DECISION_COMMANDS.map((entry) => entry.kind)]);
+export const DECISION_KINDS = Object.freeze(['', ...DECISION_OPERATIONS.map((entry) => entry.kind)]);
 
 /** Normaliza un estado que venga de un punto de control: si un campo falta o viene raro, se rellena. */
 function normalize(state) {

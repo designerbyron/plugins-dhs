@@ -1,16 +1,16 @@
 {
-  "generado": "2026-10-23T17:13:32.026Z",
+  "generado": "2026-10-23T18:13:32.281Z",
   "ficheros": {
     "lib/audit.mjs": 309,
     "lib/auto-approve.mjs": 170,
     "lib/auto-update.mjs": 287,
-    "lib/commands.mjs": 583,
+    "lib/commands.mjs": 574,
     "lib/compiler.mjs": 1766,
     "lib/definitions.mjs": 263,
     "lib/lock.mjs": 21,
     "lib/localized-commands.mjs": 0,
     "lib/pending-rows.mjs": 305,
-    "lib/presentation.mjs": 158,
+    "lib/presentation.mjs": 156,
     "lib/projection.mjs": 176,
     "lib/promote.mjs": 402,
     "lib/repair.mjs": 819,
@@ -21,7 +21,7 @@
     "lib/i18n/es.mjs": 0,
     "lib/i18n/index.mjs": 45,
     "bin/skill-compiler.mjs": 0,
-    "client.js": 906,
+    "client.js": 903,
     "index.js": 327
   }
 }

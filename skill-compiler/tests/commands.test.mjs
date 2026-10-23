@@ -117,25 +117,18 @@ describe('gestión · el aviso al catálogo coincide con lo que cambió en disco
 describe('comandos · descriptor', () => {
   it('se declaran como el registro del harness los exige', () => {
     const { list } = commands('C:\\tmp');
-    // Canónicos ingleses, y los 15 alias españoles declarados con metadatos (sin duplicar el canónico).
-    assert.deepEqual(list.filter((c) => c.aliasOf === undefined).map((c) => c.name).sort(),
+    // Las 16 definiciones base, con el nombre del idioma base. El nombre español no es un alias: lo
+    // registra el conjunto del idioma EN LUGAR de este (tests/menu-localizado.test.mjs).
+    assert.deepEqual(list.map((c) => c.name).sort(),
       [
         'skill-approve', 'skill-auto', 'skill-disable', 'skill-enable', 'skill-ownership',
         'skill-ownership-dsh-only', 'skill-ownership-machine', 'skill-pending', 'skill-proposals',
         'skill-publish', 'skill-reject', 'skill-retire', 'skill-retired', 'skill-scope', 'skill-show',
         'skill-systems',
       ]);
-    assert.deepEqual(list.filter((c) => c.aliasOf !== undefined).map((c) => c.name).sort(),
-      [
-        'skill-ambito', 'skill-aprobar', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar',
-        'skill-habilitar', 'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only',
-        'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar', 'skill-retiradas',
-        'skill-sistemas', 'skill-ver',
-      ]);
-    for (const alias of list.filter((c) => c.aliasOf !== undefined)) {
-      assert.equal(alias.deprecatedIn, '5.0.0', `${alias.name} sin versión de retirada`);
-      assert.equal(typeof alias.description, 'string');
-      assert.match(alias.description, /^Alias obsoleto/);
+    for (const command of list) {
+      assert.equal(command.aliasOf, undefined, `${command.name}: declara aliasOf`);
+      assert.equal(command.deprecatedIn, undefined, `${command.name}: declara deprecatedIn`);
     }
     for (const command of list) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/, `${command.name} no cumple la gramática del harness`);
@@ -173,7 +166,7 @@ describe('comandos · /skill-proposals', () => {
     assert.match(result.text, /otro-tema-distinto/);
     assert.match(result.text, /Aprobadas y activas \(1\)/);
     assert.match(result.text, /measured-decision-check/);
-    assert.match(result.text, /\/skill-approve <id>/, 'y dice cómo seguir');
+    assert.match(result.text, /\/skill-aprobar <id>/, 'y dice cómo seguir');
   });
 });
 
@@ -182,7 +175,8 @@ describe('comandos · /skill-show', () => {
     const { byName } = commands('C:\\tmp');
     const result = byName['skill-show'].handler({ agent, rawInput: '   ' });
     assert.equal(result.kind, 'error');
-    assert.match(result.text, /Uso: \/skill-show <id>/);
+    // La prosa espanola cita el nombre que existe en espanol: `/skill-ver`.
+    assert.match(result.text, /Uso: \/skill-ver <id>/);
   });
 
   it('avisa cuando el id no existe', () => {
@@ -248,7 +242,7 @@ describe('comandos · /skill-approve', () => {
     const result = byName['skill-approve'].handler({ agent, rawInput: 'no-existe' });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /No hay ninguna propuesta/);
-    assert.match(result.text, /skill-proposals/, 'dice dónde mirar, en vez de solo que no existe');
+    assert.match(result.text, /skill-propuestas/, 'dice dónde mirar, en vez de solo que no existe');
   });
 
   it('respeta la puerta: una propuesta que no la pasa no se aprueba, y nada se mueve', () => {
@@ -492,7 +486,7 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     assert.equal(result.kind, 'error', 'no había nada con ese id: se dice');
     assert.match(result.text, /No hay ninguna propuesta "dhs-nexus-protocol"/);
     assert.match(result.text, /Querias decir "dsh-nexus-protocol"\?/);
-    assert.match(result.text, /skill-proposals/);
+    assert.match(result.text, /skill-propuestas/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'dsh-nexus-protocol')), false, 'y no se movió nada');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'proposed', 'dsh-nexus-protocol')), true);
   });
@@ -505,7 +499,7 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     const result = byName['skill-approve'].handler({ agent, rawInput: 'otra-cosa-muy-distinta --local' });
     assert.equal(result.kind, 'error');
     assert.doesNotMatch(result.text, /Querias decir/);
-    assert.match(result.text, /Miralas con \/skill-proposals/);
+    assert.match(result.text, /Miralas con \/skill-propuestas/);
   });
 
   it('con dos candidatos igual de cerca, elige siempre el mismo', () => {

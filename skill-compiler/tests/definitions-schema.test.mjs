@@ -4,10 +4,10 @@
  * Dos decisiones que este fichero materializa:
  *
  *   1. **El inventario no son cuatro herramientas por casualidad.** Lo que el plugin expone es una
- *      superficie: las herramientas del modelo, los comandos de sesion con sus alias, el proveedor de
+ *      superficie: las herramientas del modelo, los comandos de sesion con su nombre en cada idioma, el proveedor de
  *      skills y la seccion estatica del prompt. El manifiesto enumera las cuatro capas y esta prueba
  *      compara la superficie REAL (incluido lo que `index.js` registra, leido del fichero) contra ella:
- *      una herramienta nueva, un comando que desaparece o un alias que cambia de destino fallan aqui.
+ *      una herramienta nueva, un comando que desaparece o un nombre que cambia de idioma fallan aqui.
  *   2. **El texto queda fuera del manifiesto a proposito.** La estructura (nombres, tipos, obligatoriedad,
  *      enums, esquema de salida, contrato declarado) esta congelada; el texto visible se protege por sus
  *      propiedades —ASCII, ingles, ninguna ruta obligatoria vacia— para que traducirlo no obligue a
@@ -24,6 +24,7 @@ import { join, relative } from 'node:path';
 import { after, describe, it } from 'node:test';
 
 import { skillCommands } from '../lib/commands.mjs';
+import { LOCALIZED_OPERATIONS } from '../lib/localized-commands.mjs';
 import {
   PROTOCOL, PROVIDER_RANK, skillPropose, skillReview, skillUpstreamCheck, skillVendor,
 } from '../lib/definitions.mjs';
@@ -123,12 +124,13 @@ const fetchFalso = (rutas) => async (url) => {
 describe('definitions · inventario del contrato', () => {
   it('el manifiesto cubre las CUATRO capas de la superficie, no solo las herramientas', () => {
     assert.deepEqual(Object.keys(MANIFIESTO.superficie).sort(),
-      ['alias', 'comandos', 'herramientas', 'protocolo', 'proveedor']);
+      ['comandos', 'herramientas', 'nombres', 'protocolo', 'proveedor']);
     assert.deepEqual(MANIFIESTO.superficie.herramientas, HERRAMIENTAS);
     // Las herramientas y los comandos son superficies distintas: un comando humano no es una herramienta
     // del modelo, y el manifiesto tiene que declarar las dos.
     assert.equal(MANIFIESTO.superficie.comandos.length, 16);
-    assert.equal(Object.keys(MANIFIESTO.superficie.alias).length, 15);
+    // Y los nombres: una operacion, un nombre por idioma. El alias espanol ya no es un metadato del ingles.
+    assert.equal(Object.keys(MANIFIESTO.superficie.nombres).length, 16);
   });
 
   it('lo que index.js REGISTRA es exactamente lo que el manifiesto declara', () => {
@@ -143,14 +145,14 @@ describe('definitions · inventario del contrato', () => {
     for (const nombre of nombres) assert.equal(/approve|publish|retire|enable/.test(nombre), false, nombre);
   });
 
-  it('los comandos vivos son los declarados, con su alias y su destino', () => {
+  it('los comandos vivos son los declarados, con su nombre en cada idioma', () => {
     const s = sandbox({ curated: false });
     const cmds = skillCommands({ root: s.root });
-    const canonicos = cmds.filter((c) => c.aliasOf === undefined).map((c) => c.name).sort();
-    assert.deepEqual(canonicos, [...MANIFIESTO.superficie.comandos].sort());
-    const alias = Object.fromEntries([...cmds.filter((c) => c.aliasOf !== undefined).map((c) => [c.name, c.aliasOf])].sort());
-    assert.deepEqual(alias, MANIFIESTO.superficie.alias);
-    assert.equal(cmds.length, MANIFIESTO.superficie.comandos.length + Object.keys(MANIFIESTO.superficie.alias).length);
+    assert.deepEqual(cmds.map((c) => c.name).sort(), [...MANIFIESTO.superficie.comandos].sort());
+    // El manifiesto declara la operacion y sus dos nombres; la prueba compara el mapa REAL contra el, id a id.
+    const real = Object.fromEntries(LOCALIZED_OPERATIONS.map((op) => [op.id, { ...op.names }]));
+    assert.deepEqual(real, MANIFIESTO.superficie.nombres);
+    assert.equal(cmds.length, MANIFIESTO.superficie.comandos.length);
   });
 
   it('el proveedor y la seccion estatica declaran lo que el manifiesto congela', () => {

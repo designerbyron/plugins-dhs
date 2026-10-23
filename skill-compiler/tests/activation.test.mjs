@@ -112,35 +112,27 @@ describe('activación', () => {
     apply(ctx, { root: s.root });
     disposeAll();
 
-    // Canonicos ingleses, los alias espanoles declarados con metadatos (sin duplicar el canonico), y el
-    // nombre del idioma resuelto para la operacion que ya es localizada. Este fichero fija `DSH_LANG=es`
-    // arriba, asi que `approve` se registra con su nombre espanol y NO con el ingles: es la propiedad que
-    // se mide, no un efecto colateral. `/skill-compiler-language` es el comando estable, fuera del conjunto
-    // que cambia, y por eso aparece siempre.
-    assert.deepEqual(registered.filter((c) => c.aliasOf === undefined).map((c) => c.name).sort(),
+    // Las 16 operaciones con el nombre del idioma resuelto (este fichero fija `DSH_LANG=es`), mas el
+    // comando estable `/skill-compiler-language`, que vive FUERA del conjunto que cambia y por eso aparece
+    // siempre. Una fila por operacion: 17 en total, ni una mas.
+    assert.deepEqual(registered.map((c) => c.name).sort(),
       [
-        'skill-aprobar', 'skill-auto', 'skill-compiler-language', 'skill-disable', 'skill-enable',
-        'skill-ownership', 'skill-ownership-dsh-only', 'skill-ownership-machine', 'skill-pending',
-        'skill-proposals', 'skill-publish', 'skill-reject', 'skill-retire', 'skill-retired', 'skill-scope',
-        'skill-show', 'skill-systems',
+        'skill-ambito', 'skill-aprobar', 'skill-auto', 'skill-compiler-language', 'skill-deshabilitar',
+        'skill-eliminar', 'skill-globalizar', 'skill-habilitar', 'skill-pendientes', 'skill-propiedad',
+        'skill-propiedad-dsh-only', 'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar',
+        'skill-retiradas', 'skill-sistemas', 'skill-ver',
       ]);
-    assert.deepEqual(registered.filter((c) => c.aliasOf !== undefined).map((c) => c.name).sort(),
-      [
-        'skill-ambito', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar',
-        'skill-habilitar', 'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only',
-        'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar', 'skill-retiradas',
-        'skill-sistemas', 'skill-ver',
-      ]);
-    // Un nombre por operacion: el nombre ingles del comando localizado NO se registra a la vez que el
-    // espanol. Si esto fallara, el menu volveria a pintar la misma operacion dos veces.
-    assert.equal(registered.some((c) => c.name === 'skill-approve'), false, 'el nombre ingles no convive con el localizado');
+    // El nombre del otro idioma NO convive: era la mitad del defecto (31 filas para 16 operaciones).
+    for (const ingles of ['skill-approve', 'skill-proposals', 'skill-show', 'skill-reject', 'skill-retire']) {
+      assert.equal(registered.some((c) => c.name === ingles), false, `${ingles} no convive con el nombre espanol`);
+    }
+    // Y ningun descriptor declara metadatos de alias: el modelo se retiro.
+    for (const command of registered) {
+      assert.equal(command.aliasOf, undefined, `${command.name}: declara aliasOf`);
+      assert.equal(command.deprecatedIn, undefined, `${command.name}: declara deprecatedIn`);
+    }
     const localizado = registered.find((c) => c.definitionId === 'skill-compiler.approve');
     assert.notEqual(localizado, undefined, 'la operacion localizada declara su id interno estable');
-    for (const alias of registered.filter((c) => c.aliasOf !== undefined)) {
-      assert.equal(alias.deprecatedIn, '5.0.0', `${alias.name} sin versión de retirada`);
-      assert.equal(typeof alias.description, 'string');
-      assert.match(alias.description, /^Alias obsoleto/);
-    }
     for (const command of registered) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/);
       assert.equal(command.description.trim().length > 0, true);
@@ -202,7 +194,7 @@ describe('activación', () => {
       { root: s.root, curated: s.curated, cwd: OTRO });
 
     // Nadie ha montado todavía: sin sesión no hay filas, ni en el global ni por agente.
-    assert.equal(global.map.size, 31, 'el global tiene los comandos base y ninguna fila');
+    assert.equal(global.map.size, 17, 'el global tiene los 16 comandos del idioma y el comando estable, y ninguna fila');
 
     // El montaje entra por el provider, que el registro llama con `{ cwd, agent }`: es la vía medida
     // contra el registro real, y no depende de que un evento alcance el contexto raíz.
@@ -213,7 +205,7 @@ describe('activación', () => {
     const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-approve-'));
     assert.deepEqual(filasDe(CWD), ['skill-approve-measured-decision-check'], 'la sesión ve lo suyo');
     assert.deepEqual(filasDe(OTRO), ['skill-approve-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
-    assert.equal(global.map.size, 31, 'las filas no se registran en el global: ahí se ofrecerían a todos');
+    assert.equal(global.map.size, 17, 'las filas no se registran en el global: ahí se ofrecerían a todos');
 
     // Decidir en una sesión no toca las filas de la otra.
     const fila = perAgent.get(CWD).map.get('skill-approve-measured-decision-check');
@@ -264,6 +256,12 @@ describe('activación', () => {
   // listaba… pero el catálogo de esa sesión no tenía ninguna fila, así que el menú no ofrecía nada y la
   // tarjeta sólo decía «no hay filas que decidir en el catálogo de esta sesión». El montaje se caía sin
   // decirlo y el agente quedaba cacheado, de modo que ningún intento posterior podía arreglarlo.
+  /**
+   * El comando por su **id interno estable**, no por su nombre: el nombre cambia con el idioma y este fichero
+   * fija `DSH_LANG=es`, asi que buscarlo por `skill-proposals` mediria el idioma, no el montaje.
+   */
+  const porId = (registro, id) => [...registro.map.values()].find((c) => c.definitionId === `skill-compiler.${id}`);
+
   /** Un registro de comandos en miniatura, con nombres y disposers de verdad. */
   function registroFalso() {
     const map = new Map();
@@ -289,7 +287,7 @@ describe('activación', () => {
     const { ctx, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
 
-    const propuestas = global.map.get('skill-proposals');
+    const propuestas = porId(global, 'proposals');
     assert.ok(propuestas, 'el comando tiene que estar registrado');
     assert.equal(deLaSesion.map.size, 0, 'nadie ha montado todavía las filas de esta sesión');
 
@@ -318,13 +316,13 @@ describe('activación', () => {
     };
     const { ctx, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
-    const propuestas = global.map.get('skill-proposals');
+    const propuestas = porId(global, 'proposals');
 
     const roto = propuestas.handler({ agent, rawInput: '' });
     assert.equal(roto.kind, 'success', 'el comando funciona aunque el montaje falle: hay vía manual');
     assert.match(roto.text, /Aviso: este anfitrion no anuncia filas por propuesta/);
     // Y la orden exacta, aunque no haya filas: lo que decide no depende del menú.
-    assert.match(roto.text, /Una orden para todas: \/skill-approve pendiente-con-montaje-roto --local/);
+    assert.match(roto.text, /Una orden para todas: \/skill-aprobar pendiente-con-montaje-roto --local/);
     assert.equal(deLaSesion.map.size, 0, 'sin inject no hay filas');
 
     // El inject empieza a funcionar: el siguiente comando vuelve a intentar el montaje y esta vez sí monta.
@@ -335,7 +333,7 @@ describe('activación', () => {
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-con-montaje-roto']);
 
     // Con la lista vacía el aviso sobra: no hay nada que anunciar. Se aparta la pendiente y se vuelve a mirar.
-    assert.equal(global.map.get('skill-reject').handler({ agent, rawInput: 'pendiente-con-montaje-roto' }).kind, 'success');
+    assert.equal(porId(global, 'reject').handler({ agent, rawInput: 'pendiente-con-montaje-roto' }).kind, 'success');
     const vacia = propuestas.handler({ agent, rawInput: '' });
     assert.equal(vacia.text.includes('Aviso: este anfitrion no anuncia filas'), false, 'sin pendientes no se avisa');
     disposeAll();
@@ -361,7 +359,7 @@ describe('activación', () => {
     const { ctx, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
 
-    const r = global.map.get('skill-proposals').handler({ agent, rawInput: '' });
+    const r = porId(global, 'proposals').handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
     assert.equal(r.text.includes('Aviso: este anfitrion no anuncia filas'), false, 'montadas por la vía directa: no hay aviso');
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-sin-inject']);
@@ -394,7 +392,7 @@ describe('activación', () => {
     const { ctx, disposeAll } = fakeContext({ commands: global.commands });
     apply(ctx, { root: s.root, catalog: signal });
 
-    const r = global.map.get('skill-proposals').handler({ agent, rawInput: '' });
+    const r = porId(global, 'proposals').handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
     assert.equal(r.text.includes('Aviso: este anfitrion no anuncia filas'), false, 'montadas por el hijo: no hay aviso');
     assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-del-hijo']);

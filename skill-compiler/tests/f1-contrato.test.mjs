@@ -1,8 +1,9 @@
 /**
- * F1 · contrato de F1: los alias son el mismo comando, y el panel decide por `code`.
+ * F1 · contrato de F1: una operacion, un nombre por idioma, y el panel decide por `code`.
  *
  * Dos cosas que, si se rompen, no se notan hasta que un humano aprueba algo y la tarjeta dice que no:
- *   1. un alias tiene que ejecutar **el mismo handler** y dejar **el mismo estado** que su canónico;
+ *   1. cada operacion tiene **un nombre por idioma**, el handler es **el mismo objeto** para los dos, y el
+ *      nombre del otro idioma **no es invocable** —no es un alias: es la misma operacion en otra lengua—;
  *   2. el panel tiene que leer el código estable, ignorar la prosa cuando el código llega, y tratar un código
  *      desconocido como fallo visible —nunca como éxito ni como «sigue leyendo el texto»—.
  */
@@ -11,8 +12,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
-import { RETIRADA_DE_ALIAS, skillCommands } from '../lib/commands.mjs';
+import { skillCommands } from '../lib/commands.mjs';
 import { approve, pending, projectKey, propose } from '../lib/compiler.mjs';
+import { LOCALIZED_OPERATIONS, createLocalizedSet } from '../lib/localized-commands.mjs';
 import { cleanupSandboxes, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
@@ -46,73 +48,67 @@ function sembrar(s, id = 'contrato-de-f1') {
   assert.equal(r.status, 'proposed', JSON.stringify(r.errors ?? r.conflicts));
 }
 
-describe('F1 · alias = canónico', () => {
-  it('cada alias apunta al MISMO handler y declara su canónico y su retirada', () => {
-    const cmds = skillCommands({});
-    const porNombre = new Map(cmds.map((c) => [c.name, c]));
-    const alias = cmds.filter((c) => c.aliasOf !== undefined);
-    assert.equal(alias.length, 15);
-    for (const a of alias) {
-      const canonico = porNombre.get(a.aliasOf);
-      assert.notEqual(canonico, undefined, `${a.name}: su canónico no existe`);
-      // Mismo contrato de invocación: mismas entradas declaradas y mismo handler por dentro. La identidad de
-      // la función no se puede comparar porque `skillCommands` envuelve cada comando para montar las filas;
-      // lo que importa —y se prueba abajo— es que el efecto sea el mismo.
-      assert.deepEqual(a.input ?? {}, canonico.input ?? {}, `${a.name}: entradas distintas`);
-      assert.equal(typeof a.handler, 'function');
-      // La descripcion del alias es la del canonico con un aviso delante, y el aviso es PRESENTACION: se
-      // comprueba que el canonico viaja intacto detras, no la frase del prefijo (que depende del idioma).
-      assert.equal(a.description.endsWith(canonico.description), true, `${a.name}: falta la descripcion del canonico`);
-      assert.equal(a.description.length > canonico.description.length, true, `${a.name}: no lleva aviso de alias`);
-      assert.equal(a.deprecatedIn, RETIRADA_DE_ALIAS);
-      assert.notEqual(a.description, canonico.description, `${a.name}: sin aviso se leeria como el canonico`);
+// Una raiz que no existe: estas dos pruebas miran el mapa, y un handler que no se invoca no toca el almacen.
+const RAIZ_FALSA = join(process.cwd(), 'tests', 'arena-que-no-existe');
+const conjunto = (root) => createLocalizedSet({ definitions: skillCommands({ root, catalog: { notify() {} } }) });
+const definicionDe = (root, lang, id) => {
+  const op = conjunto(root).operations.find((o) => o.id === id);
+  assert.notEqual(op, undefined, `${id}: la operacion no esta en el mapa`);
+  const def = conjunto(root).definitionsFor(lang).find((d) => d.name === op.byLang[lang].name);
+  assert.notEqual(def, undefined, `${id}/${lang}: el conjunto no trae su nombre`);
+  return def;
+};
+
+describe('F1 · una operacion, un nombre por idioma', () => {
+  it('cada operacion tiene UN nombre por idioma y el MISMO handler en los dos', () => {
+    const set = conjunto(RAIZ_FALSA);
+    assert.equal(set.operations.length, 16);
+    assert.equal(set.operations.length, LOCALIZED_OPERATIONS.length);
+    for (const op of set.operations) {
+      const en = set.definitionsFor('en').find((d) => d.name === op.byLang.en.name);
+      const es = set.definitionsFor('es').find((d) => d.name === op.byLang.es.name);
+      assert.notEqual(en, undefined, `${op.id}: sin definicion inglesa`);
+      assert.notEqual(es, undefined, `${op.id}: sin definicion espanola`);
+      // La prueba del diseno: mismo handler, misma puerta, mismos efectos. Dos functions distintas dejarian
+      // abierta la puerta a que una de las dos se quede atras.
+      assert.equal(en.handler, es.handler, `${op.id}: el handler cambia con el idioma`);
+      assert.equal(en.definitionId, es.definitionId, `${op.id}: el id de definicion cambia con el idioma`);
+      // La FORMA de la entrada es la misma (la pista del menu existe o no); su texto puede ser idioma: la
+      // pista de `skill-auto` es `on | off` en ingles y `activar | desactivar` en espanol, y las dos son
+      // ciertas porque el handler entiende las cuatro palabras.
+      assert.deepEqual(Object.keys(en.input ?? {}), Object.keys(es.input ?? {}), `${op.id}: la forma de la entrada difiere`);
+      if (en.input?.hint !== undefined) assert.equal(typeof en.input.hint, 'string', `${op.id}: pista sin texto`);
+      assert.equal(typeof en.handler, 'function', `${op.id}: sin handler`);
     }
   });
 
-  it('el aviso de alias es presentacion: cambia con el idioma y el canonico viaja intacto', () => {
-    // El prefijo del aviso estaba escrito en el codigo y una prueba lo fijaba como frase. Ahora es una clave del
-    // catalogo: lo que se mide es el DATO (`aliasOf`, `deprecatedIn`, el canonico detras) en los dos idiomas y
-    // que los dos digan que es un alias. Una frase no es contrato; el dato si.
-    const conIdioma = (lang) => {
-      const previo = process.env.DSH_LANG;
-      process.env.DSH_LANG = lang;
-      try {
-        return new Map(skillCommands({}).map((c) => [c.name, c]));
-      } finally {
-        if (previo === undefined) delete process.env.DSH_LANG;
-        else process.env.DSH_LANG = previo;
-      }
-    };
-    const es = conIdioma('es');
-    const en = conIdioma('en');
-    assert.match(es.get('skill-aprobar').description, /^Alias obsoleto de \/skill-approve: se retira en 5\.0\.0\. /);
-    assert.match(en.get('skill-aprobar').description, /^Deprecated alias of \/skill-approve: removed in 5\.0\.0\. /);
-    for (const [viejo, nuevo] of [['skill-aprobar', 'skill-approve'], ['skill-ver', 'skill-show']]) {
-      for (const [lang, mapa] of [['es', es], ['en', en]]) {
-        const alias = mapa.get(viejo);
-        const canonico = mapa.get(nuevo);
-        assert.equal(alias.aliasOf, nuevo, `${lang}/${viejo}: aliasOf`);
-        assert.equal(alias.deprecatedIn, '5.0.0', `${lang}/${viejo}: deprecatedIn`);
-        assert.equal(alias.description.endsWith(canonico.description), true, `${lang}/${viejo}: el canonico se perdio`);
-        assert.deepEqual(alias.input ?? {}, canonico.input ?? {}, `${lang}/${viejo}: entradas distintas`);
-        assert.equal(typeof alias.handler, 'function', `${lang}/${viejo}: sin handler`);
-      }
+  it('el nombre del otro idioma NO es invocable: no hay dos filas para la misma operacion', () => {
+    const set = conjunto(RAIZ_FALSA);
+    const en = set.definitionsFor('en').map((d) => d.name);
+    const es = set.definitionsFor('es').map((d) => d.name);
+    for (const op of LOCALIZED_OPERATIONS) {
+      if (op.names.en === op.names.es) continue; // `skill-auto` es el unico que no se traduce
+      assert.equal(en.includes(op.names.es), false, `${op.id}: /${op.names.es} se registra en ingles`);
+      assert.equal(es.includes(op.names.en), false, `${op.id}: /${op.names.en} se registra en espanol`);
     }
+    // Y el conjunto no admite repetidos: una fila, un duenio.
+    assert.equal(new Set(en).size, en.length);
+    assert.equal(new Set(es).size, es.length);
   });
 
-  it('aprobar con el nombre viejo y con el nuevo deja el mismo estado y el mismo código', () => {
+  it('aprobar por el nombre de cada idioma deja el mismo estado y el mismo código', () => {
     const a = sandbox();
     const b = sandbox();
     sembrar(a);
     sembrar(b);
     const inv = { agent: { session: { header: { cwd: CWD } } }, rawInput: 'contrato-de-f1 --local' };
-    const conAlias = new Map(skillCommands({ root: a.root }).map((c) => [c.name, c])).get('skill-aprobar').handler(inv, { ok: true });
-    const canonico = new Map(skillCommands({ root: b.root }).map((c) => [c.name, c])).get('skill-approve').handler(inv, { ok: true });
-    assert.equal(conAlias.kind, 'success');
-    assert.equal(canonico.kind, 'success');
-    assert.equal(conAlias.code, canonico.code);
-    assert.equal(conAlias.code, 'activated');
-    assert.equal(conAlias.params.id, 'contrato-de-f1');
+    const porIngles = definicionDe(a.root, 'en', 'approve').handler(inv, { ok: true });
+    const porEspanol = definicionDe(b.root, 'es', 'approve').handler(inv, { ok: true });
+    assert.equal(porIngles.kind, 'success', JSON.stringify(porIngles));
+    assert.equal(porEspanol.kind, 'success', JSON.stringify(porEspanol));
+    assert.equal(porIngles.code, porEspanol.code);
+    assert.equal(porIngles.code, 'activated');
+    assert.equal(porIngles.params.id, 'contrato-de-f1');
     // Los dos sacaron la propuesta de `proposed` (cada uno en SU caja, así que se comprueba por el estado propio).
     for (const s of [a, b]) assert.equal(pending({ root: s.root, key: KEY }).length, 0);
   });

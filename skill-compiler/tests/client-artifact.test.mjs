@@ -183,7 +183,11 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
     // Medido con el usuario delante: aprobó una skill y el bloque que tenía debajo siguió enseñándola
     // como pendiente. El texto de un resultado es el registro de lo que pasó, así que lo que se puede
     // decir es que hubo una decisión POSTERIOR, y eso viaja en la proyección (plegada del log).
-    assert.match(client, /const LIST_COMMANDS = \['skill-proposals', 'skill-show', 'skill-retired', 'skill-publish', 'skill-scope'\]/);
+    // Las listas, en los dos idiomas: el bloque trae el nombre del idioma activo (skill-propuestas / skill-proposals).
+    for (const nombre of ['skill-proposals', 'skill-show', 'skill-retired', 'skill-publish', 'skill-scope',
+      'skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito']) {
+      assert.match(client, new RegExp(`const LIST_COMMANDS = \\[[\\s\\S]*?'${nombre}'`), `falta ${nombre} en LIST_COMMANDS`);
+    }
     assert.match(client, /view\.decisionSeq/, 'el dato viene de la proyección, no de inventarlo');
     assert.match(client, /decision\.seq > seq/, 'la comparación es contra el seq del propio bloque');
     assert.match(client, /Number\.isFinite\(node\?\.seq\)/, 'sin seq en el nodo no se compara');
@@ -249,7 +253,9 @@ describe('artefacto de interfaz · tarjeta de resultados', () => {
   });
 
   it('la tarjeta de una propuesta leída ofrece decidir sobre ella', () => {
-    assert.match(client, /const bulk = node\?\.name === 'skill-proposals'/);
+    // La lista se reconoce en los dos idiomas: con el nombre fijo, en espanol el panel trataba el bloque
+    // como una propuesta suelta y no ofrecia las casillas.
+    assert.match(client, /const bulk = \['skill-proposals', 'skill-propuestas'\]\.includes\(String\(node\?\.name \?\? ''\)\)/);
     assert.match(client, /const reading = typeof node\?\.args === 'string' \? node\.args\.trim\(\) : ''/);
     assert.match(client, /bulk_approve_one|bulk_reject_one/);
   });
@@ -433,7 +439,13 @@ describe('artefacto de interfaz · el lote va en UNA orden', () => {
 
   it('el ámbito del lote: aprobar va a --local, publicar a --global', () => {
     assert.match(client, /const ambito = verb === 'aprobar' \? ' --local' : verb === 'globalizar' \? ' --global' : ''/);
-    assert.match(client, /const comando = verb === 'globalizar' \? 'skill-approve' : target/, 'publicar usa skill-aprobar … --global');
+    // Publicar se manda como el comando de APROBAR del mismo idioma: en espanol /skill-aprobar --global, en
+    // ingles /skill-approve --global. El nombre fijo dejaba el boton roto en el otro idioma.
+    assert.match(client, /const comando = verb === 'globalizar' \? comandoDe\('aprobar', node\?\.name\) : target/,
+      'publicar usa el comando de aprobar del idioma del bloque');
+    // Y el nombre del comando sale del idioma del bloque, no de una constante.
+    assert.match(client, /const target = comandoDe\(verb, node\?\.name\)/);
+    assert.match(client, /const VERB_COMMANDS = \{/, 'la tabla de nombres por verbo y por idioma');
   });
 
   it('si el lote no obra, se cae a id a id: el singular sigue disponible', () => {

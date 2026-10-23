@@ -5,8 +5,8 @@
  * medir en los dos idiomas. Cinco cosas, todas ejecutando:
  *
  *   1. el idioma base es `en` **sin** `DSH_LANG`, tambien en el binario;
- *   2. los 31 comandos (16 canonicos + 15 alias) devuelven el MISMO `kind`, el MISMO `code` y los MISMOS
- *      `params` en los dos idiomas —el texto es lo unico que cambia—;
+ *   2. las 16 operaciones devuelven el MISMO `kind`, el MISMO `code` y los MISMOS `params` en los dos
+ *      idiomas —el texto es lo unico que cambia—, y el nombre de cada una cambia con el idioma;
  *   3. avisos, errores, lote parcial y preguntas neutras conservan el `code` y la ESTRUCTURA de sus lineas
  *      (los tokens `ok` / `FALLO` son marcador de maquina, no prosa: el panel los parsea);
  *   4. ningun resultado lleva una clave cruda ni un placeholder sin sustituir en ninguno de los dos idiomas;
@@ -82,10 +82,12 @@ after(() => {
 
 describe('F1.4 · el idioma base es ingles, tambien sin DSH_LANG', () => {
   it('sin DSH_LANG el motor y el binario hablan ingles', () => {
-    const info = con(null, () => resolveLang({ fresh: true }));
+    // La resolucion se mide sobre una arena propia: leer el `config.json` del almacen real hacia que el
+    // idioma que el humano fija en vivo cambiara el resultado de esta prueba (medido: `--es` la puso roja).
+    const s = arena();
+    const info = con(null, () => resolveLang({ root: s.root, fresh: true }));
     assert.equal(info.lang, 'en', `idioma resuelto: ${info.lang}`);
     assert.equal(info.source, 'default');
-    const s = arena();
     const r = cli(s.base, ['list'], null);
     const salida = `${r.stdout ?? ''}${r.stderr ?? ''}`;
     assert.equal(r.status, 0, salida);
@@ -102,10 +104,10 @@ describe('F1.4 · el idioma base es ingles, tambien sin DSH_LANG', () => {
   });
 });
 
-describe('F1.4 · los 31 comandos, en los dos idiomas', () => {
+describe('F1.4 · las 16 operaciones, en los dos idiomas', () => {
   it('mismo kind, mismo code y mismos params: el texto es lo unico que cambia', () => {
     const nombres = [...con(null, () => comandos(sandbox().root).keys())];
-    assert.equal(nombres.length, 31, `se esperan 16 canonicos + 15 alias, hay ${nombres.length}`);
+    assert.equal(nombres.length, 16, `se esperan las 16 operaciones (una fila por operacion), hay ${nombres.length}`);
     const conProsa = [];
     for (const nombre of nombres) {
       // Cada idioma en SU caja: si algo escribe, escribe en la suya y la comparacion sigue siendo valida.
@@ -120,9 +122,11 @@ describe('F1.4 · los 31 comandos, en los dos idiomas', () => {
       assert.deepEqual(en.params, es.params, `${nombre}: params distintos entre idiomas`);
       if (en.text !== es.text) conProsa.push(nombre);
     }
-    // La cobertura que se busca: la mayoria de la superficie tiene prosa propia traducida de verdad. Si un dia
-    // se queda en los datos (`skill-pending` devuelve solo ids), este numero lo dice en vez de suponerlo.
-    assert.equal(conProsa.length >= 20, true, `solo ${conProsa.length} comandos cambian de texto entre idiomas`);
+    // La cobertura que se busca: la mayoria de la superficie tiene prosa propia traducida de verdad. De las
+    // 16, 14 cambian de texto; las dos que no son `skill-pending` (devuelve ids, que son datos) y
+    // `skill-ownership` (el estado lo compone `lib/scope.mjs`, que no esta traducido: deuda declarada). El
+    // numero se afirma para que baje a la vista y no se suponga.
+    assert.equal(conProsa.length >= 14, true, `solo ${conProsa.length} comandos cambian de texto entre idiomas`);
   });
 });
 

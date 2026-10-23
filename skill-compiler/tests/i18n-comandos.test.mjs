@@ -64,7 +64,8 @@ describe('F1.2 · el idioma de la superficie humana', () => {
     assert.equal(r.kind, 'success');
     assert.match(r.text, /Pendientes de tu aprobacion \(1\):/);
     assert.match(r.text, /Aprobadas y activas \(0\):/);
-    assert.match(r.text, /Una orden para todas: \/skill-approve measured-decision-check --local/);
+    // El nombre del comando es el de SU idioma: en espanol, `/skill-aprobar` es el unico invocable.
+    assert.match(r.text, /Una orden para todas: \/skill-aprobar measured-decision-check --local/);
   });
 
   it('el id que no existe: mismo aviso, mismo codigo, en los dos idiomas', () => {

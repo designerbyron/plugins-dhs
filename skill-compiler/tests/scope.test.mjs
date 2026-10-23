@@ -446,9 +446,11 @@ describe('los comandos y el CLI dicen lo mismo', () => {
   it('las dos filas de un clic declaran su respuesta', () => {
     const s = sandbox();
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
-    assert.equal(byName[`skill-propiedad-${SOLO_DSH}`].handler({}).kind, 'success');
+    // Las definiciones base llevan el nombre del idioma base; el nombre localizado (`skill-propiedad-...`
+    // en espanol) lo registra el conjunto del idioma, y su equivalencia se prueba en menu-localizado.
+    assert.equal(byName[`skill-ownership-${SOLO_DSH}`].handler({}).kind, 'success');
     assert.equal(leerPropiedad({ root: s.root }).ownership, SOLO_DSH);
-    assert.equal(byName[`skill-propiedad-${MAQUINA}`].handler({}).kind, 'success');
+    assert.equal(byName[`skill-ownership-${MAQUINA}`].handler({}).kind, 'success');
     assert.equal(leerPropiedad({ root: s.root }).ownership, MAQUINA);
   });
 

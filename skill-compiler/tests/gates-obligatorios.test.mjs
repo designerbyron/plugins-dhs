@@ -103,10 +103,10 @@ describe('F3 · cada defecto pone en rojo su puerta', () => {
 
   it('placeholders inconsistentes entre los dos catalogos', () => {
     const base = copia();
-    sembrar(base, 'lib/i18n/es.mjs', 'Alias obsoleto de /{nuevo}: se retira en {retirada}.', 'Alias obsoleto de /{nombre}: se retira en {retirada}.');
+    sembrar(base, 'lib/i18n/es.mjs', 'Activa: {id} [{key}]', 'Activa: {id} [{clave}]');
     const r = i18n(base);
     assert.equal(r.code, 1, r.salida);
-    assert.match(r.salida, /FALLO placeholders · es:cmd\.alias\.deprecated/);
+    assert.match(r.salida, /FALLO placeholders · es:code\.activated/);
   });
 
   it('un caracter no ASCII nuevo en el texto del plugin', () => {
@@ -117,22 +117,24 @@ describe('F3 · cada defecto pone en rojo su puerta', () => {
     assert.match(r.salida, /FALLO ascii-nuevo · lib\/scope\.mjs/);
   });
 
-  it('un alias con destino invalido', () => {
+  it('una operacion sin nombre en uno de los dos idiomas', () => {
+    // La regla que sustituye a la del alias: el mapa tiene que dar UN nombre por idioma. Sin el espanol, esa
+    // operacion desaparece del menu en espanol y nadie se enteraria hasta echarla de menos.
     const base = copia();
-    sembrar(base, 'lib/commands.mjs', "'skill-ver': 'skill-show'", "'skill-ver': 'skill-show-typo'");
+    sembrar(base, 'lib/localized-commands.mjs', "names: Object.freeze({ en: 'skill-show', es: 'skill-ver' })", "names: Object.freeze({ en: 'skill-show' })");
     const r = i18n(base);
     assert.equal(r.code, 1, r.salida);
-    assert.match(r.salida, /FALLO alias-destino · lib\/commands\.mjs:skill-ver/);
+    assert.match(r.salida, /FALLO nombre-gramatica · lib\/localized-commands\.mjs:show/);
   });
 
-  it('un alias cuyo metadato contradice la retirada declarada', () => {
-    // El defecto medido en la 4.0.0: `deprecatedIn: '4.0.0'` con la descripcion del mismo objeto diciendo «se
-    // retira en 5.0.0». La regla de la puerta estaba clavada en el numero viejo, asi que lo daba por bueno.
+  it('un nombre que se registra en los dos idiomas a la vez (la fila duplicada)', () => {
+    // Era el defecto de los 15 alias: la misma operacion dos veces en el menu. Ahora solo puede pasar por un
+    // mapa mal escrito, y la puerta lo tiene que ver antes de que el registro rechace el conjunto entero.
     const base = copia();
-    sembrar(base, 'lib/commands.mjs', 'deprecatedIn: RETIRADA_DE_ALIAS,', "deprecatedIn: '4.0.0',");
+    sembrar(base, 'lib/localized-commands.mjs', "names: Object.freeze({ en: 'skill-systems', es: 'skill-sistemas' })", "names: Object.freeze({ en: 'skill-systems', es: 'skill-approve' })");
     const r = i18n(base);
     assert.equal(r.code, 1, r.salida);
-    assert.match(r.salida, /FALLO alias-metadatos · lib\/commands\.mjs/);
+    assert.match(r.salida, /FALLO nombre-duplicado · lib\/localized-commands\.mjs:systems/);
   });
 
   it('el contrato de herramientas alterado: la prueba congelada se pone roja', () => {

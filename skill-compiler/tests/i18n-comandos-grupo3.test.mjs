@@ -113,7 +113,9 @@ describe('F1.2 · grupo 3 en los dos idiomas', () => {
       const s = conActiva();
       const aviso = con(idioma, () => comando(s.root, 'skill-retire').handler(inv(ID)));
       assert.equal(aviso.kind, 'success');
-      assert.match(aviso.text, /skill-retire measured-decision-check --yes/, 'tiene que decir cómo hacerlo');
+      // La orden que se imprime cita el nombre del idioma: es la que el humano puede teclear.
+      const orden = idioma === null ? /skill-retire measured-decision-check --yes/ : /skill-eliminar measured-decision-check --yes/;
+      assert.match(aviso.text, orden, 'tiene que decir cómo hacerlo');
       assert.equal(existsSync(ruta(s, 'approved')), true, 'sin --yes no se retira nada');
 
       const hecho = con(idioma, () => comando(s.root, 'skill-retire').handler(inv(`${ID} --yes`)));

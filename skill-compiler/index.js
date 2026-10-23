@@ -326,14 +326,14 @@ export function apply(ctx, config = {}) {
         //
         // El idioma decide QUE nombres se registran, y el conjunto queda intercambiable en vivo: se construye
         // una sola vez (con las dos lenguas dentro y un solo handler por operacion) y se omite del registro
-        // base lo que ese conjunto va a poseer. Sin omision, el alta localizada chocaria con el canonico o
-        // con su alias.
+        // base lo que ese conjunto va a poseer. Sin omision, el alta localizada chocaria con la base: los 31
+        // nombres (16 en un idioma y 16 en el otro, con `skill-auto` compartido) son todos del conjunto.
         const todas = skillCommands({ root, catalog, onListed: refreshPendingRows, onMount: (agent) => mountSession(agent) });
         let conjunto = null;
         try {
           conjunto = createLocalizedSet({ definitions: todas });
         } catch {
-          conjunto = null; // un mapa roto no puede quitar los 31 comandos que ya funcionan
+          conjunto = null; // un mapa roto no puede quitar los 16 comandos que ya funcionan
         }
         const omitidos = new Set(conjunto === null ? [] : conjunto.omitNames);
         const tomados = new Set();
