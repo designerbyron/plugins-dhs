@@ -110,11 +110,28 @@ Consecuencias, dichas sin adornos:
 | Los avisos `body-budget` de la auditoría | **histórico**: los 17 del mantenimiento del 2026-10-21 quedaron cerrados; la medición de la 4.0.0 da **0** de esa regla (48 skills · PASS 47 · WARN 1) | — (cerrado; el registro está en `docs/MANTENIMIENTO-2026-10-21-ownership-body-budget.md`) |
 | `ownership.json` ausente | la propiedad del puesto no se presume | `ownership dsh-only` o `ownership machine` |
 
-La etiqueta de release vigente es **`v4.0.0`** —la de esta entrega, sobre el commit que declara los contratos de
-este documento—; el historial de versiones está en [`CHANGELOG.md`](../../CHANGELOG.md).
+La etiqueta de release vigente es **`v4.0.1`** —la que cierra los defectos de la 4.0.0 sobre el commit que declara
+los contratos de este documento—; el historial de versiones está en [`CHANGELOG.md`](../../CHANGELOG.md).
 
 Lo que **no** es una limitación y conviene no confundir: el aprendizaje funciona de punta a punta —proponer,
 decidir, activar, servir, auditar— sin el menú. El menú es comodidad.
+
+## 5 · Los tres límites que este acto NO toca
+
+Esta sección se reafirma en la rama de endurecimiento posterior a la 4.0.1, y lo primero es lo que **no** se ha
+hecho: no se ha tocado el `app.asar` del anfitrión, no se ha retirado la reserva de prosa, y no se ha añadido ni
+un regex ni un texto centinela para «detectar» el recorte. Los tres límites siguen donde estaban, cada uno con la
+condición que lo cerraría y que **no** es una fecha.
+
+| # | Límite (lo que hace hoy el anfitrión) | Qué hace el plugin mientras tanto | Condición de salida, medida |
+|---|---|---|---|
+| 1 | `normalizeResult` **recorta** el resultado del handler a `{kind, text}`: `code`, `params` y `items` no llegan al panel | el panel decide con la reserva de prosa; el contrato estructurado está escrito y probado en los dos lados | una compilación que transporte el objeto del handler, **comprobada con una sonda que lea `code`/`items` en el consumidor**; no se retira nada por número de versión |
+| 2 | El **respaldo textual sigue activo**, y hoy es lo que decide en producción | se conserva entero y en los dos idiomas; un `code` reconocido manda, uno desconocido es fallo visible, y `scope-ask`/`language-ask`/`pending-list` son neutros | se retira **sólo** cuando la medición del límite 1 demuestre transporte real; si la 4.2.0 llega con el recorte, **no se retira** y el panel declara «no medible en este anfitrión» en vez de contar cero |
+| 3 | Los **alias son invocables y visibles a la vez**: `aliasOf`/`deprecatedIn` no viajan (0 apariciones en el `app.asar`) y el menú sólo oculta filas sin `hint` | `doctor` cuenta las 31 filas en voz alta y `aliasProblems()` vigila la tabla; retirar el registro para ocultarlos quitaría la invocabilidad que el humano usa hasta `5.0.0` | un descriptor con marca de ocultación, o un menú que lea `aliasOf`. Hasta entonces se informan por separado las tres propiedades: invocabilidad, registro y visibilidad |
+
+La regla que comparten los tres: **una reserva no se retira por calendario ni por número de versión; se retira
+cuando una medición demuestra que ya no hace falta.** Y el día que se cierre alguno, el cambio entra con su
+prueba y con la medición que lo autoriza —no antes, y nunca «porque tocaba»—.
 
 ## Ventana de compatibilidad del veredicto por prosa
 
