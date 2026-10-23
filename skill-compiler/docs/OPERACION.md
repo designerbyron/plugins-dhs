@@ -410,7 +410,7 @@ node bin/skill-compiler.mjs auto [<id>]  # ¿puede actualizarse sola? cada medid
 ## Comprobaciones de salud
 
 ```sh
-npm test                # puertas (i18n + ASCII) y las 860 pruebas, en caja de arena
+npm test                # puertas (i18n + ASCII) y las 889 pruebas, en caja de arena
 npm run test:hermetic   # lo mismo + huella del almacén real antes y después
 npm run gate            # solo las puertas: para un cambio de texto o de catálogo
 ```

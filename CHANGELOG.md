@@ -4,21 +4,19 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
-## [No publicado] — rama `release/v5.0.0` · contrato
+## [5.0.0] — 2026-10-23 · contrato
 
-**Las 16 operaciones de sesión pasan a tener un nombre por idioma, y el modelo de alias se retira.** No sube
-`package.json`: la versión publicada sigue siendo la 4.0.1 y este bloque describe lo que **aún no ha salido**.
-Por la política del repositorio, cuando se autorice la publicación entrará como **5.0.0** —es cambio de contrato:
-los nombres de comando son superficie—, y entonces el número se moverá en los tres sitios que lo llevan
-(`package.json`, esta entrada y la política). Esta entrada cubre el candidato que integra las dos ramas locales
-(`proto/i18n-live-commands` y `hardening/post-4.0.1`).
+**Las 16 operaciones de sesión pasan a tener un nombre por idioma, y el modelo de alias se retira.** Es `mayor`
+porque los nombres de comando son superficie: quien invocaba `/skill-aprobar` en inglés deja de tener ese nombre
+(ahora es `/skill-approve`), y el nombre del otro idioma **no se registra**. Entra además la deuda de idioma que
+quedaba: toda la prosa humana del plugin sale del catálogo, en los dos idiomas.
 
 ### Cambiado — un nombre por operación, en el idioma activo
 
-- **`lib/localized-commands.mjs`** declara las **16** operaciones (antes sólo `approve`, como prototipo): id
-  interno estable, `definitionId`, nombre `en`, nombre `es`, clave de descripción y `input.hint`. El **handler se
-  hereda** de la definición base, así que los dos nombres son la misma función y no pueden divergir. `skill-auto`
-  mantiene el mismo nombre en los dos idiomas: una sola definición, con la descripción del idioma activo.
+- **`lib/localized-commands.mjs`** declara las **16** operaciones: id interno estable, `definitionId`, nombre
+  `en`, nombre `es`, clave de descripción y `input.hint`. El **handler se hereda** de la definición base, así que
+  los dos nombres son la misma función y no pueden divergir. `skill-auto` mantiene el mismo nombre en los dos
+  idiomas: una sola definición, con la descripción del idioma activo.
 - **El registro sirve 16 filas, no 31.** El conjunto activo tiene un nombre por operación; el del otro idioma no
   se registra y **no es invocable**. Medido en la `0.2.1-rc.2`: `/skill-compiler-language --es` cambia el menú
   `/` de `/skill-approve` a `/skill-aprobar` **sin reiniciar** (altas antes que bajas sobre `commands/change`).
@@ -41,22 +39,44 @@ los nombres de comando son superficie—, y entonces el número se moverá en lo
 - **Los catálogos** ya no citan un comando que no existe en su idioma: la prosa española dice `/skill-aprobar`,
   `/skill-propuestas`, `/skill-propiedad`… (43 líneas).
 
+### Cerrado — la prosa humana fuera del catálogo (la deuda que bloqueó el primer cierre)
+
+El candidato integrado no pasaba la evaluación de idioma: con `DSH_LANG=en`, `audit` imprimía 9 líneas en
+español y `security`, `check`, `repair`, `vendor`, `review` y `promote` tenían la misma deuda. Ahora:
+
+- **Los hallazgos llevan su código.** `messageCode`/`messageParams`/`fixCode`/`fixParams` (y `detalleCode` en las
+  pruebas de promoción) acompañan al `message`/`fix` crudo, que **se conserva como dato** porque viaja en
+  `audit --json`, en `checkProposal.errors` y en las pruebas. `lib/audit.mjs` expone `fraseDeHallazgo`,
+  `arregloDeHallazgo`, `estadoEnTexto` y `lineasDePuerta`; `lib/i18n/index.mjs`, `textoDeCodigo`, que centraliza
+  la reserva (clave ausente → dato crudo, nunca una clave).
+- **Una tabla por regla**: las ~45 reglas de calidad, seguridad y auditoría tienen su frase y su arreglo en los
+  dos catálogos; las que tienen variantes (`security-tree`, `unreadable`, los motivos de los patrones) llevan
+  código propio, y los motivos se resuelven en anidado (`motivoCode` → `security.motivo.*`) como ya hacía
+  `fraseDeReparacion`.
+- **La página de revisión** (`lib/review.mjs`) deja de tener frases fijas: cabeceras, botones y avisos salen del
+  catálogo en el idioma efectivo, y las líneas de la puerta se componen de los hallazgos.
+- **`promote`** añade `reasonCode`/`reasonParams` sin mover el `reason` (que es lo que se anota como `why` en el
+  diario) y `ficherosQueDifieren` devuelve `[{ruta, cambio}]` en vez de una frase.
+- **La capa del modelo no se toca a propósito**: `lib/definitions.mjs` es la superficie que lee el modelo (no
+  varía por el idioma del humano) y su texto forma parte del contrato congelado. Se declara como tal.
+
 ### Medido en el candidato integrado
 
-- `npm test`: **860 pruebas, 860 pasan** en **209 suites** (la suma de los dos frentes no es 805+804: al integrar
-  entran los tests nuevos de las dos ramas y salen los del modelo de alias, que ya no existe).
-- `npm run test:hermetic`: 860/860 y la huella del almacén real **idéntica** antes y después.
-- `node tools/i18n-gate.mjs`: en orden, **695 claves por idioma**, 16 operaciones × 2 nombres.
-- `node tools/ascii-gate.mjs`: **8.353 caracteres heredados con tope 8.353**, **26/26** ficheros de primera parte
-  vigilados (los 24 del endurecimiento más `lib/localized-commands.mjs` y `lib/operations.mjs`, que entraron con
-  0 de deuda y sin clasificar hasta este acto).
+- `npm test`: **889 pruebas, 889 pasan** en **220 suites**.
+- `npm run test:hermetic`: 889/889 y la huella del almacén real **idéntica** antes y después.
+- `node tools/i18n-gate.mjs`: en orden, **938 claves por idioma**, 16 operaciones × 2 nombres.
+- `node tools/ascii-gate.mjs`: **8.308 caracteres heredados con tope 8.308**, **26/26** ficheros de primera parte
+  vigilados, 0 excluidos. Bajó de 8.401 al salir la prosa de los módulos; ningún tope sube.
+- Salidas reales con el binario sobre una **copia** del almacén: `audit` y `security` en `en` con **0 líneas de
+  prosa española** (antes 11 y 25 caracteres no ASCII en prosa), y el mismo dato en los dos idiomas (44 skills,
+  PASS 43 · WARN 1 · ERROR 0, 32 archivadas; mismos hallazgos, reglas y severidades por skill).
+- `doctor` y los subcomandos de solo lectura (`audit`, `security`, `list`, `active`, `retired`, `systems`,
+  `ownership`, `where`) en `en`: **0 prosa española** en la salida.
 - `tests/update-real.e2e.test.mjs`: el último guion manual pasa a prueba descubierta, con mutación controlada
   (retirar la comprobación de integridad de la base pone en rojo el caso 4 y sólo ese; restaurado, 5/5).
-- **No cumplido, y por eso no hay PASS ni publicación**: la prosa humana que vive fuera del catálogo en
-  `lib/audit.mjs`, `lib/security.mjs`, `lib/compiler.mjs` (`check`), `lib/vendor.mjs`, `lib/promote.mjs`,
-  `lib/review.mjs` y `lib/projection.mjs`. Medido con el binario en una copia del almacén: `audit` bajo
-  `DSH_LANG=en` imprime **9 líneas en español** («skills auditadas», «archivadas … no se auditan», los estados,
-  los `fixes:` y el detalle de la regla).
+- **Límite del anfitrión que sigue vigente**: `normalizeResult` recorta el resultado a `{kind, text}`, así que la
+  reserva de prosa **no se retira por calendario**; se retira cuando una medición demuestre que `code`/`items`
+  llegan al consumidor. Está declarado en `docs/ANFITRION.md` §5.
 
 ## [4.0.1] — 2026-10-23 · parche
 

@@ -117,21 +117,23 @@ los cambios.
 Es la misma regla que aplica el propio plugin con las skills que vendoriza: guarda de dónde vinieron, con
 su hash y su fecha, para que nadie tenga que creerse nada de memoria.
 
-## Estado: versión estable actual (**4.0.1**)
+## Estado: versión estable actual (**5.0.0**)
 
-La estable hoy es la **4.0.1** (etiqueta `v4.0.1`, release publicada). «Estable» no es un adjetivo: son
+La estable hoy es la **5.0.0** (etiqueta `v5.0.0`, release publicada). «Estable» no es un adjetivo: son
 criterios y un compromiso.
 
 **Lo que lo sostiene**
 
-- **777 pruebas en verde** en **192 suites**, con la suite **hermética** que mide la huella del almacén real
-  antes y después, y con las puertas de **i18n** y **ASCII** colgadas de `npm test` (`pretest`): la suite no
-  corre una sola prueba con una puerta en rojo.
+- **889 pruebas en verde** en **220 suites**, con la suite **hermética** que mide la huella del almacén real
+  antes y después, y con las puertas de **i18n** (938 claves por idioma, 16 operaciones × 2 nombres) y **ASCII**
+  (8.308 caracteres medidos, tope igual al medido, 26/26 ficheros de primera parte) colgadas de `npm test`
+  (`pretest`): la suite no corre una sola prueba con una puerta en rojo.
 - Los contratos se comprueban contra los **paquetes reales** del harness (registro de skills, de comandos y de
   proyecciones), no contra dobles escritos a mano.
 - `doctor` verde: cada comprobación **ejecuta** el camino que vigila, no lo reimplementa.
 - `audit` mide el almacén sin tocarlo y `security` verifica ids, contenido, árboles y la cadena del diario
-  (0 bloqueos, 0 avisos, cadena válida; 48 skills auditadas y 44 revisadas en la medición de la 4.0.0). En
+  (0 bloqueos, 0 avisos, cadena válida; en la medición de la 5.0.0, **44 skills auditadas** —PASS 43 · WARN 1 ·
+  ERROR 0— con **32 archivadas** fuera del recuento y **44 revisadas**). En
   `WARN` puede quedar una propuesta esperando decisión humana —estado, no defecto— o una skill ya aprendida con
   un aviso de ámbito: hoy hay **una**, `absolute-path` sobre una skill del almacén, que se cierra localizándola o
   parametrizando la ruta; se declara y no se oculta.
@@ -142,7 +144,7 @@ criterios y un compromiso.
 
 | Qué | Se mantiene |
 |---|---|
-| Comandos de la sesión | Los nombres `skill-*` —canónicos en inglés, con los 15 nombres españoles como alias hasta `5.0.0`— y su forma (`input` opcional, resultado `{kind, text}`; `code`, `params` e `items` son aditivos y nunca obligatorios) |
+| Comandos de la sesión | **Un nombre por operación en el idioma activo** (inglés o español ASCII; el nombre del otro idioma no se registra y no es invocable) y su forma (`input` opcional, resultado `{kind, text}`; `code`, `params` e `items` son aditivos y nunca obligatorios) |
 | CLI | `where`, `list`, `show`, `check`, `approve`, `scope`, `disable`, `enable`, `delete`, `retired`, `restore`, `reject`, `active`, `vendor`, `upstream`, `provenance`, `ownership`, `systems`, `security`, `auto`, `doctor`, `audit`, `repair`, `promote`, `history`, `review` |
 | Almacén | `projects/<clave>/{proposed,approved,published,disabled,rejected,superseded}`, `global/superseded` y el `SKILL.md` con su frontmatter |
 | Ámbito | El proyecto sale del `cwd` de la sesión; nunca lo declara el modelo. Publicar o localizar es una decisión aparte, y deja asiento en el diario |
