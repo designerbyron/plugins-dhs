@@ -73,3 +73,19 @@ cada uno, que las filas aparezcan, que el aviso no salga y que al descargar el p
 
 Lo que **no** es una limitación y conviene no confundir: el aprendizaje funciona de punta a punta —proponer,
 decidir, activar, servir, auditar— sin el menú. El menú es comodidad.
+
+## Ventana de compatibilidad del veredicto por prosa
+
+El panel decide con el **código estable** que devuelve el comando (`activated`, `with-warnings`, `scope-ask`…).
+La lectura de la prosa queda sólo como compatibilidad para un anfitrión o un plugin anterior que no envíe `code`:
+
+| Versión | Comportamiento |
+|---|---|
+| 4.0.0 – 4.1.x | Si no llega `code`, el panel sigue leyendo el texto (compatibilidad). |
+| **4.2.0** | Se **retira** la lectura de prosa: un resultado sin `code` no se interpreta. |
+
+Reglas que no cambian en ninguna de las dos:
+
+- Un `code` **reconocido** manda siempre; el `text` no se analiza.
+- Un `code` **desconocido** es un fallo visible: no se convierte en éxito ni se recurre a la prosa.
+- `scope-ask`, `language-ask` y `pending-list` son neutros: no se clasifican como éxito ni como fallo.

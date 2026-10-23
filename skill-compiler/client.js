@@ -197,6 +197,7 @@ window.__ModuleLoader__.load({
         bulk_single: 'Esta propuesta',
         bulk_reading: 'Leyendo las pendientes…',
         bulk_none: 'Ninguna pendiente: si acabas de aprobar, ya no queda nada que decidir.',
+        bulk_ids_hint: 'Sin filas en esta sesión: el comando con el id funciona igual.',
         bulk_no_rows: 'No hay filas que decidir en el catálogo de esta sesión. La lista está en el resultado de arriba: escribe «/» y elige la fila, o teclea el comando con su id.',
         bulk_nothing: 'Nada pendiente: no hay ninguna propuesta esperando tu decisión. Las activas siguen en el resultado de arriba.',
         bulk_unreadable: 'No se pudieron leer las pendientes',
@@ -278,7 +279,7 @@ window.__ModuleLoader__.load({
         bulk_none: 'Nothing pending: if you just approved, there is nothing left to decide.',
         bulk_no_rows: 'No rows to decide on in this session catalog. The list is in the result above: type «/» and pick the row, or type the command with its id.',
         bulk_nothing: 'Nothing pending: no proposal is waiting for your decision. The active ones are in the result above.',
-        bulk_ids_hint: 'Sin filas en esta sesión: el comando con el id funciona igual.',
+        bulk_ids_hint: 'No rows in this session: the command with its id works the same.',
         bulk_unreadable: 'Could not read the pending ones',
         bulk_unreadable_hint: 'Follow it from the terminal or from the «/» menu: the list and the approval work the same, through the same gate',
         bulk_habilitar: 'Switch the marked ones back on',
@@ -321,7 +322,7 @@ window.__ModuleLoader__.load({
       },
     };
 
-    const FALLBACK = DICTIONARIES.es;
+    const FALLBACK = DICTIONARIES.en;
 
     /* ── iconos: SVG en línea, trazo, decorativos (el texto de al lado ya lo dice) ───────────────── */
 
