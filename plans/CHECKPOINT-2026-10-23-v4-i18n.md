@@ -16,7 +16,7 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 | F0 | cerrada | `lib/i18n/{index,es,en}.mjs`, resolucion `DSH_LANG` -> `config.json` -> `en`, `lang` en CLI, `doctor` con idioma y fuente |
 | F1.1 | parcial | 16 comandos canonicos + 15 alias con `aliasOf`/`deprecatedIn`, mismo codigo y efecto (probado). **Menu real sin verificar** |
 | **F1.3** | **cerrada** | superficie completa congelada + texto visible al modelo en ASCII puro |
-| **F1.2** | **grupos 1-3 de 5** | proposals/pending/show + approve/publish/scope + reject/disable/enable/retire/retired (**167 claves** por idioma). Grupos 4-5 pendientes |
+| **F1.2** | **grupos 1-3 cerrados; grupo 4 inspeccionado** | 167 claves por idioma. Grupo 4 (ownership/systems/auto): inspeccion medida, sin editar |
 | F1.4 | parcial | 18 casos en `definitions-schema` (antes 4), 5 en `i18n-comandos` (nuevo), 7 de la puerta i18n, paridad de catalogos |
 | F1.5 | cerrada | `docs/ANFITRION.md`: fallback de prosa en 4.0.0-4.1.x, retirada en **4.2.0** |
 | F2 | parcial | el panel lee `code`, `bulk_ids_hint` corregido, reserva `en` |
@@ -80,7 +80,7 @@ node --test tests/definitions-schema.test.mjs -> 18/18
 
 ## Proximo paso exacto (en orden)
 
-1. **F1.2 grupos 3-5**, uno por commit, con `npm test` verde entre grupos (mismo metodo que 1 y 2:
+1. **F1.2 grupo 4 y 5** (ver la seccion del grupo 4 al final: inspeccion ya medida, 639 no ASCII en scope.mjs):
    claves en `es`/`en`, `t(key, params)`, `code` cuando sea veredicto, y `DSH_LANG=es` en el fichero de
    pruebas que afirme prosa):
    - grupo 3: `reject` / `disable` / `enable` / `retire` / `retired`
@@ -118,3 +118,54 @@ node --test tests/definitions-schema.test.mjs -> 18/18
 - `tests/i18n-comandos-grupo3.test.mjs`: 7 casos por idioma y por efecto. Suite 700 -> 707.
 - Siguiente: **grupo 4** (ownership / systems / auto, cuya prosa vive en `lib/scope.mjs`) y **grupo 5**
   (mensajes humanos de `bin/`); despues F1.1-menu, F1.4, F2, F3 y F4.
+
+## Grupo 4 (ownership / systems / auto): inspeccion hecha, migracion NO empezada
+
+El contexto se agoto antes de tocar codigo, asi que **no se edito nada** de este grupo: el arbol queda
+limpio y los gates en verde (167 claves, ASCII 8.614, 707/707). Lo que sigue es la inspeccion ya medida
+para que la proxima sesion no la repita.
+
+### Estado verificado al entrar
+
+- HEAD `d3893de`, rama `main`, `origin/main` en 0/0, arbol limpio, version 3.9.3, sin tag `v4.0.0`.
+- `lib/scope.mjs`: 821 lineas, **639 caracteres no ASCII**.
+
+### Que es prosa visible (lo que hay que migrar) y donde
+
+| Bloque | Lineas | No ASCII | Consumidores |
+|---|---|---|---|
+| `PROPIEDADES` (mapa de las dos politicas) | 63-68 | 6 | `textoDelEstado`, `declararLaPropiedad` (commands.mjs) |
+| `textoDeLaPregunta` | 721-732 | 12 | `textoDelEstado` (estado `ausente`) |
+| `textoDelEstado` | 738-762 | 18 | `/skill-ownership` (commands.mjs:475) y CLI |
+| `textoDeSistemas` | 769-821 | 29 | `/skill-systems` (commands.mjs:493) y CLI `systems` |
+| handler de `auto` | desde commands.mjs:647 | 93 | `/skill-auto` |
+| `bin/skill-compiler.mjs` | todo | 722 | grupo 5, no este |
+
+### Trampas y riesgos ya identificados
+
+- **`PROPIEDADES` se evalua al importar** (linea 63): una constante con texto traducible congela el idioma
+  del arranque. Es la misma trampa que `NO_SCOPE` en el grupo 1: pasa a funcion (`propiedadEnTexto(owner)`)
+  y se ajustan sus dos consumidores.
+- **`textoDeLaPregunta` esta dentro del camino de LECTURA del estado**: `textoDelEstado` lo compone cuando
+  no hay declaracion. Cualquier cambio de firma afecta tambien a lo que lee el CLI.
+- **`textoDeSistemas` es compartido por comando y CLI** (`/skill-systems` y `systems` imprimen lo mismo, a
+  proposito): la firma `{ datos, estado }` se mantiene y la traduccion entra por dentro, no por parametro.
+- `tests/scope-concurrencia.test.mjs:162-164` afirma `textoDeSistemas`/`textoDelEstado` **en español**
+  (`/Propiedad: AUSENTE/`): ese fichero tendra que fijar `DSH_LANG=es`, como los de los grupos 1-3.
+- `ESTADOS_PROPIEDAD` (`ausente|declarada|invalida|ilegible`) y `SOLO_DSH`/`MAQUINA` **son datos, no prosa**:
+  no se traducen nunca (son las claves de almacenamiento y de politica).
+- El handler de `auto` usa `AUTO_COMMAND` y `parseAutoCommand` con `activar|desactivar` como **tokens de
+  comando**: son interfaz, no prosa libre, y cambiarlos es cambio de contrato; dejarlos y traducir solo las
+  respuestas.
+
+### Proximo paso exacto (grupo 4)
+
+1. `lib/scope.mjs`: convertir `PROPIEDADES` en funcion traducida; migrar `textoDeLaPregunta`,
+   `textoDelEstado` y `textoDeSistemas` con claves `scope.*` (unas 45 claves nuevas por idioma).
+2. `lib/commands.mjs`: migrar el handler de `auto` (dos bloques de respuesta y la descripcion) y la
+   descripcion de `/skill-ownership` y de sus dos filas.
+3. `tests/i18n-comandos-grupo4.test.mjs`: ES/EN con el mismo `kind`, `code` y estado; la propiedad declarada
+   en un idioma se lee en el otro sin cambiar el fichero `ownership.json` ni su huella.
+4. Fijar `DSH_LANG=es` en `tests/scope-concurrencia.test.mjs` (y en cualquier otro que afirme esa prosa).
+5. Verificacion: `npm test`, `test:hermetic`, los dos gates, `definitions-schema`, y comprobar que la linea
+   base ASCII **no crece** (el texto se muda de `scope.mjs` al catalogo: lo esperable es 8.614 igual).
