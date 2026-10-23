@@ -4,10 +4,11 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
-## [No publicado] — rama `fix/panel-lecturas-concurrentes` · parche
+## [5.0.2] — 2026-10-23 · parche
 
-**Tres defectos mas del panel de pendientes, medidos con la release 5.0.1 ya instalada.** No sube
-`package.json`: la publicada sigue siendo la 5.0.1 y esto describe lo que aun no ha salido.
+**Tres defectos mas del panel de pendientes, medidos con la 5.0.1 ya instalada y validados a mano por el
+operador.** Es `parche`: no cambia el protocolo, ni los esquemas de las herramientas, ni el formato del almacen.
+La documentacion de la feature de idiomas entra en este mismo acto (ver abajo).
 
 1. **Un comando de lista dejaba un bloque de mas.** La 5.0.1 leia la foto al montar cada tarjeta, asi que
    `/skill-proposals` —que ya trae su lista— ejecutaba ademas un `/skill-pending` y dejaba dos bloques en el
@@ -20,11 +21,22 @@ añade capacidad, `parche` cuando se corrige un defecto.
    Hay **generacion** en el store: `invalidar()` la sube, la lectura forzada arranca la suya, y una lectura de
    una generacion anterior que termina tarde **no escribe**. El single-flight se conserva dentro de la misma
    generacion.
-3. **El lector compartido dependia de que tarjeta se pintó la ultima.** El respaldo leia las filas del menu con
+3. **El lector compartido dependia de que tarjeta se pinto la ultima.** El respaldo leia las filas del menu con
    el verbo de la tarjeta (`approve`/`retire`), asi que dos tarjetas de la misma sesion con operaciones distintas
    podian dejar una foto con otro significado. Ahora la foto comun sale **solo** de `/skill-pending` —fuente
    independiente del verbo— y las filas del host se quedan como presentacion de cada tarjeta. Cuando la lectura
    no es medible no se juzga nada: no se abre la pantalla de avisos ni se declara que algo desaparecio.
+
+### Documentacion — la feature de idiomas, con su metodo de uso
+
+- `skill-compiler/README.md` gana la seccion **«Idiomas: que hay, como se cambia y que no cambia»**: las tres
+  puertas para cambiarlo (`/skill-compiler-language --es|--en`, `lang es` en el CLI, `DSH_LANG`), la precedencia
+  (`DSH_LANG` → preferencia guardada → `en`), la tabla de las **16 operaciones con su nombre en cada idioma**,
+  lo que cambia y lo que **nunca** cambia (ids, banderas, codigos, formato del almacen, vocabulario del diario) y
+  como comprobarlo con `doctor`.
+- `docs/OPERACION.md` gana **«Cambiar el idioma, paso a paso»**, con lo que hay que verificar despues.
+- Se corrige una afirmacion que ya era falsa: las **filas del menu siguen al idioma** (`skill-aprobar-<id>` en
+  `es`), no son siempre inglesas; su nombre sale del mismo mapa que el de los comandos.
 
 ### Medido
 
@@ -33,8 +45,14 @@ añade capacidad, `parche` cuando se corrige un defecto.
   rojo antes del cambio, verde despues—), dos `force` de la misma generacion siguen compartiendo una ejecucion,
   dos tarjetas con operaciones distintas ven la foto nueva tras decidir en una, y el lector comun no menciona el
   verbo de la tarjeta.
-- `npm test` (hermetico): **902 pruebas, 902 pasan, 224 suites**; gates i18n (938 claves) y ASCII (8.289 con tope
-  8.289, 26/26) en verde. Huella del almacen real identica antes y despues.
+- `npm run test:hermetic`: **902 pruebas, 902 pasan, 224 suites**; gates i18n (938 claves por idioma) y ASCII
+  (8.289 con tope 8.289, 26/26) en verde; huella del almacen real **identica** antes y despues.
+- Validacion manual del operador con DSH reiniciado (la que autoriza esta release): **un solo bloque** para
+  `/skill-proposals`, la decision actualiza las tarjetas, y la skill aprobada sigue disponible en el ambito
+  elegido.
+
+Ojo al instalarlo: `client.js` lo carga el harness **al arrancar**, asi que el arreglo no esta vivo hasta
+reiniciar DSH.
 
 ## [5.0.1] — 2026-10-23 · parche
 

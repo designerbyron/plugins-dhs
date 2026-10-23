@@ -168,38 +168,96 @@ El modelo propone; tú decides.
 
 Los comandos de sesión tienen **un nombre por idioma**: `/skill-approve` en inglés, `/skill-aprobar` en
 español. No son dos comandos ni un alias: es la **misma operación**, con el mismo handler, la misma puerta y
-los mismos efectos, y el registro tiene **una fila por operación** —la del idioma activo—. El idioma se fija
-con `/skill-compiler-language --es|--en` (o `skill-compiler lang --es|--en` en el terminal) y el menú `/` cambia
-**sin reiniciar**; `DSH_LANG` manda sobre la preferencia guardada, y el idioma base es `en`. `doctor` dice qué
-idioma está activo y cuántas filas sirve (`16 operaciones y 16 filas en <idioma>`).
+los mismos efectos, y el registro tiene **una fila por operación** —la del idioma activo—.
 
-Los ejemplos de abajo usan los nombres **españoles**, que son los que están activos con el idioma en `es`.
+## Idiomas: qué hay, cómo se cambia y qué no cambia
 
+**Qué hay.** Dieciséis operaciones, dos idiomas (`en` es el base, `es` el alternativo) y **un solo nombre
+registrado por operación**: el del idioma activo. El del otro idioma **no está registrado y no es invocable**
+—teclearlo responde «comando desconocido», no aprueba nada—. `skill-auto` es la excepción de forma: se llama
+igual en los dos idiomas, porque «auto» no se traduce.
+
+**Cómo se cambia** (tres puertas, una sola verdad):
+
+| Vía | Cómo | Cuándo usarla |
+| --- | --- | --- |
+| En la sesión | `/skill-compiler-language --es` · `/skill-compiler-language --en` | lo normal: cambia el registro y el menú `/` **sin reiniciar** |
+| En la sesión, sin argumentos | `/skill-compiler-language` | dice el idioma activo, de dónde sale, y los nombres de cada idioma |
+| En el terminal | `node bin/skill-compiler.mjs lang es` · `lang en` · `lang` | para dejar la preferencia guardada sin abrir sesión |
+| Variable de entorno | `DSH_LANG=es` | automatización y pruebas: **manda sobre todo lo demás** |
+
+También vale `en`/`es` sin los guiones (`/skill-compiler-language es`), y una etiqueta con región se normaliza
+(`es-ES`, `es_419`, `ES` → `es`; `en-US`, `en_GB` → `en`).
+
+**Precedencia** (la primera que exista manda):
+
+1. `DSH_LANG` — variable de entorno.
+2. `config.json` del almacén — la preferencia guardada por el comando.
+3. `en` — el idioma base.
+
+Si `DSH_LANG` impone un idioma, el comando **no finge** que ha cambiado la preferencia: dice que el entorno
+manda y no escribe nada. Un valor explícito no admitido (`--fr`) es un error y **no escribe**; un `DSH_LANG`
+inválido no rompe nada (se usa `en`) y `doctor` lo dice **una** vez.
+
+**Qué cambia con el idioma** — solo la presentación y el nombre público:
+
+- el nombre de los 16 comandos de sesión y las filas del menú `/` (`skill-approve-<id>` / `skill-aprobar-<id>`);
+- las descripciones del menú, la ayuda del CLI, los mensajes y diagnósticos, la página de `review`;
+- el texto del panel de pendientes (sigue el idioma efectivo).
+
+**Qué NO cambia nunca** — es dato, no presentación:
+
+- los ids, los parámetros y las banderas (`--local`, `--global`, `--force`, `--preserve-state`, `--yes`);
+- los códigos de resultado (`activated`, `with-warnings`, `pending-list`…) y los `kind`;
+- el formato del almacén (`projects/<clave>/{proposed,approved,published,disabled,rejected,superseded}`,
+  `global/`, `SKILL.md` con su frontmatter);
+- el vocabulario del diario (`aprobada`, `publicada`, `globalizada`, `localizada`…), que se verifica sobre la
+  cadena de auditoría y se lee en las series históricas: se traduce su etiqueta en pantalla, nunca el valor;
+- los nombres de fichero y de ruta, y el contenido de las skills.
+
+**Cómo comprobar que está bien**:
+
+```sh
+node bin/skill-compiler.mjs lang          # idioma efectivo y su fuente (env | config | default)
+node bin/skill-compiler.mjs doctor        # "16 operaciones y 16 filas en <idioma>" + aviso si DSH_LANG no vale
+/skill-compiler-language --es             # y el menú "/" pasa a los nombres españoles, sin reiniciar
 ```
-/skill-propuestas                   qué espera tu decisión y qué está activo, en este proyecto
-/skill-pendientes                   los ids pendientes en una línea (lo que consulta la tarjeta)
-/skill-ver <id>                     leer una propuesta entera antes de decidir
-/skill-aprobar <id> [--global|--local] [--force] [--preserve-state]
-                                    activarla donde digas; con avisos exige --force explícito, y
-                                    --preserve-state corrige una apagada sin encenderla
-/skill-globalizar <id> [--force]    publicarla para todos tus proyectos
-/skill-ambito <id> --global|--local cambiarla de sitio una vez aprobada
-/skill-deshabilitar <id>            apagarla (deja de servirse; se conserva entera)
-/skill-habilitar <id>               volver a servirla
-/skill-eliminar <id>                retirarla a un respaldo con fecha (nunca borra)
-/skill-retiradas                    qué hay retirado y cómo volver
-/skill-rechazar <id>                apartar una propuesta sin borrarla
-/skill-auto activar|desactivar      aprobar automáticamente en ESTA sesión
-/skill-propiedad [dsh-only|machine] de quién es el proceso de creación de skills en este puesto
-/skill-sistemas                     los sistemas del puesto y los ids que viven en más de uno
-```
 
-Y cada pendiente aparece además en el menú `/` como **tres filas elegibles** —leer, activar, apartar—, sin
-argumentos que escribir: `skill-show-<id>`, `skill-approve-<id>`, `skill-reject-<id>`. Los nombres de fila son
-**siempre los ingleses**, en los dos idiomas: son el marcador de máquina con el que el panel reconoce una fila
-(`skill-approve-<id>`), y el id que llevan detrás las hace inequívocas. **Elegir la fila es la decisión
-completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila desaparece del
-menú: una pendiente que ya no lo está no se sigue ofreciendo.
+**Lo que el anfitrión impone** (medido en la `0.2.1-rc.2`): el cambio se hace dando las altas antes que las
+bajas sobre `commands/change`, así que la ventana muestra dos nombres y **nunca cero**; la visibilidad del menú
+no se puede medir sin pantalla, y se informa aparte de la invocabilidad y del registro.
+
+### Los comandos, con su nombre en cada idioma
+
+Los ejemplos usan los nombres **españoles** (idioma `es`); al lado, el nombre inglés de la misma operación.
+
+| Español | Inglés | Qué hace |
+| --- | --- | --- |
+| `/skill-propuestas` | `/skill-proposals` | qué espera tu decisión y qué está activo, en este proyecto |
+| `/skill-pendientes` | `/skill-pending` | los ids pendientes en una línea (lo que consulta la tarjeta) |
+| `/skill-ver <id>` | `/skill-show <id>` | leer una propuesta entera antes de decidir |
+| `/skill-aprobar <id>` | `/skill-approve <id>` | activarla donde digas (`--local`/`--global`; con avisos exige `--force`; `--preserve-state` corrige una apagada sin encenderla) |
+| `/skill-globalizar <id>` | `/skill-publish <id>` | publicarla para todos tus proyectos |
+| `/skill-ambito <id>` | `/skill-scope <id>` | cambiarla de sitio una vez aprobada (`--global`/`--local`) |
+| `/skill-deshabilitar <id>` | `/skill-disable <id>` | apagarla (deja de servirse; se conserva entera) |
+| `/skill-habilitar <id>` | `/skill-enable <id>` | volver a servirla |
+| `/skill-eliminar <id>` | `/skill-retire <id>` | retirarla a un respaldo con fecha (nunca borra) |
+| `/skill-retiradas` | `/skill-retired` | qué hay retirado y cómo volver |
+| `/skill-rechazar <id>` | `/skill-reject <id>` | apartar una propuesta sin borrarla |
+| `/skill-auto activar\|desactivar` | `/skill-auto on\|off` | aprobar automáticamente en ESTA sesión |
+| `/skill-propiedad` | `/skill-ownership` | de quién es el proceso de creación de skills en este puesto |
+| `/skill-propiedad-dsh-only` | `/skill-ownership-dsh-only` | declararlo de DSH |
+| `/skill-propiedad-machine` | `/skill-ownership-machine` | declararlo de toda la máquina |
+| `/skill-sistemas` | `/skill-systems` | los sistemas del puesto y los ids que viven en más de uno |
+
+Y cada pendiente aparece además en el menú `/` como **filas elegibles** —leer, activar, publicar, apartar—,
+sin argumentos que escribir: `skill-ver-<id>`, `skill-aprobar-<id>`, `skill-globalizar-<id>`,
+`skill-rechazar-<id>` en español; `skill-show-<id>`, `skill-approve-<id>`, `skill-publish-<id>`,
+`skill-reject-<id>` en inglés. **Las filas siguen el idioma activo** (su nombre sale del mismo mapa que el de
+los comandos) y el id las hace inequívocas. **Elegir la fila es la decisión completa**; teclear el comando
+entero hace exactamente lo mismo. Después de aprobar, la fila desaparece del menú: una pendiente que ya no lo
+está no se sigue ofreciendo.
+
 
 Aprobar algo que ya está aprobado no es un fallo: responde «Ya estaba activa» y no mueve nada. Y cada
 decisión termina con la lista de pendientes al día, así que no hace falta volver a pedirla. Si un bloque de
@@ -316,11 +374,11 @@ y vendorizas una versión limpia, o no se vendoriza.
 
 ```sh
 cd "<donde-clonaste-el-repo>/skill-compiler"   # donde lo hayas clonado
-npm test              # las 898 pruebas (con las puertas i18n y ASCII antes)
-npm run test:hermetic # las 898 pruebas + huella del store real antes y después
+npm test              # las 902 pruebas (con las puertas i18n y ASCII antes)
+npm run test:hermetic # las 902 pruebas + huella del store real antes y después
 ```
 
-898 pruebas en 223 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
+902 pruebas en 224 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
 máquina. `pretest` corre las puertas de idioma y ASCII: con una en rojo, no se ejecuta ni una prueba.
 
 - `tests/compiler.test.mjs` — validación, composición del `SKILL.md`, solapamiento, idempotencia,

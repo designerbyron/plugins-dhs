@@ -30,13 +30,16 @@ medias, y el aviso del turno **cuenta por tipo y se retira**. **v2.0.0** publica
 calidad vigente, `audit`, `repair`/`promote` con los tres niveles de riesgo y la promoción automática
 **apagada** por defecto.
 
-**v5.0.1** (2026-10-23, parche del panel: una sola foto de pendientes por sesión y ninguna propuesta ya decidida
-ofreciéndose otra vez) sobre **v5.0.0**, publicada ese mismo día: tag anotado `v5.0.0` sobre el commit de cierre de
-ese acto (`git rev-parse v5.0.0^{}`; la versión y el CHANGELOG entran en `354e93a`) y release estable en
-`designerbyron/plugins-dsh`. **898 pruebas en verde** en **223 suites** (889/220 al publicar la 5.0.0), suite
+**v5.0.2** (2026-10-23, parche del panel: cero lecturas al listar, generacion en el store para que una lectura
+vieja no pise la nueva, y la foto comun independiente del verbo de la tarjeta; + la guia de idiomas en la
+documentacion) sobre **v5.0.1** (una sola foto de pendientes por sesion y ninguna propuesta ya decidida
+ofreciendose otra vez) y **v5.0.0**, publicada ese mismo dia: tag anotado `v5.0.0` sobre el commit de cierre de
+ese acto (`git rev-parse v5.0.0^{}`; la version y el CHANGELOG entran en `354e93a`) y release estable en
+`designerbyron/plugins-dsh`. **902 pruebas en verde** en **224 suites** (889/220 al publicar la 5.0.0), suite
 hermética en verde (huella del almacén real idéntica antes y después); i18n **938 claves por idioma** y 16
 operaciones x 2 nombres; ASCII **8.289 medidos con tope 8.289** en **26/26** ficheros de primera parte. Cambio de
 contrato de la 5.0.0: **un nombre de comando por operación en el idioma activo** y el modelo de alias, retirado.
+
 Antes, los 805/8.401/24 eran el estado de la rama `hardening/post-4.0.1` sola, y los 860/695/8.353 el del primer
 candidato integrado.
 
@@ -576,7 +579,11 @@ de `/skill-approve` a `/skill-aprobar` **sin reiniciar**), asi que se autorizo m
   la app y aqui se mide por evento y por registro); `lib/scope.mjs` sigue devolviendo su prosa en espanol en los
   dos idiomas (lo ven `/skill-propiedad` y `systems`, y por eso `skill-ownership` es una de las dos operaciones
   cuyo texto no cambia con el idioma: deuda declarada, con su fichero); y los nombres de **fila**
-  (`skill-approve-<id>`) siguen en ingles en los dos idiomas a proposito (marcador de maquina del panel).
+  (`skill-approve-<id>`) seguian en ingles en los dos idiomas a proposito (marcador de maquina del panel).
+  **Corregido el 2026-10-23 (trampa caducada)**: con las 16 operaciones migradas, **las filas siguen al idioma**
+  (`skill-ver-<id>`, `skill-aprobar-<id>`, `skill-globalizar-<id>`, `skill-rechazar-<id>` en `es`), porque su
+  nombre sale del mismo mapa (`rowNameOf`). Lo que sigue siendo marcador de maquina es el **texto** de la linea
+  del lote (`ok`/`FALLO`), no el nombre de la fila.
 
 ## Candidato 2026-10-23 — estado intermedio de la v5.0.0 (historia: lo cerró el acto siguiente)
 
@@ -618,6 +625,36 @@ por `link:` a esta carpeta, asi que lo que arrancara es el codigo publicado y no
   (cabecera, estados, `fixes` y detalle) y `lib/security.mjs` (detalle y `fix` de cada regla), conservando el
   DATO (`rule`, `observed`, `fix` como valor y el vocabulario del diario) y traduciendo solo en el punto de
   presentacion, con la prueba en los dos idiomas sobre el texto real del binario.
+
+## Parche 2026-10-23 — v5.0.2: leer solo cuando hay que decidir, y la guia de idiomas
+
+El operador valido a mano la 5.0.1 (un solo bloque por comando) y su captura destapo un defecto mas: con **un**
+`/skill-proposals` salian **dos** bloques, porque la tarjeta leia la foto al montar y eso ejecuta `/skill-pending`.
+
+- **Cero lecturas al montar.** La tarjeta pinta la lista del comando que la abrio; la foto se pide **antes de
+  decidir** (avisos + ¿sigue pendiente?) y **despues** (para medir el efecto). Listar ya no ejecuta nada.
+- **Generacion en el store.** El single-flight devolvia la lectura en vuelo sin mirar cuando se habia pedido: si
+  la tarjeta estaba leyendo cuando el humano decido, la comprobacion del efecto podia aceptar una foto **anterior
+  a la decision** y decir «sigue pendiente» de algo ya publicado. `invalidar()` sube la generacion; la lectura
+  forzada arranca la suya y la vieja que termina tarde **no escribe**. Dentro de la misma generacion, el
+  single-flight se conserva (dos `force` concurrentes = una ejecucion).
+- **La foto comun no depende del verbo de la tarjeta.** El respaldo usaba `listVerbFor(node.name)`
+  (`approve`/`retire`), asi que dos tarjetas de la misma sesion con operaciones distintas podian dejar una foto
+  con otro significado: la ultima en pintarse ganaba el lector. Ahora la foto sale **solo** de `/skill-pending` y
+  las filas del host quedan como presentacion de cada tarjeta. Si la lectura no es medible, no se juzga nada.
+- **Pruebas**: 13 casos en `tests/panel-pendientes.test.mjs` (antes 9). El de la carrera estaba **rojo** con el
+  store anterior (1 ejecucion y foto vieja como final) y pasa despues; hay un caso que exige que el single-flight
+  siga vivo dentro de la generacion, otro con dos tarjetas de operaciones distintas, y un aserto de que el lector
+  comun no menciona el verbo. Dos asertos del artefacto se alinearon con el contrato nuevo (medible solo si
+  `/skill-pending` contesto).
+- **Documentacion de la feature de idiomas** (lo que pidio el operador): `skill-compiler/README.md` estrena
+  «Idiomas: que hay, como se cambia y que no cambia» —tres puertas, precedencia, tabla de las 16 operaciones con
+  su nombre en cada idioma, lo que cambia y lo que nunca cambia— y `docs/OPERACION.md` la receta paso a paso.
+  **Trampa caducada corregida**: las filas del menu **siguen al idioma** (`skill-aprobar-<id>` en `es`); el
+  marcador de maquina es el texto `ok`/`FALLO` del lote, no el nombre de la fila.
+- **Medido**: `npm test` hermetico **902/902 en 224 suites**; i18n 938 claves por idioma; ASCII **8.289 con tope
+  8.289** en 26/26; huella del almacen real identica. Publicado como **v5.0.2** con tag anotado y release estable;
+  rama `fix/panel-lecturas-concurrentes` conservada como evidencia (`4f2e233`).
 
 ## Parche 2026-10-23 — v5.0.1: el panel deja de preguntar cinco veces y de ofrecer lo ya decidido
 

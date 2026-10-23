@@ -25,6 +25,29 @@ son los del idioma `es`. Con `en` son los ingleses (`/skill-approve`, `/skill-pr
 `/skill-compiler-language --es|--en` y el menú `/` cambia sin reiniciar; `DSH_LANG` manda sobre la preferencia
 guardada, y el idioma base es `en`.
 
+### Cambiar el idioma, paso a paso
+
+```
+/skill-compiler-language              idioma activo, de donde sale (env | config | default) y los nombres de cada uno
+/skill-compiler-language --es         pasa a español: registro y menú "/", sin reiniciar
+/skill-compiler-language --en         vuelve al inglés (el base)
+node bin/skill-compiler.mjs lang es   guarda la preferencia desde el terminal (o "lang" para consultarla)
+DSH_LANG=es                           variable de entorno: manda sobre todo y no escribe nada
+```
+
+Qué comprobar después de cambiarlo:
+
+- `doctor` dice **«16 operaciones y 16 filas en `<idioma>`»**; si `DSH_LANG` trae un valor que no es idioma, lo
+  dice una vez y sigue con `en`.
+- El nombre del otro idioma **no está registrado**: teclearlo responde «comando desconocido» y no toca el
+  almacén. No es un alias; es el mismo comando con otro nombre.
+- Un idioma que no se admite (`--fr`) es un error y **no escribe nada**.
+- Las filas del menú siguen al idioma (`skill-aprobar-<id>` en `es`, `skill-approve-<id>` en `en`), y el id va
+  detrás.
+- Lo que **no** cambia: ids, banderas, códigos de resultado, formato del almacén, vocabulario del diario y el
+  contenido de las skills. Si algo de eso cambia con el idioma, es un defecto: repórtalo.
+
+
 ```
 /skill-propuestas              qué espera tu aprobación y qué está activo, en este proyecto
 /skill-ver <id>                la propuesta entera (o la ya activa), con el veredicto de la puerta
@@ -410,7 +433,7 @@ node bin/skill-compiler.mjs auto [<id>]  # ¿puede actualizarse sola? cada medid
 ## Comprobaciones de salud
 
 ```sh
-npm test                # puertas (i18n + ASCII) y las 898 pruebas, en caja de arena
+npm test                # puertas (i18n + ASCII) y las 902 pruebas, en caja de arena
 npm run test:hermetic   # lo mismo + huella del almacén real antes y después
 npm run gate            # solo las puertas: para un cambio de texto o de catálogo
 ```

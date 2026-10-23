@@ -117,7 +117,7 @@ hace improbable.
 
 ```sh
 npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
-npm test              # las puertas (i18n + ASCII) y, si pasan, las 898 pruebas
+npm test              # las puertas (i18n + ASCII) y, si pasan, las 902 pruebas
 npm run test:hermetic # lo mismo + huella del almacén real antes y después
 npm run gate          # solo las puertas: para un cambio de texto o de catálogo
 ```

@@ -117,14 +117,14 @@ los cambios.
 Es la misma regla que aplica el propio plugin con las skills que vendoriza: guarda de dónde vinieron, con
 su hash y su fecha, para que nadie tenga que creerse nada de memoria.
 
-## Estado: versión estable actual (**5.0.0**)
+## Estado: versión estable actual (**5.0.2**)
 
-La estable hoy es la **5.0.0** (etiqueta `v5.0.0`, release publicada). «Estable» no es un adjetivo: son
+La estable hoy es la **5.0.2** (etiqueta `v5.0.2`, release publicada). «Estable» no es un adjetivo: son
 criterios y un compromiso.
 
 **Lo que lo sostiene**
 
-- **898 pruebas en verde** en **223 suites**, con la suite **hermética** que mide la huella del almacén real
+- **902 pruebas en verde** en **224 suites**, con la suite **hermética** que mide la huella del almacén real
   antes y después, y con las puertas de **i18n** (938 claves por idioma, 16 operaciones × 2 nombres) y **ASCII**
   (8.289 caracteres medidos, tope igual al medido, 26/26 ficheros de primera parte) colgadas de `npm test`
   (`pretest`): la suite no corre una sola prueba con una puerta en rojo.
@@ -144,7 +144,7 @@ criterios y un compromiso.
 
 | Qué | Se mantiene |
 |---|---|
-| Comandos de la sesión | **Un nombre por operación en el idioma activo** (inglés o español ASCII; el nombre del otro idioma no se registra y no es invocable) y su forma (`input` opcional, resultado `{kind, text}`; `code`, `params` e `items` son aditivos y nunca obligatorios) |
+| Comandos de la sesión | **Un nombre por operación en el idioma activo** (inglés o español ASCII; el nombre del otro idioma no se registra y no es invocable) y su forma (`input` opcional, resultado `{kind, text}`; `code`, `params` e `items` son aditivos y nunca obligatorios). El idioma se cambia con `/skill-compiler-language --es\|--en` (o `lang es` en el CLI) **sin reiniciar**; precedencia `DSH_LANG` → preferencia guardada → `en`. Guía completa, con la tabla de los 16 nombres: [`skill-compiler/README.md`](skill-compiler/README.md#idiomas-qué-hay-cómo-se-cambia-y-qué-no-cambia) |
 | CLI | `where`, `list`, `show`, `check`, `approve`, `scope`, `disable`, `enable`, `delete`, `retired`, `restore`, `reject`, `active`, `vendor`, `upstream`, `provenance`, `ownership`, `systems`, `security`, `auto`, `doctor`, `audit`, `repair`, `promote`, `history`, `review` |
 | Almacén | `projects/<clave>/{proposed,approved,published,disabled,rejected,superseded}`, `global/superseded` y el `SKILL.md` con su frontmatter |
 | Ámbito | El proyecto sale del `cwd` de la sesión; nunca lo declara el modelo. Publicar o localizar es una decisión aparte, y deja asiento en el diario |
