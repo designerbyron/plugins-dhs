@@ -14,7 +14,7 @@ se comporta en cada caso. Todo lo de la primera tabla está medido contra la com
 | Listar los comandos existentes (`listCommands`) | **sí** | el panel mide el efecto contra esa lista |
 | Alias del nombre viejo en el menú «/» | **sí, y no se pueden ocultar** | el descriptor que sirve el anfitrión no lleva `aliasOf` (abajo) |
 | Eventos de sesión (`session.snapshotEvents()`) | **sí** | `/skill-auto` se pliega de los `command/run` |
-| Catálogo de skills por proyecto (`~/.dsh/skills`, `approved/`) | **sí** | 12 activas, 3 publicadas, servidas sin reiniciar |
+| Catálogo de skills por proyecto (`~/.dsh/skills`, `approved/`) | **sí** | 36 aprobadas, 4 publicadas y 1 apagada en la medición de la 4.0.0 (2026-10-23; 48 auditadas), servidas sin reiniciar |
 
 ### Lo que no ofrece: filas de comando por agente
 
@@ -107,22 +107,26 @@ Consecuencias, dichas sin adornos:
 | Filas por propuesta en el menú «/» | cosmético: la decisión tiene tres vías sin menú | una compilación del anfitrión que componga `commands` en el contexto del agente |
 | La forma de `runCommand` no está publicada | el panel la sondea y verifica con el veredicto por id del comando (las filas, si existen, como respaldo) | un contrato documentado por el anfitrión |
 | Un resultado de comando viaja recortado a `{kind, text}` | el panel mide con la reserva de prosa; `code`, `params` e `items` esperan a que el anfitrión deje pasar el objeto del handler | una compilación que transporte el resultado completo |
-| 16 avisos `body-budget` en la auditoría | 14 son proponibles; 2 exigen criterio humano (`brandkit` entre ellas, sin corte posible) | decisión del humano sobre el material |
+| Los avisos `body-budget` de la auditoría | **histórico**: los 17 del mantenimiento del 2026-10-21 quedaron cerrados; la medición de la 4.0.0 da **0** de esa regla (48 skills · PASS 47 · WARN 1) | — (cerrado; el registro está en `docs/MANTENIMIENTO-2026-10-21-ownership-body-budget.md`) |
 | `ownership.json` ausente | la propiedad del puesto no se presume | `ownership dsh-only` o `ownership machine` |
-| Sin etiqueta de release por encima de `v3.8.0` | el tree va en `3.8.4`; se etiqueta al promover | una promoción de release (`docs` del repo) |
+
+La etiqueta de release vigente es **`v4.0.0`** —la de esta entrega, sobre el commit que declara los contratos de
+este documento—; el historial de versiones está en [`CHANGELOG.md`](../../CHANGELOG.md).
 
 Lo que **no** es una limitación y conviene no confundir: el aprendizaje funciona de punta a punta —proponer,
 decidir, activar, servir, auditar— sin el menú. El menú es comodidad.
 
 ## Ventana de compatibilidad del veredicto por prosa
 
-El panel decide con el **código estable** que devuelve el comando (`activated`, `with-warnings`, `scope-ask`…).
-La lectura de la prosa queda sólo como compatibilidad para un anfitrión o un plugin anterior que no envíe `code`:
+El contrato es el **código estable** que devuelve el comando (`activated`, `with-warnings`, `scope-ask`…) y, por
+elemento, el `items` descrito arriba. La lectura de la prosa es la **reserva**: sirve para un anfitrión que no
+transporte `code`, y hoy es el caso medido —`normalizeResult` recorta el resultado a `{kind, text}`, así que en
+producción decide la prosa y el código es el contrato que entra cuando el anfitrión deje pasar el objeto—:
 
 | Versión | Comportamiento |
 |---|---|
-| 4.0.0 – 4.1.x | Si no llega `code`, el panel sigue leyendo el texto (compatibilidad). |
-| **4.2.0** | Se **retira** la lectura de prosa: un resultado sin `code` no se interpreta. |
+| 4.0.0 – 4.1.x | Si no llega `code` —hoy, en producción, siempre—, el panel sigue leyendo el texto (compatibilidad). |
+| **4.2.0** | Se **retira** la lectura de prosa: un resultado sin `code` no se interpreta. Condicionado a que el anfitrión transporte el objeto del handler; si sigue recortando, el panel dice «no medible en este anfitrión» en vez de contar cero. |
 
 Reglas que no cambian en ninguna de las dos:
 

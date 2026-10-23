@@ -32,7 +32,7 @@ skill es **nueva** o si se **actualizó** una existente.
 - [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md) — la capa de seguridad: contrato de id, escaneo del contenido, árbol y diario encadenado, con lo que **no** cubre.
 | [`docs/DESARROLLO.md`](docs/DESARROLLO.md) | Cómo ampliarlo sin romperlo: mapa de ficheros, cómo añadir reglas, herramientas y piezas de interfaz, pruebas, versionado |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Historial de versiones |
-| [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md) | **Trabajo pendiente**: acciones en la tarjeta del resultado y decidir en lote (checkbox, paso a paso), con el contrato medido y las fases. Sin implementar |
+| [`plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md`](../plans/PLAN-2026-10-13-acciones-en-la-tarjeta.md) | El plan de las acciones en la tarjeta del resultado y la decisión en lote (checkbox, paso a paso): el contrato que se midió y sus fases. **Implementado** entre 3.4.0 y 3.8.5; se conserva como registro de lo que se autorizó |
 
 ## Las dos vías, y en qué se diferencian
 
@@ -166,6 +166,12 @@ El modelo propone; tú decides.
 
 ### Desde el harness, sin salir de la sesión
 
+Los nombres **canónicos** son los ingleses (`/skill-proposals`, `/skill-approve`, `/skill-pending`, …). Los
+ejemplos de abajo usan los nombres **españoles** a propósito: siguen funcionando como **alias** del canónico
+—mismo handler, mismos argumentos, misma puerta y mismos efectos— hasta la `5.0.0` (`RETIRADA_DE_ALIAS`). El
+alias se declara por metadatos (`aliasOf`, `deprecatedIn`), `doctor` cuenta las filas del menú que produce el
+registro (`15 de 31 filas del menu (16 canonicos)`) y la tabla se comprueba con `aliasProblems()`.
+
 ```
 /skill-propuestas                   qué espera tu decisión y qué está activo, en este proyecto
 /skill-pendientes                   los ids pendientes en una línea (lo que consulta la tarjeta)
@@ -186,7 +192,8 @@ El modelo propone; tú decides.
 ```
 
 Y cada pendiente aparece además en el menú `/` como **tres filas elegibles** —leer, activar, apartar—, sin
-argumentos que escribir: `skill-ver-<id>`, `skill-aprobar-<id>`, `skill-rechazar-<id>`. **Elegir la fila es
+argumentos que escribir: `skill-show-<id>`, `skill-approve-<id>`, `skill-reject-<id>` (los nombres de fila son
+siempre los canónicos, en inglés; el alias sólo existe para lo que se teclea). **Elegir la fila es
 la decisión completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila
 desaparece del menú: una pendiente que ya no lo está no se sigue ofreciendo.
 
@@ -305,11 +312,12 @@ y vendorizas una versión limpia, o no se vendoriza.
 
 ```sh
 cd "<donde-clonaste-el-repo>/skill-compiler"   # donde lo hayas clonado
-npm test              # las 730 pruebas
-npm run test:hermetic # las 730 pruebas + huella del store real antes y después
+npm test              # las 769 pruebas (con las puertas i18n y ASCII antes)
+npm run test:hermetic # las 769 pruebas + huella del store real antes y después
 ```
 
-730 pruebas, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la máquina.
+769 pruebas en 190 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
+máquina. `pretest` corre las puertas de idioma y ASCII: con una en rojo, no se ejecuta ni una prueba.
 
 - `tests/compiler.test.mjs` — validación, composición del `SKILL.md`, solapamiento, idempotencia,
   aislamiento por proyecto, aprobación/rechazo/supersesión, inventario.

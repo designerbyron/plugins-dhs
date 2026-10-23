@@ -125,6 +125,16 @@ describe('F3 · cada defecto pone en rojo su puerta', () => {
     assert.match(r.salida, /FALLO alias-destino · lib\/commands\.mjs:skill-ver/);
   });
 
+  it('un alias cuyo metadato contradice la retirada declarada', () => {
+    // El defecto medido en la 4.0.0: `deprecatedIn: '4.0.0'` con la descripcion del mismo objeto diciendo «se
+    // retira en 5.0.0». La regla de la puerta estaba clavada en el numero viejo, asi que lo daba por bueno.
+    const base = copia();
+    sembrar(base, 'lib/commands.mjs', 'deprecatedIn: RETIRADA_DE_ALIAS,', "deprecatedIn: '4.0.0',");
+    const r = i18n(base);
+    assert.equal(r.code, 1, r.salida);
+    assert.match(r.salida, /FALLO alias-metadatos · lib\/commands\.mjs/);
+  });
+
   it('el contrato de herramientas alterado: la prueba congelada se pone roja', () => {
     const base = copia();
     // Un parametro obligatorio que deja de serlo es un cambio de ESQUEMA: la superficie visible al modelo

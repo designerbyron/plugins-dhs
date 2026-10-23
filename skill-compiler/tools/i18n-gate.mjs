@@ -130,8 +130,16 @@ try {
     if (!nombres.includes(nuevo)) fallo('alias-destino', `lib/commands.mjs:${viejo}`, `su canónico «${nuevo}» no existe`);
     if (nombres.includes(`'${viejo}'`)) fallo('alias-duplicado', `lib/commands.mjs:${viejo}`, 'el alias se registra como comando propio');
   }
-  if (!/aliasOf: nuevo/.test(comandos) || !/deprecatedIn: '4\.0\.0'/.test(comandos)) {
-    fallo('alias-metadatos', 'lib/commands.mjs', 'los alias no declaran aliasOf/deprecatedIn');
+  // El metadato tiene que decir lo MISMO que la retirada declarada. Estaba clavado en '4.0.0' mientras la
+  // descripcion del mismo objeto decia «se retira en 5.0.0»: la puerta daba por bueno un dato que se
+  // contradecia con la frase, y la incoherencia viajo hasta la puerta de release. Ahora se lee la constante y
+  // se exige que el metadato sea ella, o su literal exacto.
+  const retirada = /export const RETIRADA_DE_ALIAS = '(\d+\.\d+\.\d+)'/.exec(comandos)?.[1];
+  const declarado = /deprecatedIn: ([^,\n]+),/.exec(comandos)?.[1]?.trim();
+  const coherente = declarado === 'RETIRADA_DE_ALIAS' || (retirada !== undefined && declarado === `'${retirada}'`);
+  if (!/aliasOf: nuevo/.test(comandos) || !coherente) {
+    fallo('alias-metadatos', 'lib/commands.mjs',
+      `los alias no declaran aliasOf/deprecatedIn coherentes con la retirada (RETIRADA_DE_ALIAS=${retirada ?? 'ausente'}, deprecatedIn=${declarado ?? 'ausente'})`);
   }
 } catch (error) {
   fallo('comandos', 'lib/commands.mjs', `no se pudo revisar: ${error.message}`);

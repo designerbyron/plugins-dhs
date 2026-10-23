@@ -985,7 +985,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
       ...canonico,
       name: viejo,
       aliasOf: nuevo,
-      deprecatedIn: '4.0.0',
+      deprecatedIn: RETIRADA_DE_ALIAS,
       description: `${t('cmd.alias.deprecated', { nuevo, retirada: RETIRADA_DE_ALIAS })} ${canonico.description}`,
     });
   }

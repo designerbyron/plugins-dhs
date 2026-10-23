@@ -414,3 +414,32 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
 - **Sigue pendiente**: la version 4.0.0, su entrada del CHANGELOG, el README con el recuento real y la
   etiqueta/release (F4); la prosa de `observado`/`umbral` y los `motivo` de bloqueo de `repair`; y la
   verificacion visual del menu, que este entorno no puede ver.
+## Acto 2026-10-23 — F4 publicada: v4.0.0
+
+- **Version 4.0.0 declarada** en `package.json` y en `package-lock.json` (la raiz del lock llevaba en `1.2.0`
+  desde hace veinticinco versiones: ahora dice lo mismo que el manifiesto), con la entrada del `CHANGELOG` en el
+  MISMO commit —10.047 caracteres, por fase—; `coherencia.test.mjs` en verde sin tocarlo.
+- **Portada refrescada desde el binario, no de memoria**: `v4.0.0` y **769 pruebas en 190 suites** (medido con
+  `npm test`), en el README del repo y en el del plugin; la historia se conserva como historia (1.7.1 con 276 y
+  3.9.3 con 730), no se reescribe como estado de hoy.
+- **Defecto corregido y declarado**: `deprecatedIn` decia `4.0.0` mientras la descripcion del MISMO objeto decia
+  «se retira en 5.0.0». Publicar 4.0.0 asi declaraba retirado en su propia version un alias que sigue vivo.
+  Ahora sale de `RETIRADA_DE_ALIAS` y las pruebas comparan contra el dato (no contra un literal suelto).
+- **Frases de estado de `docs/` barridas**: `ANFITRION.md` tenia la fila de etiqueta caducada («sin etiqueta por
+  encima de v3.8.0, el tree va en 3.8.4»), el catalogo medido en el 19-10, `body-budget` (cerrado en el
+  mantenimiento: hoy 0 de esa regla) y una ventana de prosa que decia que el panel decide por codigo —cuando el
+  anfitrion recorta el resultado y hoy decide la reserva—. Corregido, con la condicion de 4.2.0 declarada.
+- **Referencia viva del README del plugin arreglada**: los ejemplos declaran que los canonicos son ingleses y los
+  espanoles alias hasta 5.0.0, y las filas del menu son `skill-show-<id>` / `skill-approve-<id>` /
+  `skill-reject-<id>` (decia `skill-ver` / `skill-aprobar` / `skill-rechazar`, que no existen como fila).
+- **Verificado en el commit candidato**: `npm test` 769/769 con `pretest` (gates i18n 566 claves por idioma y
+  ASCII 7580 con tope 7580), `npm run test:hermetic` verde, `gates-obligatorios` verde, `definitions-schema`
+  18/18, `audit` 48 skills (PASS 47, WARN 1 **preexistente** `absolute-path` en
+  `approved/nexusbusinesssuite-3495896e/wsl2-red-espejo-y-toolchain-php`), `security` 0 bloqueos / 0 avisos con
+  cadena valida.
+- **Publicado**: tag **anotado** `v4.0.0` sobre el commit validado y release estable (ni borrador ni
+  prerelease) en `designerbyron/plugins-dsh`. Sin `--force`, sin reescribir historia, sin mover etiquetas.
+- **Queda abierto**: la verificacion visual del menu (este entorno no la puede ver; el plugin mide los alias y
+  `doctor` cuenta 31 filas); la prosa de `observado`/`umbral` y los `motivo` de bloqueo de `repair` (viajan como
+  DATO); y las dos retiradas declaradas —alias en 5.0.0, prosa del panel en 4.2.0 **condicionada** a que el
+  anfitrion transporte el resultado completo.

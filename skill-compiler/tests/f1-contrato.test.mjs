@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
-import { skillCommands } from '../lib/commands.mjs';
+import { RETIRADA_DE_ALIAS, skillCommands } from '../lib/commands.mjs';
 import { approve, pending, projectKey, propose } from '../lib/compiler.mjs';
 import { cleanupSandboxes, sandbox } from './helpers.mjs';
 
@@ -64,7 +64,7 @@ describe('F1 · alias = canónico', () => {
       // comprueba que el canonico viaja intacto detras, no la frase del prefijo (que depende del idioma).
       assert.equal(a.description.endsWith(canonico.description), true, `${a.name}: falta la descripcion del canonico`);
       assert.equal(a.description.length > canonico.description.length, true, `${a.name}: no lleva aviso de alias`);
-      assert.equal(a.deprecatedIn, '4.0.0');
+      assert.equal(a.deprecatedIn, RETIRADA_DE_ALIAS);
       assert.notEqual(a.description, canonico.description, `${a.name}: sin aviso se leeria como el canonico`);
     }
   });
@@ -92,7 +92,7 @@ describe('F1 · alias = canónico', () => {
         const alias = mapa.get(viejo);
         const canonico = mapa.get(nuevo);
         assert.equal(alias.aliasOf, nuevo, `${lang}/${viejo}: aliasOf`);
-        assert.equal(alias.deprecatedIn, '4.0.0', `${lang}/${viejo}: deprecatedIn`);
+        assert.equal(alias.deprecatedIn, '5.0.0', `${lang}/${viejo}: deprecatedIn`);
         assert.equal(alias.description.endsWith(canonico.description), true, `${lang}/${viejo}: el canonico se perdio`);
         assert.deepEqual(alias.input ?? {}, canonico.input ?? {}, `${lang}/${viejo}: entradas distintas`);
         assert.equal(typeof alias.handler, 'function', `${lang}/${viejo}: sin handler`);

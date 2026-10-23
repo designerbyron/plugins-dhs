@@ -57,7 +57,7 @@ describe('F1.1 · los alias son el mismo comando', () => {
       const alias = mapa.get(viejo);
       assert.notEqual(alias, undefined, `${viejo}: no se registra`);
       assert.equal(alias.aliasOf, nuevo, `${viejo}: aliasOf`);
-      assert.equal(alias.deprecatedIn, '4.0.0', `${viejo}: deprecatedIn`);
+      assert.equal(alias.deprecatedIn, RETIRADA_DE_ALIAS, `${viejo}: deprecatedIn`);
       assert.equal(typeof alias.handler, 'function', `${viejo}: sin handler`);
       assert.equal(alias.description.endsWith(mapa.get(nuevo).description), true, `${viejo}: el canonico se perdio en la descripcion`);
     }

@@ -4,6 +4,127 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [4.0.0] — 2026-10-23 · release
+
+**El plugin habla español e inglés, el contrato de lo que ve el modelo queda congelado y las puertas dejan de
+depender de la memoria.** Esta versión no añade una función suelta: cierra las cuatro fases de la migración
+—contrato, idioma, alias y cobertura—, el contrato de resultado por elemento del panel y las dos puertas
+obligatorias. Y declara, con su medición, los dos límites que hoy impone el anfitrión.
+
+### Cambiado — contrato y alias (F1.1)
+
+- **Los comandos de sesión pasan a nombre inglés como canónico** (`/skill-proposals`, `/skill-pending`,
+  `/skill-show`, `/skill-approve`, `/skill-publish`, `/skill-scope`, `/skill-disable`, `/skill-enable`,
+  `/skill-retire`, `/skill-retired`, `/skill-ownership`, `/skill-systems` y `/skill-reject`, más `/skill-auto` y
+  los tres de propiedad —`/skill-ownership-dsh-only` y `/skill-ownership-machine` incluidos—). Los **15 nombres
+  españoles** siguen funcionando como alias del canónico —mismo handler, mismos
+  argumentos, misma puerta y mismos efectos— hasta `5.0.0` (`RETIRADA_DE_ALIAS`). Renombrar un comando es
+  cambiar el contrato: por eso esta entrega es **mayor**, no menor.
+- **El alias se declara por metadatos** (`aliasOf`, `deprecatedIn`) y no por el texto de la descripción, para que
+  una superficie pueda ocultarlo por **dato**. `aliasProblems()` mide nueve formas de mentir en silencio
+  (destino inexistente, alias que no se registra, `aliasOf` cruzado, retirada que no es versión, handler ausente,
+  descripción vacía, alias fuera de la tabla, nombre duplicado y alias de sí mismo) y `aliasSummary()` publica
+  canónicos, alias y filas. `doctor` cuenta las **31 filas** del menú en voz alta
+  (`15 de 31 filas del menu (16 canonicos)`), para que la tabla no pueda quedarse corta sin decirlo.
+
+### Añadido — idioma ES/EN (F1.2, F1.3, F1.4)
+
+- **F1.2 · catálogo por grupos.** El texto que presenta el plugin vive en `lib/i18n/{es,en}.mjs`: **566 claves
+  por idioma** (34 al empezar la migración), con paridad **bidireccional** comprobada —claves de más y de menos,
+  prohibición de clave cruda y reserva al idioma base—. No se movieron los `code` ni las líneas del lote
+  (`ok    <id> — …` / `FALLO <id> — …`): el panel las parsea con `/^FALLO\s+(\S+)\s+—/`, así que son **protocolo**
+  y se quedan literales aunque estén en español. Las aserciones de prosa que ya pasaban se conservaron fijando
+  `DSH_LANG=es` por fichero, así que además prueban la traducción española.
+- **F1.3 · la superficie visible al modelo, congelada sin texto.** `tests/fixtures/definitions-contract.json`
+  fija la **estructura**: 4 herramientas (contadas en `index.js`), 16 comandos, 15 alias, el rango del proveedor
+  (150) y la sección estática del prompt (orden 9000). El manifiesto **no guarda cadenas**, así que traducir no
+  obliga a regenerarlo y una traducción no puede tapar un cambio de esquema; el texto se protege por propiedades
+  (ASCII puro, idioma y lista de rutas que no pueden quedarse vacías). `tests/definitions-schema.test.mjs`:
+  **18/18**. El texto visible al modelo quedó en ASCII puro: se retiraron 10 caracteres no ASCII —9 U+2014 y
+  1 U+2026— en 8 rutas de `skill_propose`.
+- **F1.4 · cobertura medida, no supuesta.** `tests/i18n-cobertura.test.mjs` (9 casos) ejecuta el idioma base `en`
+  sin `DSH_LANG` en motor y binario, y compara los **31 comandos** en los dos idiomas exigiendo el **mismo
+  `kind`, mismo `code` y mismos `params`**. El texto cambia en 20 o más —los que sólo devuelven datos no cambian,
+  y eso es correcto—, los marcadores del lote viajan intactos, `unsafe-id` conserva su `params.id` y no queda ni
+  una clave cruda ni un placeholder sin sustituir.
+
+### Añadido — el contrato de resultados por elemento (F2)
+
+- `aprobarLote` devuelve **`items: [{id, kind, code, state, params, text}]`**: un veredicto por elemento, con
+  `state` derivado del `code` por tabla (`activated` → `approved`, `already-active` → `approved`,
+  `updated-disabled` → `disabled`, `published` → `published`, `set-aside` → `rejected`, y un elemento fallido da
+  `failed` con su `code`). Un código fuera de la tabla da `unknown`, **no un estado inventado**. No se quitó ni se
+  renombró nada de lo que ya había, y el lote **no** emite un `code` global a propósito: un `batch-partial`
+  global haría que el panel marcara un solo id de los varios que decidió.
+- `client.js` prefiere `items` al `code` suelto y a la prosa, **ignora** los ids que no se pidieron y trata un
+  `state` desconocido como **fallo visible**. La ventana de compatibilidad: un `code` reconocido manda siempre;
+  uno desconocido no se convierte en éxito ni vuelve al regex; y `scope-ask`, `language-ask` y `pending-list` son
+  neutros, no veredictos.
+- La **reserva de prosa aprendió inglés** (`Active`, `Published`, `Set aside`, `Already active`, y `FALLO` acepta
+  la raya del servidor o el guion ASCII). Sin eso, con el texto inglés —ya el idioma base— una aprobación
+  correcta no se reconocía y el panel la contaba como fallo.
+- **Límite declarado**: el anfitrión recorta el resultado. `normalizeResult` (`@deepseek-ai/dsh-commands`)
+  reconstruye el objeto a `{kind, text}`, así que `code`, `params` e `items` **no llegan al panel en producción**:
+  hoy decide la prosa como **reserva**, y se retira en **4.2.0** sólo si el anfitrión ya transporta el objeto del
+  handler. Si sigue recortando, el panel tendrá que decir «no medible en este anfitrión» en vez de contar cero.
+  El contrato completo, la condición y la fecha: [`skill-compiler/docs/ANFITRION.md`](skill-compiler/docs/ANFITRION.md).
+
+### Añadido — puertas obligatorias (F3)
+
+- `tools/gates-obligatorios.mjs` corre la puerta i18n y la ASCII en serie, devuelve distinto de cero si alguna
+  falla y dice **cuál** (con `--json` para leerlo como dato). `pretest` lo cuelga de `npm test`, así que la suite
+  no corre una sola prueba con una puerta en rojo, y `test:hermetic` corre las puertas **antes** de la suite.
+  Una puerta que depende de la memoria no es una puerta.
+- `tests/gates-obligatorios.test.mjs` (11 casos) siembra cada defecto en una **copia** del paquete —nunca en el
+  árbol— y exige el rojo: clave que falta, código sin texto, placeholders inconsistentes, no-ASCII nuevo, alias
+  con destino inválido, contrato de herramientas alterado por el esquema y la expectativa congelada con un
+  parámetro de más, además del runner con una puerta en rojo y dos asertos de cableado.
+
+### Corregido
+
+- **`/skill-scope` llamaba a `ambito()` sin importarlo.** El `try` convertía el `ReferenceError` en «No se pudo
+  completar: ambito is not defined», así que cambiar de ámbito desde la sesión **nunca funcionó** y ninguna prueba
+  lo ejercitaba (la del motor probaba el motor). Arreglado, con un caso que ejecuta **el comando**.
+- **`doctor` fallaba en un almacén recién instalado**: `readdirSync(<almacén>/projects)` sin guarda convertía el
+  `ENOENT` de una carpeta de estado en «no pude leer». Un `ENOENT` es «todavía no hay»; `EACCES`/`ENOTDIR` sí son
+  fallo y se declaran con su motivo.
+- **Los avisos de una propuesta se leían vacíos**: `scanTree` devuelve la ruta del `SKILL.md`, no la de su
+  carpeta, así que `join(fila.path, 'meta.json')` no existía y un `catch` mudo lo contaba como «0 avisos».
+- **`deprecatedIn` decía `4.0.0` mientras la descripción del mismo objeto decía «se retira en 5.0.0»**: el
+  metadato estaba clavado a mano en vez de salir de `RETIRADA_DE_ALIAS`. Publicar 4.0.0 así habría declarado
+  retirado, en su propia versión, un alias que sigue vivo. Ahora se deriva de la constante y las pruebas comparan
+  contra ese dato. **Y la regla de `i18n-gate` que lo daba por bueno también estaba clavada en `4.0.0`**: ahora
+  lee `RETIRADA_DE_ALIAS` y exige que el metadato sea ella o su literal exacto, con un caso negativo que siembra
+  el número viejo en una copia del paquete y exige el rojo (`gates-obligatorios.test.mjs`, 10 → 11 casos).
+
+### Medido en esta entrega
+
+- Suite **769/769** en **190 suites**, con `pretest` (puertas i18n y ASCII) en verde, y `npm run test:hermetic`
+  con la huella del almacén real **idéntica** antes y después.
+- Catálogos: **566 claves por idioma**, **15 alias**, paridad bidireccional.
+- ASCII: **7580 caracteres heredados** con tope **7580** — no crece ni uno.
+- `definitions-schema`: **18/18**; los fixtures del contrato, intactos.
+- `audit`: **48 skills** · PASS 47 · WARN 1 · ERROR 0. El WARN es **preexistente** y ajeno a esta entrega:
+  `absolute-path` (observado `/mnt/c`) en `approved/nexusbusinesssuite-3495896e/wsl2-red-espejo-y-toolchain-php`,
+  una skill del almacén cuya decisión es de su humano — se resuelve localizándola o parametrizando la ruta, y no
+  se toca desde aquí.
+- `security`: **0 bloqueos · 0 avisos**, cadena del diario válida, 44 skills en 3 proyectos.
+
+### Límites declarados (no se ocultan)
+
+- **El menú `/` no puede ocultar un alias, y su dibujo no se puede observar desde este entorno.** Medido en la
+  compilación instalada: `normalizeDefinition` publica un descriptor de lista cerrada
+  `{definitionId?, name, description, input?}`; `aliasOf` y `deprecatedIn` tienen **0 apariciones** en todo el
+  `app.asar`; y la única condición que oculta una fila es no declarar `hint` cuando el cursor no está al inicio.
+  El plugin mide los alias (**15 de 31 filas**) y `doctor` los cuenta, pero **las filas visibles no se afirman**:
+  aquí no hay navegador ni sesión interactiva.
+- **El resultado viaja recortado a `{kind, text}`.** El contrato por elemento está escrito y probado en los dos
+  lados y entra cuando el anfitrión transporte el objeto; mientras tanto decide la prosa. La condición que hay
+  que mirar antes de retirarla en 4.2.0 está en `docs/ANFITRION.md`.
+- Siguen en español, como **dato** y no como presentación, la prosa de `observado`/`umbral` de las medidas y los
+  `motivo` de bloqueo de `repair`; `redaccion` del diario es vocabulario congelado por contrato y no se traduce
+  nunca.
+
 ## [3.8.6] — 2026-10-21
 
 **La prueba de que una decisión ocurrió es el veredicto del comando —la frase que ve el humano—, no el menú.**

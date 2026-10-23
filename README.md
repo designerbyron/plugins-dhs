@@ -12,7 +12,7 @@ absoluta** con el gestor de plugins del harness.
 
 | Plugin | Qué hace | Estado |
 |---|---|---|
-| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con **ámbito** —de un proyecto o de todos, lo eliges tú al aprobar—; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Estable · v3.9.3 · 730 pruebas en verde |
+| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con **ámbito** —de un proyecto o de todos, lo eliges tú al aprobar—; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Estable · v4.0.0 · 769 pruebas en verde |
 
 ## Por qué está en `htdocs`
 
@@ -117,20 +117,24 @@ los cambios.
 Es la misma regla que aplica el propio plugin con las skills que vendoriza: guarda de dónde vinieron, con
 su hash y su fecha, para que nadie tenga que creerse nada de memoria.
 
-## Estado: versión estable actual (**3.9.3**)
+## Estado: versión estable actual (**4.0.0**)
 
-La estable hoy es la **3.9.3** (etiqueta `v3.9.3`, release publicada). «Estable» no es un adjetivo: son
+La estable hoy es la **4.0.0** (etiqueta `v4.0.0`, release publicada). «Estable» no es un adjetivo: son
 criterios y un compromiso.
 
 **Lo que lo sostiene**
 
-- **730 pruebas en verde**, con la suite **hermética** que mide la huella del almacén real antes y después.
+- **769 pruebas en verde** en **190 suites**, con la suite **hermética** que mide la huella del almacén real
+  antes y después, y con las puertas de **i18n** y **ASCII** colgadas de `npm test` (`pretest`): la suite no
+  corre una sola prueba con una puerta en rojo.
 - Los contratos se comprueban contra los **paquetes reales** del harness (registro de skills, de comandos y de
   proyecciones), no contra dobles escritos a mano.
 - `doctor` verde: cada comprobación **ejecuta** el camino que vigila, no lo reimplementa.
 - `audit` mide el almacén sin tocarlo y `security` verifica ids, contenido, árboles y la cadena del diario
-  (0 bloqueos, 0 avisos, cadena válida). Lo único que puede quedar en `WARN` es una propuesta esperando
-  decisión humana: eso es estado, no un defecto.
+  (0 bloqueos, 0 avisos, cadena válida; 48 skills auditadas y 44 revisadas en la medición de la 4.0.0). En
+  `WARN` puede quedar una propuesta esperando decisión humana —estado, no defecto— o una skill ya aprendida con
+  un aviso de ámbito: hoy hay **una**, `absolute-path` sobre una skill del almacén, que se cierra localizándola o
+  parametrizando la ruta; se declara y no se oculta.
 - El flujo completo **probado en vivo**: proponer, aprobar, reparar, apagar, encender, publicar, localizar,
   retirar y recuperar.
 
@@ -138,7 +142,7 @@ criterios y un compromiso.
 
 | Qué | Se mantiene |
 |---|---|
-| Comandos de la sesión | Los nombres `skill-*` y su forma (`input` opcional, resultado `{kind, text}`) |
+| Comandos de la sesión | Los nombres `skill-*` —canónicos en inglés, con los 15 nombres españoles como alias hasta `5.0.0`— y su forma (`input` opcional, resultado `{kind, text}`; `code`, `params` e `items` son aditivos y nunca obligatorios) |
 | CLI | `where`, `list`, `show`, `check`, `approve`, `scope`, `disable`, `enable`, `delete`, `retired`, `restore`, `reject`, `active`, `vendor`, `upstream`, `provenance`, `ownership`, `systems`, `security`, `auto`, `doctor`, `audit`, `repair`, `promote`, `history`, `review` |
 | Almacén | `projects/<clave>/{proposed,approved,published,disabled,rejected,superseded}`, `global/superseded` y el `SKILL.md` con su frontmatter |
 | Ámbito | El proyecto sale del `cwd` de la sesión; nunca lo declara el modelo. Publicar o localizar es una decisión aparte, y deja asiento en el diario |
@@ -151,6 +155,11 @@ versión pase a 1.0.0. La numeración es la que es; esto declara una garantía, 
 La **1.7.1** fue la primera versión que este repositorio declaró estable, con 276 pruebas y el mismo
 compromiso. Se conserva como historia de lo que se declaró entonces, no como estado de hoy; el registro de
 versiones y sus motivos está en [`CHANGELOG.md`](CHANGELOG.md).
+
+### Historia: la declaración anterior (3.9.3)
+
+La **3.9.3** fue la estable inmediatamente anterior a esta entrega (etiqueta `v3.9.3`, release publicada), y se
+declaró con **730 pruebas**. También se conserva como historia: la portada decía eso y era cierto entonces.
 
 ## Estado del repositorio
 

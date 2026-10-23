@@ -128,7 +128,7 @@ describe('activación', () => {
         'skill-sistemas', 'skill-ver',
       ]);
     for (const alias of registered.filter((c) => c.aliasOf !== undefined)) {
-      assert.equal(alias.deprecatedIn, '4.0.0', `${alias.name} sin versión de retirada`);
+      assert.equal(alias.deprecatedIn, '5.0.0', `${alias.name} sin versión de retirada`);
       assert.equal(typeof alias.description, 'string');
       assert.match(alias.description, /^Alias obsoleto/);
     }
