@@ -351,7 +351,9 @@ describe('artefacto de interfaz · el informe del lote se comprueba contra el ef
     // La evidencia es la frase que vería el humano: `Activa: <id>`, `Ya estaba activa: <id>`, `ok <id> — …`.
     // Un `kind: 'success'` sin veredicto NO basta: se sigue con la comprobación por filas y, si no las hay,
     // no se declara éxito.
-    assert.match(client, /const v = veredicto\(salida, idsPedidos, resultado\?\.code, resultado\?\.params\)/);
+    // La firma gano el quinto parametro (los `items` del contrato por elemento): el aserto se actualiza y el
+    // comportamiento nuevo se mide en `resultados-por-elemento.test.mjs`.
+    assert.match(client, /const v = veredicto\(salida, idsPedidos, resultado\?\.code, resultado\?\.params, resultado\?\.items\)/);
     assert.match(client, /ok: v\.fallos\.size === 0 && idsPedidos\.every\(\(id\) => v\.hechos\.has\(id\)\)/);
     assert.equal(/resultado\?\.kind === 'success'\)?\s*return \{ ok: true/.test(client), false, 'no se cree al kind');
     // Las filas quedan como comprobación de respaldo, y su ausencia es un estado de primera clase.

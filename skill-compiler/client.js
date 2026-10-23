@@ -112,11 +112,30 @@ window.__ModuleLoader__.load({
     ]);
     /** Códigos que no son veredicto (una pregunta, un listado): se dejan pasar sin decidir nada. */
     const CODIGOS_NEUTROS = new Set(['scope-ask', 'language-ask', 'pending-list']);
+    /**
+     * Estados funcionales del contrato por elemento que cuentan como HECHO. Es dato del servidor (el `state` de
+     * cada `items[]`), no prosa: si el estado no esta aqui, el elemento no se cuenta como hecho.
+     */
+    const ESTADOS_HECHOS = new Set(['approved', 'published', 'disabled', 'enabled', 'retired', 'rejected']);
 
-    const veredicto = (texto, ids, code, params) => {
+    const veredicto = (texto, ids, code, params, items) => {
       const pedidos = new Set(ids);
       const hechos = new Set();
       const fallos = new Map();
+      // 0) Contrato por ELEMENTO (4.0.0). Manda sobre todo lo demas: cada elemento dice su id, su `state` y su
+      //    `code`, asi que no hay que interpretar ninguna frase. Un elemento de un id que no se pidio se ignora
+      //    (nunca se inventa un veredicto) y uno con estado desconocido es fallo visible, no exito.
+      if (Array.isArray(items) && items.length > 0) {
+        for (const item of items) {
+          const id = typeof item?.id === 'string' ? item.id : '';
+          if (!pedidos.has(id)) continue;
+          const c = typeof item.code === 'string' ? item.code : '';
+          const estado = String(item.state ?? '');
+          if (ESTADOS_HECHOS.has(estado) && (c === '' || CODIGOS_HECHO.has(c))) hechos.add(id);
+          else fallos.set(id, c !== '' ? c : (estado !== '' ? estado : 'failed'));
+        }
+        if (hechos.size > 0 || fallos.size > 0) return { hechos, fallos, code: '', items: true };
+      }
       // 1) Contrato nuevo: el código decide. Sólo se acepta como hecho si nombra un id pedido; si no, se cae a
       //    la prosa (compatibilidad), nunca a un éxito inventado.
       if (typeof code === 'string' && code !== '' && !CODIGOS_NEUTROS.has(code)) {
@@ -135,9 +154,11 @@ window.__ModuleLoader__.load({
       for (const cruda of String(texto ?? '').split('\n')) {
         const linea = cruda.trim();
         if (linea === '') continue;
-        let m = /^ok\s+(\S+)/.exec(linea) || /^(?:Activa|Publicada|Apartada|Habilitada|Deshabilitada|Retirada|Ya estaba activa):\s*(\S+)/.exec(linea);
+        // Los verbos de la reserva estan en los dos idiomas: con el texto ingles, la lista espanola no casaba y
+        // una aprobacion correcta se contaba como fallo (el `code` no llega en esta compilacion del anfitrion).
+        let m = /^ok\s+(\S+)/.exec(linea) || /^(?:Activa|Publicada|Apartada|Habilitada|Deshabilitada|Retirada|Ya estaba activa|Active|Published|Set aside|Enabled|Disabled|Retired|Already active):\s*(\S+)/.exec(linea);
         if (m !== null && pedidos.has(m[1])) { hechos.add(m[1]); continue; }
-        m = /^FALLO\s+(\S+)\s+—\s*(.*)$/.exec(linea);
+        m = /^FALLO\s+(\S+)\s+[—-]\s*(.*)$/.exec(linea);
         if (m !== null && pedidos.has(m[1])) fallos.set(m[1], m[2] || 'falló');
       }
       return { hechos, fallos };
@@ -814,7 +835,7 @@ window.__ModuleLoader__.load({
 
           // 1) El comando contestó con veredicto por id. Es la evidencia: exactamente la frase que vería el
           //    humano al escribirlo. No hace falta preguntar por filas —y en este anfitrión, además, no hay—.
-          const v = veredicto(salida, idsPedidos, resultado?.code, resultado?.params);
+          const v = veredicto(salida, idsPedidos, resultado?.code, resultado?.params, resultado?.items);
           if (v.hechos.size > 0 || v.fallos.size > 0) {
             return {
               ok: v.fallos.size === 0 && idsPedidos.every((id) => v.hechos.has(id)),

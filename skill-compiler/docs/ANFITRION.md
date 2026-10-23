@@ -81,12 +81,32 @@ CLI) funcionando sin él.
 Esto no es una promesa: `tests/activation.test.mjs` monta tres anfitriones falsos —uno por camino— y exige, en
 cada uno, que las filas aparezcan, que el aviso no salga y que al descargar el plugin no quede nada colgando.
 
+### Un resultado de comando viaja recortado: `{kind, text}`
+
+Medido en `@deepseek-ai/dsh-commands` (`normalizeResult`): el objeto que devuelve un handler se **reconstruye**
+con lista cerrada antes de salir —`success` -> `{kind, text?, sourceEventSeq?}`, `error` -> `{kind, text}`— y
+`execute()` devuelve `{commandId, result}` con ese objeto. Lo que el handler puso de mas (`code`, `params`,
+`items`) no llega al panel por `runCommand`.
+
+Consecuencias, dichas sin adornos:
+
+- El panel **no puede** decidir por `code` en esta compilacion: su lectura de `code` es codigo defensivo que hoy
+  no se ejecuta. Lo que decide es la reserva de prosa (por eso en 4.0.0 se le ensenaron los verbos de los dos
+  idiomas) y, cuando el anfitrion lo transporte, el contrato por elemento (`items`).
+- `items` esta escrito y probado en los dos lados —`aprobarLote` lo produce con `id`, `kind`, `code`, `state`,
+  `params` y `text`; `client.js` lo prefiere y no inventa veredictos—: entra en cuanto el anfitrion transporte
+  el objeto. Lo unico que falta es la compilacion.
+- **La retirada de la prosa en 4.2.0 depende de esto.** Si 4.2.0 llega con un anfitrion que sigue recortando el
+  resultado, el panel no podra medir nada por id y tendra que decirlo («no medible en este anfitrion») en vez de
+  contar cero. Es el requisito que hay que mirar antes de tocar esa fecha.
+
 ## 4 · Limitaciones declaradas (hoy)
 
 | Limitación | Alcance | Qué la cierra |
 |---|---|---|
 | Filas por propuesta en el menú «/» | cosmético: la decisión tiene tres vías sin menú | una compilación del anfitrión que componga `commands` en el contexto del agente |
 | La forma de `runCommand` no está publicada | el panel la sondea y verifica con el veredicto por id del comando (las filas, si existen, como respaldo) | un contrato documentado por el anfitrión |
+| Un resultado de comando viaja recortado a `{kind, text}` | el panel mide con la reserva de prosa; `code`, `params` e `items` esperan a que el anfitrión deje pasar el objeto del handler | una compilación que transporte el resultado completo |
 | 16 avisos `body-budget` en la auditoría | 14 son proponibles; 2 exigen criterio humano (`brandkit` entre ellas, sin corte posible) | decisión del humano sobre el material |
 | `ownership.json` ausente | la propiedad del puesto no se presume | `ownership dsh-only` o `ownership machine` |
 | Sin etiqueta de release por encima de `v3.8.0` | el tree va en `3.8.4`; se etiqueta al promover | una promoción de release (`docs` del repo) |

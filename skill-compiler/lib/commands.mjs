@@ -130,6 +130,26 @@ export function viewProposal({ root = defaultRoot(), cwd, key, id }) {
 
 /** Activa una propuesta, y sólo si pasa la puerta. `force` acepta los avisos; nunca salta los fallos. */
 /**
+ * El estado funcional que deja cada `code` del motor.
+ *
+ * Es DATO del contrato por elemento, no presentacion: el panel decide por `state` + `code` en vez de leer la
+ * frase de la primera linea. Un codigo que no este en la tabla no se adivina (sale `unknown`) porque inventar
+ * un estado es peor que declararlo desconocido.
+ */
+const ESTADO_DE_CODIGO = Object.freeze({
+  activated: 'approved',
+  'already-active': 'approved',
+  'updated-disabled': 'disabled',
+  published: 'published',
+  'already-published': 'published',
+  'set-aside': 'rejected',
+  'already-set-aside': 'rejected',
+  disabled: 'disabled',
+  enabled: 'approved',
+  retired: 'retired',
+});
+
+/**
  * Aprobar **varias** de una vez: la misma puerta, una a una, con resultado por elemento.
  *
  * No es una transacción y no lo finge: cada id se aprueba o falla por su cuenta, y el informe dice cuál fue
@@ -146,7 +166,13 @@ export function aprobarLote({ root, key, ids = [], scope = 'project', force = fa
   const resultados = [];
   for (const id of limpios) {
     const r = approveProposal({ root, key, id, force, scope, catalog: null });
-    resultados.push({ id, ok: r.kind === 'success', primera: String(r.text ?? '').split('\n')[0] });
+    resultados.push({
+      id,
+      ok: r.kind === 'success',
+      code: typeof r.code === 'string' ? r.code : '',
+      params: r.params ?? {},
+      primera: String(r.text ?? '').split('\n')[0],
+    });
   }
   const bien = resultados.filter((r) => r.ok).length;
   const mal = resultados.length - bien;
@@ -160,7 +186,18 @@ export function aprobarLote({ root, key, ids = [], scope = 'project', force = fa
     ...resultados.map((r) => `${r.ok ? 'ok   ' : 'FALLO'} ${r.id} — ${r.primera}`),
     ...(mal > 0 ? ['', t('cmd.batch.failed-hint')] : []),
   ].join('\n');
-  return bien === resultados.length ? ok(texto) : bad(texto);
+  // El contrato por ELEMENTO: lo que el panel necesita para decidir sin leer prosa. `text` es la frase que ve
+  // el humano; `state` y `code` son el veredicto. Se anaden sin quitar los campos de siempre (`kind`, `text`),
+  // asi que un consumidor viejo sigue funcionando igual.
+  const items = resultados.map((r) => ({
+    id: r.id,
+    kind: r.ok ? 'success' : 'error',
+    code: r.code,
+    state: r.ok ? (ESTADO_DE_CODIGO[r.code] ?? 'unknown') : 'failed',
+    params: r.params,
+    text: r.primera,
+  }));
+  return bien === resultados.length ? ok(texto, { items }) : bad(texto, { items });
 }
 
 /**

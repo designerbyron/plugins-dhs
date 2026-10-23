@@ -371,3 +371,43 @@ idiomas. Todo lo que sigue se ejecuta, comando a comando y binario a binario.
 - `regla`/`observado`/`umbral` de la auto-actualizacion y el motivo de bloqueo de `repair`: siguen siendo datos
   del motor en espanol (ver la seccion de deudas). No es cobertura de comandos: es representacion de un dato, y
   pide su propia tabla.
+## F2 · contrato estructurado por elemento: cerrado, con su limite medido
+
+### Lo que cambio, en los dos lados a la vez
+
+- **Productor** (`lib/commands.mjs`, `aprobarLote`): cada elemento del lote lleva ahora su veredicto como DATO.
+  `items: [{id, kind, code, state, params, text}]`, con `state` traducido del `code` por la tabla
+  `ESTADO_DE_CODIGO` (`activated` -> `approved`, `already-active` -> `approved`, `updated-disabled` -> `disabled`,
+  `published` -> `published`, `set-aside` -> `rejected`, ...). Un codigo fuera de la tabla da `unknown`, no un
+  estado inventado; un elemento fallido da `state: 'failed'` con su `code` (`no-proposal`, `gate-failed`, ...).
+  No se quito ni se renombro nada: `kind`, `text` y las lineas `ok    <id>` / `FALLO <id>` siguen igual, y **el
+  lote no emite un `code` global a proposito** (un `batch-partial` global haria que el panel marcara un solo id).
+- **Consumidor** (`client.js`, bloque `<veredicto>`): `veredicto(texto, ids, code, params, items)` usa `items`
+  cuando esta —antes que el `code` suelto y que la prosa—, ignora los elementos de ids que no se pidieron y
+  trata un `state` desconocido como fallo visible. Sin `items`, la reserva sigue: `code` reconocido, y si no,
+  los marcadores del texto.
+- **La reserva de prosa aprende ingles.** Las frases del veredicto singular estaban solo en espanol (`Activa:`,
+  `Ya estaba activa:`, `Apartada:`), asi que con el texto ingles —que ya es el idioma base— una aprobacion
+  correcta no se reconocia. Ahora la lista incluye `Active:`, `Published:`, `Set aside:`, `Already active:`, y
+  el `FALLO` acepta la raya del servidor **y** el guion ASCII. Sigue siendo reserva, no contrato.
+
+### El limite, medido en el anfitrion instalado
+
+`@deepseek-ai/dsh-commands` (`normalizeResult`) **reconstruye** el resultado con lista cerrada antes de salir:
+`success` -> `{kind, text?, sourceEventSeq?}` y `error` -> `{kind, text}`; `execute()` devuelve
+`{commandId, result}` con ese objeto. Consecuencia: `code`, `params` e `items` **no llegan al panel** por
+`runCommand` en esta compilacion. Por eso el camino de `items` esta escrito y probado, pero hoy no se ejecuta en
+produccion: lo que decide es la reserva. Queda declarado en `docs/ANFITRION.md`, con la condicion que hay que
+mirar antes de retirar la prosa en 4.2.0 (si el anfitrion sigue recortando, el panel no puede medir por id y
+tiene que decir «no medible», no contar cero).
+
+No se metio el contrato en el texto visible (un bloque JSON al pie se lo comeria el humano en cada lote): el
+texto queda para presentar y el dato para el objeto, que es lo que el encargo pedia.
+
+### Pruebas nuevas
+
+`tests/resultados-por-elemento.test.mjs` (10 casos): lote mixto con `items` reales del productor (exito, fallo,
+`state`, `params`, `text` y lineas de siempre), lote entero bueno y entero fallido, lote sin ids; y el consumidor
+con `items` (mixto, estado desconocido, id no pedido, tres hechos), sin `items` (marcadores del lote en los dos
+idiomas, aprobacion suelta en ingles y en espanol, lineas de la puerta que no cuentan). Suite **748 -> 758**
+(`client-artifact` actualiza su aserto de la firma, como manda la regla, y no borra ninguno).
