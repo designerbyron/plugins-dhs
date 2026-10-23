@@ -64,6 +64,27 @@ hace improbable.
 5. Añade el contrato al protocolo solo si el modelo necesita saber cuándo llamarla, y **midiendo el
    coste**: el protocolo se paga entero en cada turno (`tests/definitions.test.mjs` fija el techo).
 
+### Añadir un comando de sesión (con nombre por idioma)
+
+1. La **definición base** va en `lib/commands.mjs`, dentro de `skillCommands()`, con el nombre del idioma
+   base (`en`) y su handler. Ahí no se declara ninguna traducción.
+2. La **operación** va en `LOCALIZED_OPERATIONS` (`lib/localized-commands.mjs`): id interno estable,
+   `definitionId` (`skill-compiler.<id>`), `source` (el nombre base), `descriptionKey`, los dos nombres
+   (`names.en` / `names.es`) y, si el comando toma argumentos, `hint` (una cadena para los dos idiomas, o
+   `{ en, es }` cuando las palabras son idioma, como `skill-auto`). El handler **no** se escribe ahí: se hereda,
+   y por eso los dos nombres no pueden divergir.
+3. Añade las dos descripciones al catálogo (`lib/i18n/en.mjs` y `es.mjs`, ASCII) y, si el comando emite
+   códigos nuevos, su texto `code.<codigo>` en los dos.
+4. La puerta lo comprueba sola: `tools/i18n-gate.mjs` exige 16 operaciones (el recuento está en el gate),
+   un nombre válido y único por idioma, que no quede **ninguna definición base sin operación** ni al revés, y
+   que el único nombre sin traducir sea `skill-auto`. `npm test` incluye las dos pruebas verticales
+   (`tests/menu-localizado.test.mjs` y `tests/localized-commands.test.mjs`).
+5. Si es una **decisión** (mueve el almacén), añade su id a `DECISION_OPERATIONS` (`lib/presentation.mjs`) y
+   revisa `lib/pending-rows.mjs` si además merece una fila en el menú. Los nombres de **fila** son siempre los
+   ingleses (`skill-approve-<id>`): son marcador de máquina, no prosa.
+6. Los nombres de la CLI y los flags siguen en inglés y no se localizan: la CLI es superficie de terminal,
+   no del menú.
+
 ### Añadir un comando a la CLI
 
 1. `bin/skill-compiler.mjs`: un `case` más, con lectura estricta de flags (los `--` desconocidos fallan).
@@ -95,7 +116,7 @@ hace improbable.
 
 ```sh
 npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
-npm test              # las puertas (i18n + ASCII) y, si pasan, las 768 pruebas
+npm test              # las puertas (i18n + ASCII) y, si pasan, las 804 pruebas
 npm run test:hermetic # lo mismo + huella del almacén real antes y después
 npm run gate          # solo las puertas: para un cambio de texto o de catálogo
 ```
@@ -103,8 +124,9 @@ npm run gate          # solo las puertas: para un cambio de texto o de catálogo
 Las dos puertas son **obligatorias por construcción**, no por costumbre: `pretest` las corre antes que
 `node --test`, y `test:hermetic` aborta si alguna está en rojo —y aborta **antes** de la suite, no después—.
 Una puerta que se pudiera olvidar no sería una puerta. `tests/gates-obligatorios.test.mjs` siembra cada
-defecto (clave que falta, código sin texto, placeholders inconsistentes, no-ASCII nuevo, alias inválido,
-contrato de herramientas alterado) en una **copia** del paquete y exige que la puerta se ponga roja.
+defecto (clave que falta, código sin texto, placeholders inconsistentes, no-ASCII nuevo, una operación sin
+nombre en un idioma, dos operaciones con el mismo nombre, el modelo de alias reintroducido, contrato de
+herramientas alterado) en una **copia** del paquete y exige que la puerta se ponga roja.
 
 - `tests/output-contract.test.mjs` — **el valor de cada herramienta contra el esquema que el harness
   valida**, en todas las ramas de su `execute`, con `validateJsonSchemaValue` (el juez real) y el esquema

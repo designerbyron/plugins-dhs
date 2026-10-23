@@ -469,11 +469,55 @@ cargue en el proximo arranque es el codigo publicado. Informe autorizable: `plan
   conjunto intercambiable y sobrevive a todos los cambios.
 - **Numeros**: `npm test` **796/796** (777 -> 796), hermetico verde, i18n 576 claves por idioma, ASCII 7579 con
   tope 7579 y 22 ficheros (el nuevo `lib/localized-commands.mjs` entra con 0 de deuda).
-- **Queda abierto, y no se declara resuelto**: la comprobacion VISUAL del menu (este entorno no la ve; el
-  refresco esta inferido por codigo y medido por evento, no visto); `doctor` sigue contando la tabla vieja
-  («15 of 31 menu rows (16 canonical)», medido) porque la migracion es de una operacion; y
-  `decisionKindOf('skill-aprobar')` devuelve `''` (`lib/presentation.mjs:42-47`), asi que el pliegue no cuenta
-  esa decision con el nombre espanol - deuda del acto de migracion, con su linea.
+- **Quedaba abierto** — y lo cerro el acto de migracion completa (siguiente seccion): `doctor` contaba la tabla
+  vieja («15 of 31 menu rows (16 canonical)», medido) porque la migracion era de una operacion, y
+  `decisionKindOf('skill-aprobar')` devolvia `''` (`lib/presentation.mjs:42-47`), asi que el pliegue no contaba
+  esa decision con el nombre espanol. Sigue abierto, y no se declara resuelto: la comprobacion VISUAL del menu
+  (este entorno no la ve; el refresco esta inferido por codigo y medido por evento, y el operador lo vio en la
+  app, pero no hay captura en el repo).
 - **Trampa nueva**: `propose` veta por TEMA tambien contra lo ya aprobado en el mismo almacen, asi que una
   segunda propuesta de prueba con el mismo asunto que una aprobada sale `status:"conflict"`. Un almacen por
   idioma aisla la medicion del efecto.
+
+## Migracion completa 2026-10-23 — las 16 operaciones, y el modelo de alias retirado (rama, NO publicado)
+
+Rama `proto/i18n-live-commands`, desde `v4.0.1`. Sin push, sin release, sin mover etiquetas; al cerrar, el
+arbol vuelve a `main` y la rama queda para revision. Criterio de decision del mandato: el prototipo ya estaba
+validado de extremo a extremo en la app real (el operador ejecuto `/skill-compiler-language --es` y el menu paso
+de `/skill-approve` a `/skill-aprobar` **sin reiniciar**), asi que se autorizo migrar las 16.
+
+- **Las 16 operaciones viven en un solo mapa** (`lib/localized-commands.mjs`): id interno estable, `definitionId`,
+  nombre `en`, nombre `es`, `descriptionKey` y `input.hint`. El **handler se hereda** de la definicion base de
+  `lib/commands.mjs`, asi que los dos nombres son la misma funcion por construccion, no por cuidado. `skill-auto`
+  declara **el mismo nombre** en los dos idiomas (31 nombres distintos, 16 filas por idioma).
+- **El alias ya no existe como modelo**: fuera `ALIAS_ESPERADOS`, `RETIRADA_DE_ALIAS`, `aliasProblems()`,
+  `aliasSummary()`, `aliasOf`/`deprecatedIn` y `cmd.alias.deprecated`. Un nombre espanol es **el nombre de su
+  operacion en espanol**; el otro idioma no se registra y **no es invocable**.
+- **La puerta cambio de regla** (`tools/i18n-gate.mjs`, regla 5): 16 operaciones × 2 nombres, nombre valido y
+  unico por idioma, ninguna definicion base huerfana ni operacion sin base, el unico nombre sin traducir es
+  `skill-auto`, y el modelo retirado no puede reaparecer en `lib/`, `index.js`, `client.js` ni los catalogos.
+  Importa los modulos en vez de leer el texto: una tabla de nombres copiada mide la memoria de quien la copio.
+  Cinco pruebas negativas nuevas en `tests/i18n-gate.test.mjs` y dos en `tests/gates-obligatorios.test.mjs`.
+- **`doctor`** dice `16 operaciones y 16 filas en <idioma>` (construido desde el mapa), en los dos idiomas.
+- **`decisionKindOf` se declara por id de operacion** (`DECISION_OPERATIONS`) y resuelve el nombre en el mapa:
+  reconoce `skill-aprobar` y `skill-approve` sin saberse ningun nombre de memoria.
+- **Trampa que costo el acto: `client.js` componia SIEMPRE el nombre espanol** (`skill-aprobar`, `skill-globalizar`…)
+  y funcionaba porque el alias existia en los dos idiomas. Al retirar el alias, bajo `en` el boton de aprobar
+  habria dejado de existir. El panel ahora lleva los dos nombres y el idioma viaja con el bloque que se decide
+  (`VERB_COMMANDS` + `idiomaDe(node.name)`), y el `bulk` reconoce la lista en los dos idiomas.
+- **Los catalogos citaban comandos que solo existian por el alias**: 43 lineas de prosa espanola con
+  `/skill-proposals`, `/skill-show`… ahora dicen `/skill-propuestas`, `/skill-ver`… Un texto que manda teclear
+  un comando inexistente es un callejon, no una traduccion.
+- **Trampa medida: la suite leia el `config.json` del almacen REAL.** `tests/i18n-cobertura.test.mjs` resolvia el
+  idioma con `resolveLang({ fresh: true })` sin `root`, asi que el `--es` que el operador fijo en vivo puso en
+  rojo «sin DSH_LANG el motor habla ingles» (796 pruebas, 1 roja). Ahora resuelve en su arena: una prueba que
+  mide el defecto no puede depender del estado de la maquina.
+- **Numeros**: `npm test` **804/804** (antes 796, con 1 roja por lo anterior); `test:hermetic` 804/804 con la
+  huella del almacen real identica; i18n 578 claves por idioma y 16×2 nombres; ASCII 7565 con tope 7565 (bajo de
+  7579 al mudar tres descripciones al catalogo en ASCII) y 22 ficheros; `definitions-schema` 18/18 con el
+  manifiesto congelado pasado de `alias` a `nombres`.
+- **Lo que NO queda demostrado**: el dibujo del menu `/` (no hay captura; el cambio en vivo lo vio el operador en
+  la app y aqui se mide por evento y por registro); `lib/scope.mjs` sigue devolviendo su prosa en espanol en los
+  dos idiomas (lo ven `/skill-propiedad` y `systems`, y por eso `skill-ownership` es una de las dos operaciones
+  cuyo texto no cambia con el idioma: deuda declarada, con su fichero); y los nombres de **fila**
+  (`skill-approve-<id>`) siguen en ingles en los dos idiomas a proposito (marcador de maquina del panel).

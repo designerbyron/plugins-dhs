@@ -166,11 +166,14 @@ El modelo propone; tú decides.
 
 ### Desde el harness, sin salir de la sesión
 
-Los nombres **canónicos** son los ingleses (`/skill-proposals`, `/skill-approve`, `/skill-pending`, …). Los
-ejemplos de abajo usan los nombres **españoles** a propósito: siguen funcionando como **alias** del canónico
-—mismo handler, mismos argumentos, misma puerta y mismos efectos— hasta la `5.0.0` (`RETIRADA_DE_ALIAS`). El
-alias se declara por metadatos (`aliasOf`, `deprecatedIn`), `doctor` cuenta las filas del menú que produce el
-registro (`15 de 31 filas del menu (16 canonicos)`) y la tabla se comprueba con `aliasProblems()`.
+Los comandos de sesión tienen **un nombre por idioma**: `/skill-approve` en inglés, `/skill-aprobar` en
+español. No son dos comandos ni un alias: es la **misma operación**, con el mismo handler, la misma puerta y
+los mismos efectos, y el registro tiene **una fila por operación** —la del idioma activo—. El idioma se fija
+con `/skill-compiler-language --es|--en` (o `skill-compiler lang --es|--en` en el terminal) y el menú `/` cambia
+**sin reiniciar**; `DSH_LANG` manda sobre la preferencia guardada, y el idioma base es `en`. `doctor` dice qué
+idioma está activo y cuántas filas sirve (`16 operaciones y 16 filas en <idioma>`).
+
+Los ejemplos de abajo usan los nombres **españoles**, que son los que están activos con el idioma en `es`.
 
 ```
 /skill-propuestas                   qué espera tu decisión y qué está activo, en este proyecto
@@ -192,10 +195,11 @@ registro (`15 de 31 filas del menu (16 canonicos)`) y la tabla se comprueba con 
 ```
 
 Y cada pendiente aparece además en el menú `/` como **tres filas elegibles** —leer, activar, apartar—, sin
-argumentos que escribir: `skill-show-<id>`, `skill-approve-<id>`, `skill-reject-<id>` (los nombres de fila son
-siempre los canónicos, en inglés; el alias sólo existe para lo que se teclea). **Elegir la fila es
-la decisión completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila
-desaparece del menú: una pendiente que ya no lo está no se sigue ofreciendo.
+argumentos que escribir: `skill-show-<id>`, `skill-approve-<id>`, `skill-reject-<id>`. Los nombres de fila son
+**siempre los ingleses**, en los dos idiomas: son el marcador de máquina con el que el panel reconoce una fila
+(`skill-approve-<id>`), y el id que llevan detrás las hace inequívocas. **Elegir la fila es la decisión
+completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila desaparece del
+menú: una pendiente que ya no lo está no se sigue ofreciendo.
 
 Aprobar algo que ya está aprobado no es un fallo: responde «Ya estaba activa» y no mueve nada. Y cada
 decisión termina con la lista de pendientes al día, así que no hace falta volver a pedirla. Si un bloque de
@@ -312,11 +316,11 @@ y vendorizas una versión limpia, o no se vendoriza.
 
 ```sh
 cd "<donde-clonaste-el-repo>/skill-compiler"   # donde lo hayas clonado
-npm test              # las 777 pruebas (con las puertas i18n y ASCII antes)
-npm run test:hermetic # las 777 pruebas + huella del store real antes y después
+npm test              # las 804 pruebas (con las puertas i18n y ASCII antes)
+npm run test:hermetic # las 804 pruebas + huella del store real antes y después
 ```
 
-777 pruebas en 192 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
+804 pruebas en 199 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
 máquina. `pretest` corre las puertas de idioma y ASCII: con una en rojo, no se ejecuta ni una prueba.
 
 - `tests/compiler.test.mjs` — validación, composición del `SKILL.md`, solapamiento, idempotencia,

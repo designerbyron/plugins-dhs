@@ -20,6 +20,11 @@ Aquí vive **aprobar** cuando no quieres salir del harness: son comandos del com
 agente **sin crear mensaje del modelo**, y su resultado se pinta en la interfaz sin entrar en el historial
 del modelo. El registro de la sesión guarda cada ejecución.
 
+Cada operación tiene **un nombre por idioma** y solo está registrado el del idioma activo: los nombres de abajo
+son los del idioma `es`. Con `en` son los ingleses (`/skill-approve`, `/skill-proposals`, …). Se cambia con
+`/skill-compiler-language --es|--en` y el menú `/` cambia sin reiniciar; `DSH_LANG` manda sobre la preferencia
+guardada, y el idioma base es `en`.
+
 ```
 /skill-propuestas              qué espera tu aprobación y qué está activo, en este proyecto
 /skill-ver <id>                la propuesta entera (o la ya activa), con el veredicto de la puerta
