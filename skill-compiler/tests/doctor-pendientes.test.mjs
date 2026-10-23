@@ -78,4 +78,35 @@ describe('doctor · las filas de una propuesta pendiente', () => {
     assert.match(salida, new RegExp(`2 pendientes -> ${2 * ROW_VERBS.length} filas del menu`), salida);
     assert.equal(code, 0, salida);
   });
+
+  it('sin pendientes cierra en verde y cuenta cero filas', () => {
+    const arena = sandbox();
+    const { code, salida } = doctor(arena);
+    assert.match(salida, /0 pendientes -> 0 filas del menu/, salida);
+    assert.match(salida, new RegExp(`ofrece sus ${ROW_VERBS.length} verbos`), salida);
+    assert.doesNotMatch(salida, /falla al activarse/, salida);
+    assert.equal(code, 0, salida);
+  });
+
+  // La prueba del CONTRATO: los dos numeros que el diagnostico imprime (filas y verbos) se
+  // contrastan con lo que declara el artefacto, sin escribir ninguno a mano. Un literal en
+  // cualquiera de los dos lados la pone roja, aunque hoy coincida por casualidad.
+  it('el recuento que anuncia el diagnostico sale del contrato de verbos y cuadra consigo mismo', () => {
+    const arena = sandbox();
+    const grupo = { id: 'doctor-tres', motivo: 'Tres propuestas sembradas para contrastar el recuento con el contrato.', esperadas: 3 };
+    sembrar(arena, 'doctor-tres-a', 'Cuadrar la caja del dia contra el arqueo del turno anterior.', { group: grupo });
+    sembrar(arena, 'doctor-tres-b', 'Preparar el indice de materias de un manual largo sin perder enlaces.', { group: grupo });
+    sembrar(arena, 'doctor-tres-c', 'Revisar el contraste de una paleta antes de publicar el tema.', { group: grupo });
+
+    const { code, salida } = doctor(arena);
+    const filas = salida.match(/(\d+) pendientes -> (\d+) filas del menu/);
+    const verbos = salida.match(/ofrece sus (\d+) verbos/);
+    assert.ok(filas, `el diagnostico no anuncia las filas:\n${salida}`);
+    assert.ok(verbos, `el diagnostico no anuncia el numero de verbos:\n${salida}`);
+
+    assert.equal(Number(filas[1]), 3, salida);
+    assert.equal(Number(verbos[1]), ROW_VERBS.length, `anuncia ${verbos[1]} verbos y el contrato tiene ${ROW_VERBS.length}:\n${salida}`);
+    assert.equal(Number(filas[2]), Number(filas[1]) * Number(verbos[1]), `las filas no son pendientes x verbos:\n${salida}`);
+    assert.equal(code, 0, salida);
+  });
 });

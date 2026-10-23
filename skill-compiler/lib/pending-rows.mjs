@@ -36,7 +36,7 @@ import { pending, projectKey, scanTree } from './compiler.mjs';
 export const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
 
 /**
- * Los tres verbos, en el orden en que se usan (leer → decidir). `command` compone el nombre y
+ * Los verbos de una fila, en el orden en que se usan (leer → decidir). `command` compone el nombre y
  * `describe` la descripción que se lee en el menú.
  */
 export const ROW_VERBS = Object.freeze([
@@ -104,7 +104,7 @@ function uniqueName(base, taken) {
  * @param cwd - directorio de trabajo de la sesión; es el único origen válido del ámbito.
  * @param taken - nombres ya usados por otras filas del mismo registro (se comparte entre proyectos:
  *   el registro de comandos es global y un nombre repetido lanza al registrar).
- * @returns `[{ name, description, verb, id, key, project }]`, en el orden leer → activar → apartar.
+ * @returns `[{ name, description, verb, id, key, project }]`, en el orden leer → activar, publicar, apartar.
  */
 export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
   const key = projectKey(cwd);

@@ -63,4 +63,24 @@ describe('security · el almacen que todavia no existe y el que no se puede leer
     assert.match(salida, /ENOTDIR/, 'el motivo tiene que nombrar el error real');
     assert.doesNotMatch(salida, /sin bloqueos y con el diario integro/, 'no puede cerrar como si estuviera limpio');
   });
+  it('un projects/ vacio es un estado valido: cero proyectos y sin rojo', () => {
+    const a = arena();
+    mkdirSync(join(a.root, 'projects'), { recursive: true });
+    const { code, salida } = security(a);
+    assert.equal(code, 0, salida);
+    assert.match(salida, /0 skills revisadas en 0 proyecto\(s\)/, salida);
+    assert.doesNotMatch(salida, /no se pudo leer/, 'una carpeta vacia no es un fallo de lectura');
+  });
+
+  it('un estado del proyecto que es un FICHERO (proposed) sale en rojo con su motivo', () => {
+    const a = arena();
+    const proyecto = join(a.root, 'projects', 'arena-ilegible');
+    mkdirSync(proyecto, { recursive: true });
+    writeFileSync(join(proyecto, 'proposed'), 'esto no es una carpeta\n');
+    const { code, salida } = security(a);
+    assert.equal(code, 1, `un estado ilegible tiene que fallar:\n${salida}`);
+    assert.match(salida, /arena-ilegible\/proposed/, 'el motivo tiene que nombrar el estado');
+    assert.match(salida, /ENOTDIR/, 'el motivo tiene que nombrar el error real');
+    assert.doesNotMatch(salida, /sin bloqueos y con el diario integro/, salida);
+  });
 });
