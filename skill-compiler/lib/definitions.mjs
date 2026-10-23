@@ -187,15 +187,15 @@ const renderWithMarker = (value) => [{
 export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
   return {
     name: 'skill_propose',
-    description: 'Propose a reusable skill only with evidence you can point at: a contract discovered the hard way, a trap already paid for, an operational order, or an exact value you will need again. "It could be reused" is not evidence — nor is a solved query, restating AGENTS.md/docs, or narrating the session. Pass the id of an existing skill of this project to UPDATE it instead of creating one: the same id means a patch, and approving it moves the previous version to superseded/ (never deleted). The proposal is NOT active: it waits for human approval in this project. If this session learned SEVERAL separate things, propose them one by one (one id each) — do not merge them into a single skill; and if two of them are alike because they come from the same incident while being genuinely different skills, declare `group` on both with a concrete `motivo` so the likeness is reported instead of rejected.',
+    description: 'Propose a reusable skill only with evidence you can point at: a contract discovered the hard way, a trap already paid for, an operational order, or an exact value you will need again. "It could be reused" is not evidence - nor is a solved query, restating AGENTS.md/docs, or narrating the session. Pass the id of an existing skill of this project to UPDATE it instead of creating one: the same id means a patch, and approving it moves the previous version to superseded/ (never deleted). The proposal is NOT active: it waits for human approval in this project. If this session learned SEVERAL separate things, propose them one by one (one id each) - do not merge them into a single skill; and if two of them are alike because they come from the same incident while being genuinely different skills, declare `group` on both with a concrete `motivo` so the likeness is reported instead of rejected.',
     parameters: {
       id: { type: 'string', required: true, description: 'Unique kebab-case id of the skill, e.g. "measured-decision-check".' },
       description: { type: 'string', required: true, description: 'One line, 60-300 characters: what it automates and when it is triggered. This is what the model reads when choosing a skill, so it has to distinguish it from the others.' },
       whenToUse: { type: 'string', required: true, description: 'Required (at least 20 characters): the situation that should select this skill. It is the field the harness routes on.' },
-      body: { type: 'string', required: true, description: 'The procedure in markdown, at least 200 characters, with at least two "## " sections (one is accepted only for a short body). Distilled knowledge, not a task narrative: steps, contracts and traps already paid for. Heavy reference material does not go here — see `references`.' },
+      body: { type: 'string', required: true, description: 'The procedure in markdown, at least 200 characters, with at least two "## " sections (one is accepted only for a short body). Distilled knowledge, not a task narrative: steps, contracts and traps already paid for. Heavy reference material does not go here - see `references`.' },
       references: {
         type: 'array',
-        description: 'Optional: the heavy material that stays beside the skill instead of inside the body — a full contract list, a long table, a transcript you will consult once. Each item needs a `path` under references/ and its `content`; the body then links it (e.g. "el contrato completo vive en references/contratos.md"). The link is verified in both directions: a path the body names must exist, and a path you add is checked for escaping the skill folder. The body stays short and is paid on every load; the material is paid only when it is read.',
+        description: 'Optional: the heavy material that stays beside the skill instead of inside the body - a full contract list, a long table, a transcript you will consult once. Each item needs a `path` under references/ and its `content`; the body then links it (e.g. "the full contract lives in references/contracts.md"). The link is verified in both directions: a path the body names must exist, and a path you add is checked for escaping the skill folder. The body stays short and is paid on every load; the material is paid only when it is read.',
         items: {
           type: 'object',
           additionalProperties: false,
@@ -208,7 +208,7 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
       evidence: { type: 'array', description: 'Optional: workspace-relative paths of the files that prove it (a doc, a test, a report).', items: { type: 'string' } },
       revision: {
         type: 'object',
-        description: 'REQUIRED when the id already names a skill that is alive (approved, disabled or published): a patch changes a tool somebody uses, so it has to say why. A long text is not evidence — `measurement` needs a number or a command.',
+        description: 'REQUIRED when the id already names a skill that is alive (approved, disabled or published): a patch changes a tool somebody uses, so it has to say why. A long text is not evidence - `measurement` needs a number or a command.',
         additionalProperties: false,
         properties: {
           claim: { type: 'string', required: true, description: 'What the current version asserts (at least 20 characters).' },
@@ -221,7 +221,7 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
       tags: { type: 'array', description: 'Optional: a few words that help comparing it against existing skills. Identifiers, not prose: lowercase kebab-case ASCII (a tag with an accent is tolerated but reported).', items: { type: 'string' } },
       group: {
         type: 'object',
-        description: 'Optional, and ONLY when this session learns several things that belong together: declare them as one batch so the overlap veto does not block them. Two skills that are siblings of a group are not rejected for being alike — the likeness is reported instead — because the group states that they go together and why. It is a declaration, not a shortcut: `motivo` is required and must be concrete. Without a group the same likeness is rejected.',
+        description: 'Optional, and ONLY when this session learns several things that belong together: declare them as one batch so the overlap veto does not block them. Two skills that are siblings of a group are not rejected for being alike - the likeness is reported instead - because the group states that they go together and why. It is a declaration, not a shortcut: `motivo` is required and must be concrete. Without a group the same likeness is rejected.',
         additionalProperties: false,
         properties: {
           id: { type: 'string', required: true, description: 'Short kebab-case id shared by every proposal of the batch, e.g. "respaldos-antes-de-migrar".' },
@@ -253,14 +253,14 @@ export function skillPropose({ root = defaultRoot(), curated, catalog } = {}) {
           // después que nadie lo editó, y lo que se verifica byte a byte antes de dar la propuesta por hecha.
           references: { type: 'array', description: 'Heavy material written beside the skill, each with its size and hash as recorded. Empty when the skill carries none.', items: { type: 'object', additionalProperties: true, properties: { path: { type: 'string' }, bytes: { type: 'number' }, sha256: { type: 'string' } } } },
           links: { type: 'array', description: 'The references/ paths the body declares, in the order they appear.', items: { type: 'string' } },
-          files: { type: 'array', description: 'Every file written and verified inside the skill folder (SKILL.md, meta.json, references…).', items: { type: 'string' } },
+          files: { type: 'array', description: 'Every file written and verified inside the skill folder (SKILL.md, meta.json, references...).', items: { type: 'string' } },
           // Lo que sólo aparece cuando esto es un parche de algo vivo. Se declaran aquí por la misma razón
           // que los anteriores: con `additionalProperties: false`, devolver un campo sin declarar rechaza
           // el resultado entero y la propuesta —ya escrita— llega al modelo como un error.
           base: { type: 'object', additionalProperties: true, description: 'Only on a patch of a live skill: the state and content hash of the version it was built against. If that version moves, approving is refused.', properties: { state: { type: 'string' }, hash: { type: 'string' } } },
-          corregida: { type: 'object', additionalProperties: true, description: 'Only on a patch: the accepted revision — what the old version claimed, what contradicted it, how it was measured, what changes.', properties: { claim: { type: 'string' }, evidence: { type: 'string' }, measurement: { type: 'string' }, change: { type: 'string' }, removed: { type: 'string' } } },
+          corregida: { type: 'object', additionalProperties: true, description: 'Only on a patch: the accepted revision - what the old version claimed, what contradicted it, how it was measured, what changes.', properties: { claim: { type: 'string' }, evidence: { type: 'string' }, measurement: { type: 'string' }, change: { type: 'string' }, removed: { type: 'string' } } },
           evidenciaObservada: { type: 'boolean', description: 'True only when the revision evidence is a path that exists in the project. False means the evidence is a claim nobody has verified yet.' },
-          diff: { type: 'object', additionalProperties: true, description: 'Only on a patch: what the proposal adds and removes, in the body and in the reference material — the exact difference against the base version.' },
+          diff: { type: 'object', additionalProperties: true, description: 'Only on a patch: what the proposal adds and removes, in the body and in the reference material - the exact difference against the base version.' },
           autoApproved: { type: 'boolean', description: 'True when the session\'s auto-approve mode activated this proposal immediately; only present when that mode is on.' },
           conflicts: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, reason: { type: 'string' }, where: { type: 'string' } } } },
           relatedElsewhere: { type: 'array', items: { type: 'object', additionalProperties: true, properties: { id: { type: 'string' }, score: { type: 'number' }, where: { type: 'string' } } } },

@@ -1,12 +1,12 @@
 {
-  "generado": "2026-10-23T09:45:46.396Z",
+  "generado": "2026-10-23T09:58:18.884Z",
   "ficheros": {
     "lib/audit.mjs": 309,
     "lib/auto-approve.mjs": 170,
     "lib/auto-update.mjs": 287,
     "lib/commands.mjs": 757,
     "lib/compiler.mjs": 1767,
-    "lib/definitions.mjs": 273,
+    "lib/definitions.mjs": 263,
     "lib/lock.mjs": 21,
     "lib/pending-rows.mjs": 306,
     "lib/presentation.mjs": 158,

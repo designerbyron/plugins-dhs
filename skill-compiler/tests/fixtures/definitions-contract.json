@@ -1,7 +1,68 @@
 {
+  "_meta": {
+    "congelado": "2026-10-23",
+    "commit": "eb9bbb4",
+    "nota": "Manifiesto independiente. La parte estructural se fijo sobre el arbol ANTERIOR a la traduccion de las descripciones y no se regenera despues: el texto visible queda fuera a proposito, para que traducirlo no obligue a tocar la expectativa y un cambio de esquema no pueda esconderse tras un texto. El bloque `contrato` esta escrito a mano desde la especificacion (docs/ y el diseno); no se deriva del codigo.",
+    "idioma_texto_visible": "en",
+    "alfabeto_texto_visible": "ascii"
+  },
+  "superficie": {
+    "herramientas": [
+      "skill_propose",
+      "skill_review",
+      "skill_upstream_check",
+      "skill_vendor"
+    ],
+    "comandos": [
+      "skill-approve",
+      "skill-auto",
+      "skill-disable",
+      "skill-enable",
+      "skill-ownership",
+      "skill-ownership-dsh-only",
+      "skill-ownership-machine",
+      "skill-pending",
+      "skill-proposals",
+      "skill-publish",
+      "skill-reject",
+      "skill-retire",
+      "skill-retired",
+      "skill-scope",
+      "skill-show",
+      "skill-systems"
+    ],
+    "alias": {
+      "skill-ambito": "skill-scope",
+      "skill-aprobar": "skill-approve",
+      "skill-deshabilitar": "skill-disable",
+      "skill-eliminar": "skill-retire",
+      "skill-globalizar": "skill-publish",
+      "skill-habilitar": "skill-enable",
+      "skill-pendientes": "skill-pending",
+      "skill-propiedad": "skill-ownership",
+      "skill-propiedad-dsh-only": "skill-ownership-dsh-only",
+      "skill-propiedad-machine": "skill-ownership-machine",
+      "skill-propuestas": "skill-proposals",
+      "skill-rechazar": "skill-reject",
+      "skill-retiradas": "skill-retired",
+      "skill-sistemas": "skill-systems",
+      "skill-ver": "skill-show"
+    },
+    "proveedor": {
+      "name": "skill-compiler",
+      "rank": 150
+    },
+    "protocolo": {
+      "nombre_seccion": "skill-compiler:protocol",
+      "orden": 9000,
+      "tope_caracteres": 1200,
+      "presupuesto_trabajo": 950
+    }
+  },
   "tools": {
     "skill_propose": {
       "factory": "skillPropose",
+      "name": "skill_propose",
       "params": {
         "body": {
           "type": "string",
@@ -49,273 +110,462 @@
           "enum": null
         }
       },
-      "output": {
-        "schema": {
+      "params_arbol": {
+        "body": {
+          "type": "string",
+          "required": true,
+          "enum": null
+        },
+        "description": {
+          "type": "string",
+          "required": true,
+          "enum": null
+        },
+        "evidence": {
+          "type": "array",
+          "required": false,
+          "enum": null,
+          "items": {
+            "type": "string",
+            "required": false,
+            "enum": null
+          }
+        },
+        "group": {
           "type": "object",
+          "required": false,
+          "enum": null,
           "additionalProperties": false,
           "properties": {
-            "status": {
-              "type": "string",
-              "required": true,
-              "description": "proposed | conflict | invalid | no-project"
-            },
-            "summary": {
-              "type": "string",
-              "required": true
+            "esperadas": {
+              "type": "number",
+              "required": false,
+              "enum": null
             },
             "id": {
-              "type": "string"
+              "type": "string",
+              "required": true,
+              "enum": null
             },
-            "project": {
-              "type": "string"
-            },
-            "projectKey": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "updatesProposal": {
-              "type": "boolean",
-              "description": "True when this proposal patches a version that already existed instead of creating a new one."
-            },
-            "updatesApproved": {
-              "type": "boolean",
-              "description": "True when approving this proposal would replace an already approved skill."
-            },
-            "updatesDisabled": {
-              "type": "boolean",
-              "description": "True when approving this proposal would replace a skill that the human had switched off."
-            },
-            "updatesPublished": {
-              "type": "boolean",
-              "description": "True when this proposal patches a skill this plugin published for all projects, instead of creating a new one."
-            },
-            "references": {
-              "type": "array",
-              "description": "Heavy material written beside the skill, each with its size and hash as recorded. Empty when the skill carries none.",
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "path": {
-                    "type": "string"
-                  },
-                  "bytes": {
-                    "type": "number"
-                  },
-                  "sha256": {
-                    "type": "string"
-                  }
-                }
+            "motivo": {
+              "type": "string",
+              "required": true,
+              "enum": null
+            }
+          }
+        },
+        "id": {
+          "type": "string",
+          "required": true,
+          "enum": null
+        },
+        "references": {
+          "type": "array",
+          "required": false,
+          "enum": null,
+          "items": {
+            "type": "object",
+            "required": false,
+            "enum": null,
+            "additionalProperties": false,
+            "properties": {
+              "content": {
+                "type": "string",
+                "required": true,
+                "enum": null
+              },
+              "path": {
+                "type": "string",
+                "required": true,
+                "enum": null
               }
+            }
+          }
+        },
+        "revision": {
+          "type": "object",
+          "required": false,
+          "enum": null,
+          "additionalProperties": false,
+          "properties": {
+            "change": {
+              "type": "string",
+              "required": true,
+              "enum": null
             },
-            "links": {
-              "type": "array",
-              "description": "The references/ paths the body declares, in the order they appear.",
-              "items": {
+            "claim": {
+              "type": "string",
+              "required": true,
+              "enum": null
+            },
+            "evidence": {
+              "type": "string",
+              "required": true,
+              "enum": null
+            },
+            "measurement": {
+              "type": "string",
+              "required": true,
+              "enum": null
+            },
+            "removed": {
+              "type": "string",
+              "required": false,
+              "enum": null
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "required": false,
+          "enum": null,
+          "items": {
+            "type": "string",
+            "required": false,
+            "enum": null
+          }
+        },
+        "whenToUse": {
+          "type": "string",
+          "required": true,
+          "enum": null
+        }
+      },
+      "output_estructura": {
+        "additionalProperties": false,
+        "properties": {
+          "autoApproved": {
+            "type": "boolean"
+          },
+          "base": {
+            "additionalProperties": true,
+            "properties": {
+              "hash": {
+                "type": "string"
+              },
+              "state": {
                 "type": "string"
               }
             },
-            "files": {
-              "type": "array",
-              "description": "Every file written and verified inside the skill folder (SKILL.md, meta.json, references…).",
-              "items": {
-                "type": "string"
-              }
-            },
-            "base": {
-              "type": "object",
+            "type": "object"
+          },
+          "conflicts": {
+            "items": {
               "additionalProperties": true,
-              "description": "Only on a patch of a live skill: the state and content hash of the version it was built against. If that version moves, approving is refused.",
-              "properties": {
-                "state": {
-                  "type": "string"
-                },
-                "hash": {
-                  "type": "string"
-                }
-              }
-            },
-            "corregida": {
-              "type": "object",
-              "additionalProperties": true,
-              "description": "Only on a patch: the accepted revision — what the old version claimed, what contradicted it, how it was measured, what changes.",
-              "properties": {
-                "claim": {
-                  "type": "string"
-                },
-                "evidence": {
-                  "type": "string"
-                },
-                "measurement": {
-                  "type": "string"
-                },
-                "change": {
-                  "type": "string"
-                },
-                "removed": {
-                  "type": "string"
-                }
-              }
-            },
-            "evidenciaObservada": {
-              "type": "boolean",
-              "description": "True only when the revision evidence is a path that exists in the project. False means the evidence is a claim nobody has verified yet."
-            },
-            "diff": {
-              "type": "object",
-              "additionalProperties": true,
-              "description": "Only on a patch: what the proposal adds and removes, in the body and in the reference material — the exact difference against the base version."
-            },
-            "autoApproved": {
-              "type": "boolean",
-              "description": "True when the session's auto-approve mode activated this proposal immediately; only present when that mode is on."
-            },
-            "conflicts": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "score": {
-                    "type": "number"
-                  },
-                  "reason": {
-                    "type": "string"
-                  },
-                  "where": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            "relatedElsewhere": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "score": {
-                    "type": "number"
-                  },
-                  "where": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            "group": {
-              "type": "object",
-              "additionalProperties": true,
-              "description": "The batch this proposal belongs to (only when one was declared), with its reason.",
               "properties": {
                 "id": {
                   "type": "string"
                 },
-                "motivo": {
+                "reason": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "where": {
                   "type": "string"
                 }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "corregida": {
+            "additionalProperties": true,
+            "properties": {
+              "change": {
+                "type": "string"
+              },
+              "claim": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "string"
+              },
+              "measurement": {
+                "type": "string"
+              },
+              "removed": {
+                "type": "string"
               }
             },
-            "siblings": {
-              "type": "array",
-              "description": "Other proposals of the same batch that this one resembles. Reported, not rejected: the batch says they go together.",
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "score": {
-                    "type": "number"
-                  },
-                  "where": {
-                    "type": "string"
-                  }
+            "type": "object"
+          },
+          "diff": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidenciaObservada": {
+            "type": "boolean"
+          },
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "group": {
+            "additionalProperties": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "motivo": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "links": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "path": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "projectKey": {
+            "type": "string"
+          },
+          "references": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "bytes": {
+                  "type": "number"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
                 }
-              }
+              },
+              "type": "object"
             },
-            "warnings": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+            "type": "array"
+          },
+          "relatedElsewhere": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "where": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             },
-            "errors": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
+            "type": "array"
+          },
+          "siblings": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "where": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "required": true,
+            "type": "string"
+          },
+          "summary": {
+            "required": true,
+            "type": "string"
+          },
+          "updatesApproved": {
+            "type": "boolean"
+          },
+          "updatesDisabled": {
+            "type": "boolean"
+          },
+          "updatesProposal": {
+            "type": "boolean"
+          },
+          "updatesPublished": {
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
-        }
+        },
+        "type": "object"
+      },
+      "texto_obligatorio": [
+        "description",
+        "output.schema.properties.autoApproved.description",
+        "output.schema.properties.base.description",
+        "output.schema.properties.corregida.description",
+        "output.schema.properties.diff.description",
+        "output.schema.properties.evidenciaObservada.description",
+        "output.schema.properties.files.description",
+        "output.schema.properties.group.description",
+        "output.schema.properties.links.description",
+        "output.schema.properties.references.description",
+        "output.schema.properties.siblings.description",
+        "output.schema.properties.status.description",
+        "output.schema.properties.updatesApproved.description",
+        "output.schema.properties.updatesDisabled.description",
+        "output.schema.properties.updatesProposal.description",
+        "output.schema.properties.updatesPublished.description",
+        "parameters.body.description",
+        "parameters.description.description",
+        "parameters.evidence.description",
+        "parameters.group.description",
+        "parameters.group.properties.esperadas.description",
+        "parameters.group.properties.id.description",
+        "parameters.group.properties.motivo.description",
+        "parameters.id.description",
+        "parameters.references.description",
+        "parameters.references.items.properties.content.description",
+        "parameters.references.items.properties.path.description",
+        "parameters.revision.description",
+        "parameters.revision.properties.change.description",
+        "parameters.revision.properties.claim.description",
+        "parameters.revision.properties.evidence.description",
+        "parameters.revision.properties.measurement.description",
+        "parameters.revision.properties.removed.description",
+        "parameters.tags.description",
+        "parameters.whenToUse.description"
+      ],
+      "contrato": {
+        "permisos": "escribe",
+        "solo_lectura": false,
+        "aprueba": false,
+        "atajo_de_seguridad": false,
+        "confirmacion": "humana: la propuesta no se activa sola; el modo auto de la sesion delega la confirmacion, nunca la puerta",
+        "status_permitidos": [
+          "proposed",
+          "conflict",
+          "invalid",
+          "no-project"
+        ],
+        "efectos": [
+          "escribe SKILL.md, meta.json y el material bajo references/ en proposed/ del proyecto",
+          "no activa nada: la propuesta espera decision humana",
+          "solo anota en journal.jsonl si el modo de aprobacion automatica esta activo"
+        ],
+        "restricciones": [
+          "id kebab-case ASCII",
+          "description de 60 a 300 caracteres",
+          "whenToUse de al menos 20 caracteres",
+          "body de al menos 200 caracteres con dos secciones ##",
+          "references solo bajo references/, sin rutas absolutas ni ..",
+          "revision obligatoria cuando el id ya nombra una skill viva",
+          "group solo declara lote; no salta la puerta"
+        ],
+        "seguridad": [
+          "la puerta de validacion se aplica siempre, tambien con el modo automatico",
+          "ningun parametro puede saltarse la puerta ni aprobar"
+        ]
       }
     },
     "skill_review": {
       "factory": "skillReview",
+      "name": "skill_review",
       "params": {},
-      "output": {
-        "schema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "project": {
-              "type": "string"
-            },
-            "projectKey": {
-              "type": "string",
-              "required": true
-            },
-            "pending": {
-              "type": "array",
-              "required": true,
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  }
+      "params_arbol": {},
+      "output_estructura": {
+        "additionalProperties": false,
+        "properties": {
+          "approved": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "id": {
+                  "type": "string"
                 }
-              }
+              },
+              "type": "object"
             },
-            "approved": {
-              "type": "array",
-              "required": true,
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  }
+            "required": true,
+            "type": "array"
+          },
+          "pending": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "id": {
+                  "type": "string"
                 }
-              }
+              },
+              "type": "object"
             },
-            "summary": {
-              "type": "string",
-              "required": true
-            }
+            "required": true,
+            "type": "array"
+          },
+          "project": {
+            "type": "string"
+          },
+          "projectKey": {
+            "required": true,
+            "type": "string"
+          },
+          "summary": {
+            "required": true,
+            "type": "string"
           }
-        }
+        },
+        "type": "object"
+      },
+      "texto_obligatorio": [
+        "description"
+      ],
+      "contrato": {
+        "permisos": "lee",
+        "solo_lectura": true,
+        "aprueba": false,
+        "atajo_de_seguridad": false,
+        "confirmacion": "ninguna: no muta nada",
+        "status_permitidos": [],
+        "efectos": [
+          "no escribe nada en el almacen",
+          "lista pendientes y aprobadas del proyecto de la sesion"
+        ],
+        "restricciones": [
+          "sin parametros",
+          "el ambito sale del cwd de la sesion, no del modelo"
+        ],
+        "seguridad": [
+          "no aprueba ni publica: aprobar no es una herramienta"
+        ]
       }
     },
     "skill_vendor": {
       "factory": "skillVendor",
+      "name": "skill_vendor",
       "params": {
         "description": {
           "type": "string",
@@ -348,97 +598,173 @@
           "enum": null
         }
       },
-      "output": {
-        "schema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "status": {
-              "type": "string",
-              "required": true,
-              "description": "proposed | blocked | conflict | invalid | no-project | bad-url | fetch-failed | needs-choice"
-            },
-            "summary": {
-              "type": "string",
-              "required": true
-            },
-            "id": {
-              "type": "string"
-            },
-            "projectKey": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "upstreamUrl": {
-              "type": "string"
-            },
-            "upstreamSha256": {
-              "type": "string"
-            },
-            "updatesProposal": {
-              "type": "boolean",
-              "description": "True when this vendoring patched a version that already existed instead of creating a new one."
-            },
-            "updatesApproved": {
-              "type": "boolean",
-              "description": "True when approving it would replace an already approved skill."
-            },
-            "updatesDisabled": {
-              "type": "boolean",
-              "description": "True when approving it would replace a skill that the human had switched off."
-            },
-            "updatesPublished": {
-              "type": "boolean",
-              "description": "True when this vendoring patches a skill this plugin published for all projects, instead of creating a new one."
-            },
-            "autoApproved": {
-              "type": "boolean",
-              "description": "True when the session's auto-approve mode activated this result immediately; only present when that mode is on."
-            },
-            "findings": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "file": {
-                    "type": "string"
-                  },
-                  "line": {
-                    "type": "integer"
-                  },
-                  "label": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            "dirs": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "warnings": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "errors": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
+      "params_arbol": {
+        "description": {
+          "type": "string",
+          "required": false,
+          "enum": null
+        },
+        "id": {
+          "type": "string",
+          "required": false,
+          "enum": null
+        },
+        "localNote": {
+          "type": "string",
+          "required": false,
+          "enum": null
+        },
+        "tags": {
+          "type": "array",
+          "required": false,
+          "enum": null,
+          "items": {
+            "type": "string",
+            "required": false,
+            "enum": null
           }
+        },
+        "url": {
+          "type": "string",
+          "required": true,
+          "enum": null
+        },
+        "whenToUse": {
+          "type": "string",
+          "required": false,
+          "enum": null
         }
+      },
+      "output_estructura": {
+        "additionalProperties": false,
+        "properties": {
+          "autoApproved": {
+            "type": "boolean"
+          },
+          "dirs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "projectKey": {
+            "type": "string"
+          },
+          "status": {
+            "required": true,
+            "type": "string"
+          },
+          "summary": {
+            "required": true,
+            "type": "string"
+          },
+          "updatesApproved": {
+            "type": "boolean"
+          },
+          "updatesDisabled": {
+            "type": "boolean"
+          },
+          "updatesProposal": {
+            "type": "boolean"
+          },
+          "updatesPublished": {
+            "type": "boolean"
+          },
+          "upstreamSha256": {
+            "type": "string"
+          },
+          "upstreamUrl": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "texto_obligatorio": [
+        "description",
+        "output.schema.properties.autoApproved.description",
+        "output.schema.properties.status.description",
+        "output.schema.properties.updatesApproved.description",
+        "output.schema.properties.updatesDisabled.description",
+        "output.schema.properties.updatesProposal.description",
+        "output.schema.properties.updatesPublished.description",
+        "parameters.description.description",
+        "parameters.id.description",
+        "parameters.localNote.description",
+        "parameters.tags.description",
+        "parameters.url.description",
+        "parameters.whenToUse.description"
+      ],
+      "contrato": {
+        "permisos": "escribe",
+        "solo_lectura": false,
+        "aprueba": false,
+        "atajo_de_seguridad": false,
+        "confirmacion": "humana al aprobar; vendorizar no instala ni activa nada del origen",
+        "status_permitidos": [
+          "proposed",
+          "blocked",
+          "conflict",
+          "invalid",
+          "no-project",
+          "bad-url",
+          "fetch-failed",
+          "needs-choice"
+        ],
+        "efectos": [
+          "descarga el origen por red con el fetch del proceso o el inyectado",
+          "guarda el original verbatim en upstream/ con su sha256",
+          "registra procedencia en provenance.json",
+          "propone una version adaptada; no activa nada"
+        ],
+        "restricciones": [
+          "url http(s) a un .md, a un blob/tree de GitHub o a la raiz de un repositorio",
+          "no se vendoriza un origen sin frontmatter utilizable"
+        ],
+        "seguridad": [
+          "bloquea un origen con secretos u ordenes dirigidas al agente",
+          "no existe parametro para saltarse el bloqueo: rodearlo es un acto humano por CLI"
+        ]
       }
     },
     "skill_upstream_check": {
       "factory": "skillUpstreamCheck",
+      "name": "skill_upstream_check",
       "params": {
         "id": {
           "type": "string",
@@ -446,36 +772,64 @@
           "enum": null
         }
       },
-      "output": {
-        "schema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "status": {
-              "type": "string",
-              "required": true
-            },
-            "summary": {
-              "type": "string",
-              "required": true
-            },
-            "changed": {
-              "type": "boolean"
-            },
-            "storedSha256": {
-              "type": "string"
-            },
-            "upstreamSha256": {
-              "type": "string"
-            },
-            "url": {
-              "type": "string"
-            },
-            "ref": {
-              "type": "string"
-            }
-          }
+      "params_arbol": {
+        "id": {
+          "type": "string",
+          "required": true,
+          "enum": null
         }
+      },
+      "output_estructura": {
+        "additionalProperties": false,
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "status": {
+            "required": true,
+            "type": "string"
+          },
+          "storedSha256": {
+            "type": "string"
+          },
+          "summary": {
+            "required": true,
+            "type": "string"
+          },
+          "upstreamSha256": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "texto_obligatorio": [
+        "description",
+        "parameters.id.description"
+      ],
+      "contrato": {
+        "permisos": "lee-red",
+        "solo_lectura": true,
+        "aprueba": false,
+        "atajo_de_seguridad": false,
+        "confirmacion": "ninguna: no muta nada",
+        "status_permitidos": [],
+        "efectos": [
+          "consulta el origen por red con el fetch del proceso o el inyectado",
+          "no escribe en el almacen",
+          "no toca la version local ya adaptada"
+        ],
+        "restricciones": [
+          "id de una skill del proyecto que tenga procedencia de origen"
+        ],
+        "seguridad": [
+          "no sobrescribe la version local: la decision de re-vendorizar es humana"
+        ]
       }
     }
   }
