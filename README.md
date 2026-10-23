@@ -12,7 +12,7 @@ absoluta** con el gestor de plugins del harness.
 
 | Plugin | Qué hace | Estado |
 |---|---|---|
-| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con **ámbito** —de un proyecto o de todos, lo eliges tú al aprobar—; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Estable · v4.0.0 · 769 pruebas en verde |
+| [`LifeCode Skill-Compiler`](skill-compiler/README.md) | Aprendizaje progresivo: convierte el conocimiento reutilizable de una tarea en una **skill propuesta**, con **ámbito** —de un proyecto o de todos, lo eliges tú al aprobar—; y vendoriza skills de repositorios ajenos como **nuestra versión**, con procedencia. Se decide **dentro** de la sesión: comandos, una fila por pendiente en el menú `/` y tarjetas de resultado que se pueden **cerrar**. Con feedback visual en la interfaz: engranaje mientras analiza, y aviso de skill **nueva** o **actualizada**. | Estable · v4.0.1 · 777 pruebas en verde |
 
 ## Por qué está en `htdocs`
 
@@ -117,14 +117,14 @@ los cambios.
 Es la misma regla que aplica el propio plugin con las skills que vendoriza: guarda de dónde vinieron, con
 su hash y su fecha, para que nadie tenga que creerse nada de memoria.
 
-## Estado: versión estable actual (**4.0.0**)
+## Estado: versión estable actual (**4.0.1**)
 
-La estable hoy es la **4.0.0** (etiqueta `v4.0.0`, release publicada). «Estable» no es un adjetivo: son
+La estable hoy es la **4.0.1** (etiqueta `v4.0.1`, release publicada). «Estable» no es un adjetivo: son
 criterios y un compromiso.
 
 **Lo que lo sostiene**
 
-- **769 pruebas en verde** en **190 suites**, con la suite **hermética** que mide la huella del almacén real
+- **777 pruebas en verde** en **192 suites**, con la suite **hermética** que mide la huella del almacén real
   antes y después, y con las puertas de **i18n** y **ASCII** colgadas de `npm test` (`pretest`): la suite no
   corre una sola prueba con una puerta en rojo.
 - Los contratos se comprueban contra los **paquetes reales** del harness (registro de skills, de comandos y de

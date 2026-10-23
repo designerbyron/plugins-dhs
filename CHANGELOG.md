@@ -4,6 +4,56 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [4.0.1] — 2026-10-23 · parche
+
+**Dos rojos silenciosos del diagnóstico, y los dos son de la misma familia: una cifra escrita a mano y un
+`catch` que convierte «no pude leer» en «no hay nada».** No añade capacidad —ni prompt, ni esquemas, ni formato
+del almacén—, así que es `parche` y no `menor`.
+
+### Corregido — `doctor` se ponía rojo con cualquier pendiente (G1)
+
+- **Causa.** `bin/skill-compiler.mjs` daba el menú por bueno sólo si `filas === pendientes * 3`: un recuento
+  clavado de cuando los verbos eran tres. `ROW_VERBS` (`lib/pending-rows.mjs`) tiene **cuatro** desde que
+  publicar es una decisión propia —`show`, `approve`, `publish`, `reject`—, así que con UNA propuesta pendiente
+  el diagnóstico se contradecía en dos líneas seguidas («1 pendientes -> 4 filas del menu» y acto seguido «cada
+  pendiente ofrece sus tres verbos») y cerraba con «1 problema(s): con esto el plugin falla al activarse», exit
+  1. La puerta de aceptación se ponía roja sobre un almacén sano en cuanto había algo que decidir, que es el
+  estado normal del plugin.
+- **Arreglo.** El esperado se **deriva** de `ROW_VERBS.length` —la lista que compone las filas, no una copia—,
+  y el texto `cli.doctor.rows-verbs` toma `{n}` en los dos idiomas y nombra los cuatro verbos. El comentario de
+  `ROW_VERBS` decía «los tres verbos» con cuatro en la lista, y se corrige ahí: un comentario que miente sobre
+  su propio artefacto es la causa escrita al lado de la definición.
+
+### Corregido — `security` salía en verde con un almacén que no pudo leer (G2)
+
+- **Causa.** Los `catch { proyectos = [] }` y `catch { continue }` de `security` trataban **cualquier** error de
+  lectura como «0 proyectos»: un `projects` que existe con otra forma (un fichero, `ENOTDIR`) o una carpeta sin
+  permiso se presentaban como «0 skills revisadas · bloqueos: 0 · avisos: 0 · diarios: cadena valida · sin
+  bloqueos y con el diario integro», con **exit 0**. Un lector que devuelve cero por un `catch` no distingue
+  «no hay» de «no pude leer», que es exactamente lo que la regla del repositorio prohíbe.
+- **Arreglo.** `ENOENT` sigue siendo «todavía no hay» (almacén recién instalado: válido, sin línea y sin rojo);
+  `ENOTDIR`/`EACCES` en `projects/` produce la línea de lectura fallida con **ruta y código**
+  (`cli.doctor.security-unreadable`, que ya existía en los dos idiomas, así que la paridad sigue en 566 claves)
+  y **exit 1**; y un estado del proyecto que existe y no se puede leer entra como problema del diario en lugar
+  de desaparecer del recuento.
+
+### Medido
+
+- **Suite: 777 pruebas en 192 suites, 0 fallos** (773 → 777 con este parche; +4 casos, contados por el delta
+  del recuento y no por la existencia de los ficheros). Hermética en verde, con la huella del almacén real
+  idéntica antes y después.
+- **Cinco arenas por el binario**, con `stdio` no-tty y el exit real de cada una: sin `projects/` → 0;
+  `projects/` vacío → 0; `projects` como fichero → **1** (`ENOTDIR`); `projects/<clave>/proposed` como fichero
+  → **1**; almacén sembrado con una pendiente → `security` 0 (1 skill, 0 bloqueos, cadena válida), `audit` 0
+  (1 PASS, 0 WARN, 0 ERROR) y `doctor` 0 (1 pendiente → 4 filas y «cada pendiente ofrece sus 4 verbos», donde
+  antes cerraba en «1 problema(s)»).
+- **Prueba del arreglo, no de la intención:** 6 de los 8 casos de los dos ficheros nuevos se ponen **rojos** al
+  reintroducir los dos defectos en una copia temporal, y verdes en la rama; los 2 que siguen verdes son los
+  estados legítimos (almacén ausente y `projects/` vacío).
+- Gates obligatorios en verde: I18N **566 claves por idioma · 566 · 15 alias**; ASCII **7.579** caracteres
+  heredados con tope 7.580 y ninguno nuevo. Sin cambio de contrato: el prompt, los esquemas y el formato del
+  almacén siguen exactamente como en la 4.0.0.
+
 ## [4.0.0] — 2026-10-23 · release
 
 **El plugin habla español e inglés, el contrato de lo que ve el modelo queda congelado y las puertas dejan de

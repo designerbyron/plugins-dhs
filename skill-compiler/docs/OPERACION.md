@@ -561,7 +561,8 @@ volviendo a ejecutar `repair`.
 Qué garantiza cada puerta: `check` valida la propuesta contra la puerta de calidad; `approve` verifica la
 **huella del contenido** antes y después de mover; `promote` exige además las nueve pruebas y su guarda de
 tamaño; `audit` mide el almacén (sin tocar nada); `security` revisa ids, contenido, árboles y la cadena del
-diario; `doctor` comprueba dependencias, comandos y propiedad. Preparar una propuesta no la activa; aprobarla la
+diario y **distingue «no hay» de «no pude leer»**: un almacén que aún no existe sale en verde, y uno que no
+se puede leer sale con el error real y **exit 1**, nunca como «0 revisadas»; `doctor` comprueba dependencias, comandos y propiedad. Preparar una propuesta no la activa; aprobarla la
 activa en su ámbito; publicarla la pone en la biblioteca compartida; y `--preserve-state` la deja apagada.
 
 ### Decidir desde la tarjeta: avisos y tarjetas desactualizadas
