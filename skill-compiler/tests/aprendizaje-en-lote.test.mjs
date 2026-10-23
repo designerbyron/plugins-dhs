@@ -460,7 +460,7 @@ describe('el CLI: un lote por la superficie que usa una persona', () => {
     lotePropuesto(arena);
     const r = cli(arena, 'approve', '--grupo', GRUPO.id, '--project-key', KEY);
     assert.equal(r.code, 0, r.out);
-    assert.match(r.out, /Aprobadas las 2 propuestas del lote «certificados-y-claves»/);
+    assert.match(r.out, /Aprobadas las 2 propuestas del lote "certificados-y-claves"/);
     for (const id of ['renovar-certificados-tls', 'rotar-las-claves-de-firma']) {
       assert.ok(existsSync(join(arena.root, 'projects', KEY, 'approved', id)), `${id} tenía que quedar aprobada`);
     }

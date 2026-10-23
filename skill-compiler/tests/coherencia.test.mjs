@@ -36,13 +36,18 @@ describe('la versión, la ayuda y la documentación dicen lo mismo que el códig
 
   it('cada comando implementado está en la ayuda, y cada comando de la ayuda existe', () => {
     const bin = leer('bin', 'skill-compiler.mjs');
-    const ayuda = bin.split('*/')[0];
+    // La ayuda vive en la tabla `AYUDA` (sintaxis + clave de traduccion) y la pinta `usage()`. Antes vivia en
+    // el comentario de cabecera; el contrato es el mismo: ni un comando de mas en la ayuda, ni uno de menos.
+    const desde = bin.indexOf('const AYUDA = [');
+    assert.ok(desde > 0, 'la ayuda tiene que ser una tabla, no un comentario');
+    const tabla = bin.slice(desde, bin.indexOf('];', desde));
+    const documentados = [...tabla.matchAll(/^\s*\['([^']+)',\s*'cli\.help\.[a-z0-9-]+'\],?$/gm)].map((m) => m[1].split(/[ |\[]/)[0]);
     const implementados = [...bin.matchAll(/^\s*case '([a-z]+)':/gm)].map((m) => m[1]);
     assert.ok(implementados.length >= 15, `se esperaban los comandos del CLI, y se leyeron ${implementados.length}`);
+    assert.ok(documentados.length >= implementados.length, `la ayuda se quedo corta: ${documentados.length} de ${implementados.length}`);
     for (const comando of implementados) {
-      assert.match(ayuda, new RegExp(`skill-compiler\\.mjs ${comando}\\b`), `el comando «${comando}» está implementado y no aparece en la ayuda`);
+      assert.ok(documentados.includes(comando), `el comando «${comando}» está implementado y no aparece en la ayuda`);
     }
-    const documentados = [...ayuda.matchAll(/skill-compiler\.mjs ([a-z]+)\b/g)].map((m) => m[1]);
     for (const comando of new Set(documentados)) {
       assert.ok(implementados.includes(comando), `la ayuda promete «${comando}», que no está implementado`);
     }

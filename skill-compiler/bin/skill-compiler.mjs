@@ -1,63 +1,18 @@
 #!/usr/bin/env node
 /**
- * skill-compiler — CLI humana del compilador de conocimiento.
+ * skill-compiler - CLI humana del compilador de conocimiento.
  *
- * Aquí vive **aprobar**, y a propósito: aprobar no es una herramienta del modelo. Si lo fuera, el
- * propio modelo podría auto-aprobarse su propuesta y la revisión humana sería decorativa. El modelo
- * propone; esta CLI decide.
+ * Aqui vive **aprobar**, y a proposito: aprobar no es una herramienta del modelo. Si lo fuera, el propio
+ * modelo podria auto-aprobarse su propuesta y la revision humana seria decorativa. El modelo propone; esta
+ * CLI decide.
  *
- * Comparte implementación con el plugin (`lib/compiler.mjs`), así que las reglas no pueden divergir
- * entre lo que el modelo puede proponer y lo que tú puedes aprobar.
+ * Comparte implementacion con el plugin (`lib/compiler.mjs`), asi que las reglas no pueden divergir entre lo
+ * que el modelo puede proponer y lo que tu puedes aprobar.
  *
- *   /skill-pending                                    # los ids que esperan decisión, en una línea
- *   node bin/skill-compiler.mjs lang [en|es]           # idioma del plugin (sin argumento: efectivo y fuente)
- *   node bin/skill-compiler.mjs where                     # qué ámbito tiene este directorio
- *   node bin/skill-compiler.mjs list                      # qué hay propuesto y aprobado
- *   node bin/skill-compiler.mjs show <id>                 # leer una propuesta entera
- *   node bin/skill-compiler.mjs check [<id>]              # puerta: valida antes de aprobar
- *   node bin/skill-compiler.mjs approve <id>              # activar en ESTE proyecto (exige que `check` pase)
- *   node bin/skill-compiler.mjs approve <id> --global     # activar para TODOS tus proyectos
- *   node bin/skill-compiler.mjs scope <id> --local|--global  # cambiar de ámbito una ya aprobada
- *   node bin/skill-compiler.mjs active                  # qué se está sirviendo de verdad en este directorio
- *   node bin/skill-compiler.mjs reject <id>               # apartar sin borrar
- *   node bin/skill-compiler.mjs disable <id>              # apagar: reversible, se conserva entera
- *   node bin/skill-compiler.mjs enable <id>               # volver a encender
- *   node bin/skill-compiler.mjs delete <id> [--yes]       # RETIRAR: mueve a un respaldo fechado (no borra)
- *   node bin/skill-compiler.mjs retired                   # qué está apagado y qué se retiró
- *   node bin/skill-compiler.mjs restore <id>              # recuperar del respaldo
- *   node bin/skill-compiler.mjs vendor <url> [--id X] [--note "..."]
- *                                                         # nuestra versión de una skill externa
- *   node bin/skill-compiler.mjs upstream <id>             # ¿se movió el origen?
- *   node bin/skill-compiler.mjs provenance <id>           # procedencia guardada, entera
- *   node bin/skill-compiler.mjs ownership                 # quién manda en la creación de skills de este puesto
- *   node bin/skill-compiler.mjs ownership dsh-only|machine  # declararlo (sin respuesta, se pregunta)
- *   node bin/skill-compiler.mjs systems                   # los sistemas del puesto y los ids que chocan
- *   node bin/skill-compiler.mjs security                # la capa: ids, contenido, árboles y cadena del diario
- *   node bin/skill-compiler.mjs auto [<id>]              # ¿puede actualizarse sola? cada medida con su número
- *   node bin/skill-compiler.mjs doctor                    # ¿están las dependencias en su sitio?
- *   node bin/skill-compiler.mjs audit [--json] [--estado X] [--todo]
- *                                                       # audita TODO el almacén (solo lectura)
- *   node bin/skill-compiler.mjs repair <id>               # PREPARA la corrección de una skill viva (no activa)
- *   node bin/skill-compiler.mjs promote <id> [--nivel 1,2] [--dry]
- *                                                       # activa una corrección con pruebas; sin --nivel no activa nada
- *   node bin/skill-compiler.mjs history [<id>] [--grupo X]  # qué se promocionó, con qué pruebas y por qué
- *                                                       # `--grupo` filtra por lote
- *   node bin/skill-compiler.mjs check   --grupo <lote>
- *   node bin/skill-compiler.mjs approve --grupo <lote>
- *                                                       # un lote: varias propuestas que van juntas
- *                                                       # (aprobarlo es entero o nada; cada una pasa su puerta)
- *   node bin/skill-compiler.mjs review [--port N]         # página local para aprobar y rechazar
- *
- *   node bin/skill-compiler.mjs approve <id> --preserve-state   # corregir una APAGADA sin encenderla
- *   node bin/skill-compiler.mjs repair <id> && approve <id> --global
- *                                                         # corregir una GLOBAL: base published, se republica
- *
- * Opciones: `--project-key <clave>` para actuar sobre otro proyecto, `--preserve-state` para devolver la
- * corrección al estado apagado del que salió, `--force` para aprobar aunque
- * `check` avise (nunca si `check` falla), `--yes` para confirmar una retirada, `--grupo <lote>` para
- * mirar o decidir las propuestas de un lote como lo que son.
- *
- * Exit: 0 correcto · 1 problema (check en rojo, aprobación rechazada, vendorizado bloqueado) · 2 uso.
+ * La ayuda NO se escribe aqui: vive en `lib/i18n` (claves `cli.usage.*` y `cli.help.*`) y la pinta `usage()`.
+ * Un texto copiado en un comentario se queda obsoleto sin que nadie lo note; la tabla `AYUDA` de mas abajo es
+ * la que se imprime, y la prueba de coherencia la compara con los `case` de este fichero: ni un comando de
+ * mas en la ayuda, ni uno de menos.
  */
 import { clavesFaltantes, resolveLang, setLang, t as tr } from '../lib/i18n/index.mjs';
 import { existsSync, readFileSync } from 'node:fs';
@@ -111,13 +66,57 @@ for (let i = 1; i < argv.length; i++) {
   // puerta— es poder mirarlas y decidirlas como lo que son.
   if (arg === '--grupo') { flags.grupo = argv[++i]; continue; }
   if (arg === '--dry') { flags.dry = true; continue; }
-  if (arg.startsWith('--')) { process.stderr.write(`Opción desconocida: ${arg}\n`); process.exit(2); }
+  if (arg.startsWith('--')) { process.stderr.write(`${tr('cli.unknown-option', { option: arg })}\n`); process.exit(2); }
   positional.push(arg);
 }
 const root = defaultRoot();
 
+/**
+ * La ayuda, en una tabla: la **sintaxis** es un dato (nombres de comando y opciones, nunca se traduce) y la
+ * **descripcion** es prosa, en el catalogo. Asi la ayuda se puede leer en los dos idiomas sin duplicar la
+ * lista, y `tests/coherencia.test.mjs` compara esta tabla con los `case` implementados.
+ */
+const AYUDA = [
+  ['lang [en|es]', 'cli.help.lang'],
+  ['where', 'cli.help.where'],
+  ['list', 'cli.help.list'],
+  ['show <id>', 'cli.help.show'],
+  ['check [<id>]', 'cli.help.check'],
+  ['check --grupo <lote>', 'cli.help.check-batch'],
+  ['approve <id>', 'cli.help.approve'],
+  ['approve <id> --global', 'cli.help.approve-global'],
+  ['approve <id> --preserve-state', 'cli.help.approve-preserve'],
+  ['approve --grupo <lote>', 'cli.help.approve-batch'],
+  ['scope <id> --local|--global', 'cli.help.scope'],
+  ['active', 'cli.help.active'],
+  ['reject <id>', 'cli.help.reject'],
+  ['disable <id>', 'cli.help.disable'],
+  ['enable <id>', 'cli.help.enable'],
+  ['delete <id> [--yes]', 'cli.help.delete'],
+  ['retired', 'cli.help.retired'],
+  ['restore <id>', 'cli.help.restore'],
+  ['vendor <url> [--id X] [--note "..."]', 'cli.help.vendor'],
+  ['upstream <id>', 'cli.help.upstream'],
+  ['provenance <id>', 'cli.help.provenance'],
+  ['ownership', 'cli.help.ownership'],
+  ['ownership dsh-only|machine', 'cli.help.ownership-set'],
+  ['systems', 'cli.help.systems'],
+  ['security', 'cli.help.security'],
+  ['auto [<id>]', 'cli.help.auto'],
+  ['doctor', 'cli.help.doctor'],
+  ['audit [--json] [--estado X] [--todo]', 'cli.help.audit'],
+  ['repair <id>', 'cli.help.repair'],
+  ['promote <id> [--nivel 1,2] [--dry]', 'cli.help.promote'],
+  ['history [<id>] [--grupo X]', 'cli.help.history'],
+  ['review [--port N]', 'cli.help.review'],
+];
+
 function usage(code) {
-  process.stderr.write(readFileSync(new URL(import.meta.url), 'utf8').split('*/')[0].replace(/^\/\*\*?/, '').trim() + '\n');
+  const bin = 'node bin/skill-compiler.mjs';
+  const lineas = [tr('cli.usage.title'), '', tr('cli.usage.intro'), '', tr('cli.usage.commands')];
+  for (const [sintaxis, clave] of AYUDA) lineas.push(`  ${bin} ${sintaxis.padEnd(40)}${tr(clave)}`);
+  lineas.push('', tr('cli.usage.options'), '', tr('cli.usage.exit'), '', tr('cli.usage.harness'));
+  process.stderr.write(`${lineas.join('\n')}\n`);
   process.exit(code);
 }
 
@@ -134,7 +133,7 @@ async function idsDelLote(groupId, key) {
 function scope() {
   if (typeof flags.projectKey === 'string') return flags.projectKey;
   const key = projectKey(process.cwd());
-  if (key === null) { process.stderr.write('No se pudo determinar el proyecto desde este directorio. Usa --project-key.\n'); process.exit(2); }
+  if (key === null) { process.stderr.write(`${tr('cli.no-project')}\n`); process.exit(2); }
   return key;
 }
 
@@ -147,26 +146,29 @@ function checkSkill(id, key) {
 }
 
 function printCheck(id, key, result) {
-  for (const e of result.errors) process.stderr.write(`FALLO  ${e}\n`);
-  for (const w of result.warnings) process.stderr.write(`aviso  ${w}\n`);
-  if (result.ok) process.stdout.write(`${id}: en verde${result.warnings.length ? ' (con avisos)' : ''}\n`);
+  for (const e of result.errors) process.stderr.write(`${tr('cli.check.fail', { error: e })}\n`);
+  for (const w of result.warnings) process.stderr.write(`${tr('cli.check.warning', { aviso: w })}\n`);
+  if (result.ok) {
+    process.stdout.write(`${result.warnings.length ? tr('cli.check.green-warnings', { id }) : tr('cli.check.green', { id })}\n`);
+  }
 }
 
 switch (command) {
   case 'where': {
     const key = projectKey(process.cwd());
-    process.stdout.write(`${process.cwd()}\n  proyecto: ${key ?? '(sin ámbito)'}\n  datos:    ${root}\n`);
+    process.stdout.write(`${process.cwd()}\n${tr('cli.where.project', { key: key ?? tr('cli.no-scope-label') })}\n${tr('cli.where.data', { root })}\n`);
     break;
   }
 
   case 'list': {
     const rows = overview({ root });
-    if (rows.length === 0) { process.stdout.write(`Sin skills aprendidas todavía (${root}).\n`); break; }
+    if (rows.length === 0) { process.stdout.write(`${tr('cli.list.empty', { root })}\n`); break; }
     for (const row of rows) {
       process.stdout.write(`\n${row.projectKey}\n`);
-      process.stdout.write(`  propuestas : ${row.proposed.length ? row.proposed.map((p) => p.id).join(', ') : '—'}\n`);
-      process.stdout.write(`  aprobadas  : ${row.approved.length ? row.approved.map((p) => p.id).join(', ') : '—'}\n`);
-      process.stdout.write(`  rechazadas : ${row.rejected.length ? row.rejected.join(', ') : '—'}\n`);
+      const ninguno = tr('cli.list.none');
+      process.stdout.write(`${tr('cli.list.proposed', { ids: row.proposed.length ? row.proposed.map((p) => p.id).join(', ') : ninguno })}\n`);
+      process.stdout.write(`${tr('cli.list.approved', { ids: row.approved.length ? row.approved.map((p) => p.id).join(', ') : ninguno })}\n`);
+      process.stdout.write(`${tr('cli.list.rejected', { ids: row.rejected.length ? row.rejected.join(', ') : ninguno })}\n`);
     }
     break;
   }
@@ -176,7 +178,7 @@ switch (command) {
     if (!id) usage(2);
     const key = scope();
     const file = join(root, 'projects', key, 'proposed', id, 'SKILL.md');
-    if (!existsSync(file)) { process.stderr.write(`No hay propuesta ${id} en ${key}.\n`); process.exit(1); }
+    if (!existsSync(file)) { process.stderr.write(`${tr('cli.show.missing', { id, key })}\n`); process.exit(1); }
     process.stdout.write(readFileSync(file, 'utf8'));
     break;
   }
@@ -191,9 +193,9 @@ switch (command) {
     if (ids.length === 0) {
       // Un lote vacío y un proyecto sin pendientes no son lo mismo, y decir «nada pendiente» cuando se
       // pidió un lote concreto haría pensar que está todo hecho.
-      process.stdout.write(flags.grupo !== undefined
-        ? `No hay ninguna propuesta en el lote «${flags.grupo}» de ${key}.\n`
-        : `Nada pendiente en ${key}.\n`);
+      process.stdout.write(`${flags.grupo !== undefined
+        ? tr('cli.batch.empty', { grupo: flags.grupo, key })
+        : tr('cli.nothing-pending', { key })}\n`);
       break;
     }
     let failures = 0;
@@ -215,7 +217,7 @@ switch (command) {
     // entonces es `approve <id>` a propósito, no un lote que se rompió por el camino).
     if (flags.grupo !== undefined) {
       const ids = await idsDelLote(flags.grupo, key);
-      if (ids.length === 0) { process.stdout.write(`No hay ninguna propuesta en el lote «${flags.grupo}» de ${key}.\n`); break; }
+      if (ids.length === 0) { process.stdout.write(`${tr('cli.batch.empty', { grupo: flags.grupo, key })}\n`); break; }
       const fallos = [];
       for (const cada of ids) {
         const comprobacion = checkSkill(cada, key);
@@ -223,7 +225,7 @@ switch (command) {
         else if (comprobacion.warnings.length && flags.force !== true) { fallos.push(cada); printCheck(cada, key, comprobacion); }
       }
       if (fallos.length > 0) {
-        process.stderr.write(`Aprobación del lote RECHAZADA: ${fallos.join(', ')} no pasa(n) la puerta o tiene(n) avisos.\n  No se ha aprobado ninguna: un lote se aprueba entero o no se aprueba.\n`);
+        process.stderr.write(`${tr('cli.approve.batch-rejected', { ids: fallos.join(', ') })}\n`);
         process.exit(1);
       }
       const { approveProposal } = await import('../lib/commands.mjs');
@@ -232,11 +234,11 @@ switch (command) {
         // La misma función que el comando y el panel: puerta, seguridad, huella del contenido y entrada del
         // diario. La CLI no reimplementa nada — si lo hiciera, sería el camino que olvida el rastro.
         const movida = approveProposal({ root, key: key, id: cada, force: flags.force === true, scope: flags.global === true ? 'global' : 'project' });
-        if (movida.kind !== 'success') { process.stderr.write(`No se pudo aprobar ${cada}: ${movida.text.split('\n')[0]}\n  Ya aprobadas: ${hechas.join(', ') || '(ninguna)'}\n`); process.exit(1); }
+        if (movida.kind !== 'success') { process.stderr.write(`${tr('cli.approve.batch-failed', { id: cada, reason: movida.text.split('\n')[0], done: hechas.join(', ') || tr('cli.approve.batch-none') })}\n`); process.exit(1); }
         hechas.push(cada);
       }
-      const donde = flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`;
-      process.stdout.write(`Aprobadas las ${hechas.length} propuestas del lote «${flags.grupo}» en ${donde}:\n${hechas.map((c) => `  · ${c}`).join('\n')}\n`);
+      const donde = flags.global === true ? tr('cli.scope.global-where') : tr('cli.scope.project-where', { key });
+      process.stdout.write(`${tr('cli.approve.batch-done', { n: hechas.length, grupo: flags.grupo, donde })}\n${hechas.map((c) => tr('cli.approve.batch-row', { id: c })).join('\n')}\n`);
       break;
     }
     if (!id) usage(2);
@@ -244,11 +246,11 @@ switch (command) {
     // volvió a aprobar al ver la skill todavía en la lista, y aquí leería «no existe una propuesta».
     const ambitoPedido = flags.global === true ? 'global' : 'project';
     if (ambitoPedido === 'global' && ['global', 'published'].includes(locate(id, key, { root }))) {
-      process.stdout.write(`Ya estaba publicada: ${id} en la biblioteca de usuario\n  No se ha cambiado nada.\n`);
+      process.stdout.write(`${tr('cli.approve.already-published', { id })}\n${tr('cli.approve.no-change')}\n`);
       break;
     }
     if (ambitoPedido === 'project' && locate(id, key, { root }) === 'approved') {
-      process.stdout.write(`Ya estaba activa: ${id} en ${key}\n  No se ha cambiado nada.\n`);
+      process.stdout.write(`${tr('cli.approve.already-active', { id, key })}\n${tr('cli.approve.no-change')}\n`);
       break;
     }
     // Igual que el comando y el panel: el mismo juicio, la misma huella, el mismo rastro. La CLI ya no
@@ -257,7 +259,7 @@ switch (command) {
     const { approveProposal } = await import('../lib/commands.mjs');
     const r = approveProposal({ root, key, id, force: flags.force === true, scope: ambitoPedido, preservarEstado: flags.preserveState === true });
     process.stdout.write(`${r.text}\n`);
-    if (ambitoPedido === 'project') process.stdout.write(`Para que la vean todos tus proyectos: approve ${id} --global\n`);
+    if (ambitoPedido === 'project') process.stdout.write(`${tr('cli.approve.next-global', { id })}\n`);
     process.exit(r.kind === 'success' ? 0 : 1);
   }
 
@@ -269,8 +271,9 @@ switch (command) {
     const key = scope();
     const to = flags.local === true ? 'project' : flags.global === true ? 'global' : null;
     const moved = ambito(id, key, { to, root });
-    if (!moved.ok) { process.stderr.write(`No se pudo cambiar el ámbito: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Ahora ${id} vive en ${moved.scope === 'global' ? 'la biblioteca de usuario (todos tus proyectos)' : `el proyecto ${key}`}\n  ${moved.path}\n  huella: ${moved.sha256}\n`);
+    if (!moved.ok) { process.stderr.write(`${tr('cli.scope.failed', { reason: moved.reason })}\n`); process.exit(1); }
+    const dondeScope = moved.scope === 'global' ? tr('cli.scope.global-where') : tr('cli.scope.project-where', { key });
+    process.stdout.write(`${tr('cli.scope.done', { id, donde: dondeScope })}\n  ${moved.path}\n${tr('cli.scope.hash', { sha: moved.sha256 })}\n`);
     break;
   }
 
@@ -282,13 +285,13 @@ switch (command) {
     if (!id) usage(2);
     const key = scope();
     if (locate(id, key, { root }) === 'disabled') {
-      process.stdout.write(`Ya estaba apagada: ${id} en ${key}\n  No se ha cambiado nada.\n`);
+      process.stdout.write(`${tr('cli.disable.already-off', { id, key })}\n${tr('cli.approve.no-change')}\n`);
       break;
     }
     const moved = disable(id, key, { root, scope: flags.global === true ? 'global' : 'project' });
-    if (!moved.ok) { process.stderr.write(`No se pudo apagar: ${moved.reason}\n`); process.exit(1); }
-    const donde = flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`;
-    process.stdout.write(`Apagada ${id} en ${donde}\n  deja de servirse al modelo, y se conserva entera: vuelve con \`enable ${id}${flags.global === true ? ' --global' : ''}\`\n`);
+    if (!moved.ok) { process.stderr.write(`${tr('cli.disable.failed', { reason: moved.reason })}\n`); process.exit(1); }
+    const donde = flags.global === true ? tr('cli.scope.global-where') : tr('cli.scope.project-where', { key });
+    process.stdout.write(`${tr('cli.disable.done', { id, donde })}\n${tr('cli.disable.hint', { id, global: flags.global === true ? ' --global' : '' })}\n`);
     break;
   }
 
@@ -297,8 +300,8 @@ switch (command) {
     if (!id) usage(2);
     const key = scope();
     const moved = enable(id, key, { root, scope: flags.global === true ? 'global' : 'project' });
-    if (!moved.ok) { process.stderr.write(`No se pudo encender: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Encendida ${id} en ${flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`}\n`);
+    if (!moved.ok) { process.stderr.write(`${tr('cli.enable.failed', { reason: moved.reason })}\n`); process.exit(1); }
+    process.stdout.write(`${tr('cli.enable.done', { id, donde: flags.global === true ? tr('cli.scope.global-where') : tr('cli.scope.project-where', { key }) })}\n`);
     break;
   }
 
@@ -308,26 +311,34 @@ switch (command) {
     const key = scope();
     const esGlobal = flags.global === true;
     const destino = join(retiredRoot(), esGlobal ? 'global' : key, id);
+    const dondeRetira = esGlobal ? tr('cli.scope.global-where') : tr('cli.scope.project-where', { key });
     if (flags.yes !== true) {
-      process.stdout.write(`Se va a RETIRAR ${id} de ${esGlobal ? 'la biblioteca de usuario' : `el proyecto ${key}`}:\n  respaldo: ${destino}\n`);
-      process.stdout.write('Nada se borra: la carpeta se mueve, con su huella, y vuelve con `restore`.\n');
-      process.stdout.write('Repite con --yes para hacerlo.\n');
+      process.stdout.write(`${tr('cli.retire.confirm', { id, donde: dondeRetira, path: destino })}\n`);
+      process.stdout.write(`${tr('cli.retire.no-delete')}\n`);
+      process.stdout.write(`${tr('cli.retire.repeat')}\n`);
       process.exit(1);
     }
     const moved = retire(id, key, { root, scope: esGlobal ? 'global' : 'project' });
-    if (!moved.ok) { process.stderr.write(`No se pudo retirar: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Retirada ${id} de ${esGlobal ? 'la biblioteca de usuario' : `el proyecto ${key}`}\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: ${moved.revierte}\n`);
+    if (!moved.ok) { process.stderr.write(`${tr('cli.retire.failed', { reason: moved.reason })}\n`); process.exit(1); }
+    process.stdout.write(`${tr('cli.retire.done', { id, donde: dondeRetira, path: moved.backup, hash: moved.hash, revierte: moved.revierte })}\n`);
     break;
   }
 
   case 'retired': {
     const key = scope();
     const lista = retired(key, { root });
-    if (lista.length === 0) { process.stdout.write(`Nada apagado ni retirado en ${key}\n`); break; }
+    if (lista.length === 0) { process.stdout.write(`${tr('cli.retired.empty', { key })}\n`); break; }
     for (const skill of lista) {
-      const estado = skill.state === 'disabled' ? 'apagada ' : skill.state === 'superseded' ? 'apartada' : 'retirada';
-      const donde = skill.scope === 'global' ? 'global' : 'proyecto';
-      process.stdout.write(`  ${estado}  ${skill.id}  [${donde}]${skill.retiredAt ? `  (${skill.retiredAt})` : ''}\n`);
+      const estado = skill.state === 'disabled'
+        ? tr('cli.retired.state-disabled')
+        : skill.state === 'superseded' ? tr('cli.retired.state-apart') : tr('cli.retired.state-retired');
+      const donde = skill.scope === 'global' ? tr('cli.retired.scope-global') : tr('cli.retired.scope-project');
+      process.stdout.write(`${tr('cli.retired.row', {
+        estado: estado.padEnd(8),
+        id: skill.id,
+        donde,
+        fecha: skill.retiredAt ? `  (${skill.retiredAt})` : '',
+      })}\n`);
     }
     break;
   }
@@ -337,8 +348,8 @@ switch (command) {
     if (!id) usage(2);
     const key = scope();
     const moved = restore(id, key, { root, scope: flags.global === true ? 'global' : 'project' });
-    if (!moved.ok) { process.stderr.write(`No se pudo restaurar: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Restaurada ${id} en ${flags.global === true ? 'la biblioteca de usuario' : `el proyecto ${key}`}\n  ${moved.path}\n  huella: ${moved.hash}\n`);
+    if (!moved.ok) { process.stderr.write(`${tr('cli.restore.failed', { reason: moved.reason })}\n`); process.exit(1); }
+    process.stdout.write(`${tr('cli.restore.done', { id, donde: flags.global === true ? tr('cli.scope.global-where') : tr('cli.scope.project-where', { key }), path: moved.path, hash: moved.hash })}\n`);
     break;
   }
 
@@ -348,23 +359,23 @@ switch (command) {
     const key = scope();
     const where = locate(id, key, { root });
     if (where === 'rejected') {
-      process.stdout.write(`Ya estaba apartada: ${id} en ${key}\n  No se ha cambiado nada.\n`);
+      process.stdout.write(`${tr('cli.reject.already-aside', { id, key })}\n${tr('cli.approve.no-change')}\n`);
       break;
     }
     if (where === 'approved') {
-      process.stderr.write(`«${id}» ya está activa en ${key}: reject solo se aplica a las propuestas pendientes.\n`);
+      process.stderr.write(`${tr('cli.reject.active', { id, key })}\n`);
       process.exit(1);
     }
     const moved = reject(id, key, { root });
-    if (!moved.ok) { process.stderr.write(`No se pudo rechazar: ${moved.reason}\n`); process.exit(1); }
-    process.stdout.write(`Rechazada ${id} (apartada en ${moved.path.replace(/[\\/]SKILL\.md$/, '')}).\n`);
+    if (!moved.ok) { process.stderr.write(`${tr('cli.reject.failed', { reason: moved.reason })}\n`); process.exit(1); }
+    process.stdout.write(`${tr('cli.reject.done', { id, path: moved.path.replace(/[\\/]SKILL\.md$/, '') })}\n`);
     break;
   }
 
   case 'active': {
     const key = scope();
     const found = listForProject(process.cwd(), { root });
-    process.stdout.write(`${key}: ${found.length ? found.map((s) => s.id).join(', ') : 'ninguna skill activa'}\n`);
+    process.stdout.write(`${key}: ${found.length ? found.map((s) => s.id).join(', ') : tr('cli.active.none')}\n`);
     break;
   }
 
@@ -374,31 +385,33 @@ switch (command) {
     const result = await vendor({ url, id: flags.id, localNote: flags.note }, { root, cwd: process.cwd() });
     if (result.status === 'proposed') {
       process.stdout.write([
-        `Nuestra versión creada: ${result.id}`,
-        `Origen: ${result.provenance.source.url}${result.upstream.ref ? ` (${result.upstream.ref})` : ''}`,
-        `SHA-256 del original: ${result.upstream.sha256}`,
-        `  guardado verbatim en ${join(root, 'projects', result.projectKey, 'proposed', result.id, 'upstream')}`,
-        `Procedencia: ${join(root, 'projects', result.projectKey, 'proposed', result.id, 'provenance.json')}`,
+        tr('cli.vendor.created', { id: result.id }),
+        tr('cli.vendor.source', { url: `${result.provenance.source.url}${result.upstream.ref ? ` (${result.upstream.ref})` : ''}` }),
+        tr('cli.vendor.sha', { sha: result.upstream.sha256 }),
+        tr('cli.vendor.stored', { path: join(root, 'projects', result.projectKey, 'proposed', result.id, 'upstream') }),
+        tr('cli.vendor.provenance', { path: join(root, 'projects', result.projectKey, 'proposed', result.id, 'provenance.json') }),
         '',
-        'NO está activa. Revísala y apruébala:',
-        `  node "${SELF}" approve ${result.id}`,
-        ...(result.warnings.length ? ['', 'Avisos:', ...result.warnings.map((w) => `  · ${w}`)] : []),
+        tr('cli.vendor.not-active'),
+        tr('cli.vendor.approve', { bin: SELF, id: result.id }),
+        ...(result.warnings.length
+          ? ['', tr('cli.vendor.warnings'), ...result.warnings.map((w) => tr('cli.vendor.warning-row', { aviso: w }))]
+          : []),
       ].join('\n') + '\n');
       break;
     }
     if (result.status === 'needs-choice') {
-      process.stderr.write(`Ese enlace apunta a una carpeta con varias skills. Elige una:\n  ${result.dirs.join('\n  ')}\n`);
+      process.stderr.write(`${tr('cli.vendor.needs-choice', { dirs: result.dirs.join('\n  ') })}\n`);
       process.exit(1);
     }
     if (result.status === 'blocked') {
-      process.stderr.write('VENDORIZADO BLOQUEADO: no se escribió nada.\n');
-      process.stderr.write(`  motivo: ${result.errors[0]}\n`);
-      for (const f of result.findings ?? []) process.stderr.write(`  · ${f.file}:${f.line} — ${f.label}\n`);
-      process.stderr.write('No hay opción para saltarse esto desde aquí: revisa el origen y vendoriza una versión saneada.\n');
+      process.stderr.write(`${tr('cli.vendor.blocked')}\n`);
+      process.stderr.write(`${tr('cli.vendor.reason', { reason: result.errors[0] })}\n`);
+      for (const f of result.findings ?? []) process.stderr.write(`${tr('cli.vendor.finding', { file: f.file, line: f.line, label: f.label })}\n`);
+      process.stderr.write(`${tr('cli.vendor.no-bypass')}\n`);
       process.exit(1);
     }
-    process.stderr.write(`Vendorizado no realizado (${result.status}): ${(result.errors ?? []).join(' ')}\n`);
-    if (result.conflicts?.length) for (const c of result.conflicts) process.stderr.write(`  · choca con ${c.id} (${c.reason})\n`);
+    process.stderr.write(`${tr('cli.vendor.failed', { status: result.status, errors: (result.errors ?? []).join(' ') })}\n`);
+    if (result.conflicts?.length) for (const c of result.conflicts) process.stderr.write(`${tr('cli.vendor.conflict', { id: c.id, reason: c.reason })}\n`);
     process.exit(1);
   }
 
@@ -406,12 +419,12 @@ switch (command) {
     const id = positional[0];
     if (!id) usage(2);
     const status = await upstreamStatus(id, scope(), { root });
-    if (status.status !== 'checked') { process.stderr.write(`No se pudo comprobar ${id}: ${(status.errors ?? []).join(' ')}\n`); process.exit(1); }
+    if (status.status !== 'checked') { process.stderr.write(`${tr('cli.upstream.failed', { id, errors: (status.errors ?? []).join(' ') })}\n`); process.exit(1); }
     process.stdout.write([
-      status.changed ? `El origen CAMBIÓ desde que se tomó (${status.fetchedAt?.slice(0, 10)}).` : 'El origen no ha cambiado.',
+      status.changed ? tr('cli.upstream.changed', { fecha: status.fetchedAt?.slice(0, 10) }) : tr('cli.upstream.same'),
       `  ${status.url}${status.ref ? ` (${status.ref})` : ''}`,
-      `  guardado ${status.storedSha256?.slice(0, 16)}… · ahora ${status.upstreamSha256?.slice(0, 16)}…`,
-      status.changed ? '  Nuestra versión no se ha tocado: está adaptada a propósito.' : '',
+      tr('cli.upstream.saved', { stored: status.storedSha256?.slice(0, 16), upstream: status.upstreamSha256?.slice(0, 16) }),
+      status.changed ? tr('cli.upstream.untouched') : '',
     ].filter(Boolean).join('\n') + '\n');
     break;
   }
@@ -420,7 +433,7 @@ switch (command) {
     const id = positional[0];
     if (!id) usage(2);
     const record = readProvenance(id, scope(), { root });
-    if (!record) { process.stderr.write(`${id} no tiene procedencia de origen (no es una skill vendorizada).\n`); process.exit(1); }
+    if (!record) { process.stderr.write(`${tr('cli.provenance.missing', { id })}\n`); process.exit(1); }
     process.stdout.write(`${JSON.stringify(record, null, 2)}\n`);
     break;
   }
@@ -439,7 +452,7 @@ switch (command) {
       console.error(r.reason);
       process.exit(2);
     }
-    console.log(`Declarada la propiedad: «${respuesta}» (huella ${String(r.huella).slice(0, 12)})`);
+    console.log(tr('cli.ownership.declared', { ownership: respuesta, huella: String(r.huella).slice(0, 12) }));
     console.log(`  ${propiedadEnTexto(respuesta)}`);
     process.exit(0);
   }
@@ -474,8 +487,8 @@ switch (command) {
           const { findings } = auditarCarpeta(dir, { id });
           for (const h of findings) {
             if (!/^(security|secret)/.test(String(h.rule ?? ''))) continue;
-            if (h.severity === 'error') { bloqueos += 1; process.stdout.write(`  BLOQUEO ${estado}/${id} · ${h.rule}: ${h.message}\n`); }
-            else { avisos += 1; process.stdout.write(`  aviso   ${estado}/${id} · ${h.rule}: ${h.message}\n`); }
+            if (h.severity === 'error') { bloqueos += 1; process.stdout.write(`${tr('cli.security.block', { estado, id, rule: h.rule, message: h.message })}\n`); }
+            else { avisos += 1; process.stdout.write(`${tr('cli.security.warning', { estado, id, rule: h.rule, message: h.message })}\n`); }
           }
         }
       }
@@ -483,16 +496,16 @@ switch (command) {
       if (!diario.existe) continue;
       const cadena = verificarCadena(diario.entradas);
       for (const r of cadena.roturas) rotos.push(`${proyecto}: ${r.message}`);
-      if (cadena.sinHuella > 0) process.stdout.write(`  nota    ${proyecto}: ${cadena.sinHuella} entrada(s) anteriores al encadenado (sin huella, no rompen nada)\n`);
-      if (diario.ilegibles > 0) rotos.push(`${proyecto}: ${diario.ilegibles} línea(s) ilegible(s) en el diario`);
+      if (cadena.sinHuella > 0) process.stdout.write(`${tr('cli.security.old-entries', { proyecto, n: cadena.sinHuella })}\n`);
+      if (diario.ilegibles > 0) rotos.push(tr('cli.security.broken-line', { proyecto, n: diario.ilegibles }));
     }
-    process.stdout.write(`\nSeguridad del almacén · ${skills} skills revisadas en ${proyectos.length} proyecto(s)\n`);
-    process.stdout.write(`  bloqueos: ${bloqueos} · avisos: ${avisos}\n`);
+    process.stdout.write(`${tr('cli.security.header', { skills, proyectos: proyectos.length })}\n`);
+    process.stdout.write(`${tr('cli.security.counts', { blocked: bloqueos, warnings: avisos })}\n`);
     process.stdout.write(rotos.length === 0
-      ? '  diarios: cadena válida\n'
-      : `  diarios: ${rotos.length} problema(s)\n${rotos.map((r) => `    · ${r}`).join('\n')}\n`);
-    if (bloqueos > 0 || rotos.length > 0) { process.stdout.write('\nHAY BLOQUEOS O CADENAS ROTAS: no se publica nada hasta resolverlos.\n'); process.exit(1); }
-    process.stdout.write('\nsin bloqueos y con el diario íntegro.\n');
+      ? `${tr('cli.security.journals-ok')}\n`
+      : `${tr('cli.security.journals-broken', { n: rotos.length })}\n${rotos.map((r) => tr('cli.security.broken-row', { message: r })).join('\n')}\n`);
+    if (bloqueos > 0 || rotos.length > 0) { process.stdout.write(`${tr('cli.security.stop')}\n`); process.exit(1); }
+    process.stdout.write(`${tr('cli.security.ok')}\n`);
     process.exit(0);
   }
 
@@ -505,7 +518,7 @@ switch (command) {
     const id = String(positional[0] ?? '').trim();
     const objetivos = id === '' ? pending({ root, key: clave }).filter((p) => p.updatesActive).map((p) => p.id) : [id];
     if (objetivos.length === 0) {
-      process.stdout.write(`No hay actualizaciones pendientes en ${clave}.\n`);
+      process.stdout.write(`${tr('cli.auto.none', { key: clave })}\n`);
       process.exit(0);
     }
     let noAptas = 0;
@@ -556,8 +569,8 @@ switch (command) {
     let bad = 0;
     const line = (ok, text, remedy) => {
       if (!ok) bad++;
-      process.stdout.write(`${ok ? 'ok    ' : 'FALLA '} ${text}\n`);
-      if (!ok && remedy) process.stdout.write(`        remedio: ${remedy}\n`);
+      process.stdout.write(`${(ok ? tr('cli.mark.ok') : tr('cli.mark.fail')).padEnd(6)} ${text}\n`);
+      if (!ok && remedy) process.stdout.write(`${tr('cli.doctor.remedy', { remedy })}\n`);
     };
 
     // La capa de seguridad, en una línea: cuántas skills del almacén levantan algo. Informativo a propósito:
@@ -583,10 +596,9 @@ switch (command) {
           }
         }
       }
-      line(bloqueos === 0, `capa de seguridad: ${revisadas} skills revisadas · ${bloqueos} bloqueo(s) · ${avisos} aviso(s)`,
-        'hay contenido que la capa no deja publicar: `security` dice cuál y por qué');
+      line(bloqueos === 0, tr('cli.doctor.security-line', { revisadas, bloqueos, avisos }), tr('cli.doctor.security-remedy'));
     } catch (error) {
-      line(false, `capa de seguridad: no se pudo revisar (${error.message})`, 'comprueba que el almacén existe y se puede leer');
+      line(false, tr('cli.doctor.security-failed', { message: error.message }), tr('cli.doctor.security-failed-remedy'));
     }
 
     // El idioma, con su fuente. Informativo: un `DSH_LANG` inválido no impide activar el plugin, pero se dice
@@ -597,34 +609,32 @@ switch (command) {
       if (info.invalidEnv !== undefined) process.stdout.write(`  ${tr('lang.env-invalid', { value: info.invalidEnv }, { lang: info.lang })}\n`);
       if (info.invalidConfig !== undefined) process.stdout.write(`  ${tr('lang.config-invalid', { value: info.invalidConfig }, { lang: info.lang })}\n`);
       const faltan = clavesFaltantes(info.lang);
-      if (faltan.length > 0) process.stdout.write(`  catálogo incompleto: ${faltan.length} clave(s) sin traducir\n`);
+      if (faltan.length > 0) process.stdout.write(`${tr('cli.doctor.catalogue-incomplete', { n: faltan.length })}\n`);
     }
 
-    process.stdout.write(`\ndependencias declaradas: ${declaredNames.length}\n`);
-    line(declaredNames.length > 0, 'el manifiesto declara sus dependencias',
-      'un plugin que importe paquetes del harness tiene que declararlos: si no, se instala y falla al activarse');
+    process.stdout.write(`${tr('cli.doctor.deps-header', { n: declaredNames.length })}\n`);
+    line(declaredNames.length > 0, tr('cli.doctor.deps-declared'), tr('cli.doctor.deps-declared-remedy'));
 
     const missing = declaredNames.filter((name) => !fs.existsSync(join(packageRoot, 'node_modules', name)));
-    line(missing.length === 0, `instaladas: ${declaredNames.length - missing.length}/${declaredNames.length}`,
-      `npm install   (faltan: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? '…' : ''})`);
+    line(missing.length === 0, tr('cli.doctor.installed', { ok: declaredNames.length - missing.length, total: declaredNames.length }),
+      tr('cli.doctor.missing-remedy', { list: `${missing.slice(0, 4).join(', ')}${missing.length > 4 ? '...' : ''}` }));
 
     // No basta con que la carpeta exista: lo que importa es que el módulo se pueda CARGAR.
     for (const name of ['@deepseek-ai/dsh-tools', 'zod']) {
       try {
         const loaded = await import(name);
         const version = JSON.parse(fs.readFileSync(join(packageRoot, 'node_modules', name, 'package.json'), 'utf8')).version;
-        line(true, `${name} se carga (${version}${declared[name] && declared[name] !== version ? `, declarada ${declared[name]}` : ''})`);
+        line(true, tr('cli.doctor.loads', { name, version, declarada: declared[name] && declared[name] !== version ? tr('cli.doctor.loads-declared', { version: declared[name] }) : '' }));
         if (name === '@deepseek-ai/dsh-tools' && typeof loaded.defineTool !== 'function') {
-          line(false, 'dsh-tools no exporta defineTool', 'la versión declarada no es la del runtime del harness');
+          line(false, tr('cli.doctor.no-define-tool'), tr('cli.doctor.no-define-tool-remedy'));
         }
         // Zod tiene que ser Zod: el registro de proyecciones valida con `schema.parse(...)`, y una
         // biblioteca de esquemas que se resuelve llamándola como función (schemastery) no sirve.
         if (name === 'zod' && typeof loaded.z?.object !== 'function') {
-          line(false, 'zod no expone `z.object`', 'la biblioteca de esquemas no es la que espera el contrato del harness');
+          line(false, tr('cli.doctor.zod'), tr('cli.doctor.zod-remedy'));
         }
       } catch (error) {
-        line(false, `${name} NO se carga: ${error.code ?? error.message}`,
-          'el paquete declara peers que también tienen que estar instalados; reinstala con «npm install» sin --legacy-peer-deps');
+        line(false, tr('cli.doctor.load-failed', { name, error: error.code ?? error.message }), tr('cli.doctor.load-failed-remedy'));
       }
     }
 
@@ -635,13 +645,13 @@ switch (command) {
       for (const factory of ['skillPropose', 'skillVendor', 'skillReview', 'skillUpstreamCheck']) {
         try {
           const tool = defineTool(defs[factory]({ root }));
-          line(true, `${tool.name} compila · parámetros: ${Object.keys(tool.parameters.properties ?? {}).join(', ') || '(ninguno)'}`);
+          line(true, tr('cli.doctor.tool-compiles', { name: tool.name, params: Object.keys(tool.parameters.properties ?? {}).join(', ') || tr('cli.doctor.no-params') }));
         } catch (error) {
-          line(false, `${factory} no compila: ${error.message}`, 'corrige el esquema en lib/definitions.mjs');
+          line(false, tr('cli.doctor.tool-failed', { factory, message: error.message }), tr('cli.doctor.tool-failed-remedy'));
         }
       }
     } catch (error) {
-      line(false, `no se pudieron comprobar las herramientas: ${error.message}`, 'npm install');
+      line(false, tr('cli.doctor.tools-failed', { message: error.message }), tr('cli.doctor.tools-failed-remedy'));
     }
 
     // ── La proyección, contra el registro REAL ────────────────────────────────────────────────────
@@ -655,8 +665,8 @@ switch (command) {
       const { learningProjection, projectionContractProblems } = await import(pathToFileURL(join(packageRoot, 'lib', 'projection.mjs')).href);
       const definition = learningProjection();
       const problems = projectionContractProblems(definition);
-      line(problems.length === 0, `la proyección cumple el contrato del registro (clave ${definition.key})`,
-        problems.join(' · ') || 'la unidad no se registraría: revisa lib/projection.mjs');
+      line(problems.length === 0, tr('cli.doctor.projection-ok', { key: definition.key }),
+        problems.join(' - ') || tr('cli.doctor.projection-remedy'));
 
       const { Context } = await import('@deepseek-ai/cordis');
       const { default: SessionProjectionRegistry } = await import('@deepseek-ai/dsh-session-projection');
@@ -668,11 +678,9 @@ switch (command) {
       const live = ctx.sessionProjections.snapshot(session, [definition.key]);
       const cold = ctx.sessionProjections.restore({}, [], 0, {}, 0);
       const served = live.values[definition.key] ?? cold.snapshot.values[definition.key];
-      line(served !== undefined, 'el registro real proyecta la unidad sin lanzar (snapshot y lectura en frío)',
-        'es el camino que rompía el historial de sesiones: revisa lib/projection.mjs');
+      line(served !== undefined, tr('cli.doctor.projected'), tr('cli.doctor.projected-remedy'));
     } catch (error) {
-      line(false, `la proyección falla al proyectar: ${error.message}`,
-        'con esto la lectura de sesiones se rompe: revisa lib/projection.mjs y su dependencia zod');
+      line(false, tr('cli.doctor.projection-failed', { message: error.message }), tr('cli.doctor.projection-failed-remedy'));
     }
 
     // ── Los comandos humanos, y las puertas del harness ──────────────────────────────────────────
@@ -682,10 +690,10 @@ switch (command) {
       const names = declared.map((c) => c.name);
       const malformed = declared.filter((c) => !/^[a-z][a-z0-9_-]*$/.test(c.name) || !c.description?.trim() || typeof c.handler !== 'function');
       line(malformed.length === 0 && names.includes('skill-approve') && names.includes('skill-auto'),
-        `los comandos humanos se declaran (${names.join(', ')})`,
-        'un descriptor inválido no se registra en el harness y la superficie desaparece en silencio');
+        tr('cli.doctor.commands-ok', { names: names.join(', ') }),
+        tr('cli.doctor.commands-remedy'));
     } catch (error) {
-      line(false, `no se pudieron comprobar los comandos: ${error.message}`, 'revisa lib/commands.mjs');
+      line(false, tr('cli.doctor.commands-failed', { message: error.message }), tr('cli.doctor.commands-failed-remedy'));
     }
 
     // ── Las filas de pendientes: la superficie que convierte aprobar en elegir ────────────────────
@@ -703,15 +711,14 @@ switch (command) {
       const rows = key === null || typeof flags.projectKey === 'string' ? null : pendingRowsFor({ root, cwd });
       const malformed = (rows ?? []).filter((row) => !/^[a-z][a-z0-9_-]*$/.test(row.name) || row.description.trim().length === 0);
       line(malformed.length === 0, rows === null
-        ? `filas de pendientes: ${waiting.length} pendientes en ${key ?? '(sin ámbito)'} (no se componen filas sin el cwd del proyecto)`
-        : `filas de pendientes: ${waiting.length} pendientes → ${rows.length} filas del menú, con nombre válido`,
-        'una fila con un nombre fuera de la gramática no se registra, y desaparece del menú sin avisar');
+        ? tr('cli.doctor.rows-pending', { n: waiting.length, key: key ?? tr('cli.no-scope-label') })
+        : tr('cli.doctor.rows-ok', { n: waiting.length, rows: rows.length }),
+        tr('cli.doctor.rows-remedy'));
       if (rows !== null) {
-        line(rows.length === waiting.length * 3, 'cada pendiente ofrece sus tres verbos (leer · activar · apartar)',
-          'revisa ROW_VERBS en lib/pending-rows.mjs');
+        line(rows.length === waiting.length * 3, tr('cli.doctor.rows-verbs'), tr('cli.doctor.rows-verbs-remedy'));
       }
     } catch (error) {
-      line(false, `no se pudieron componer las filas de pendientes: ${error.message}`, 'revisa lib/pending-rows.mjs');
+      line(false, tr('cli.doctor.rows-failed', { message: error.message }), tr('cli.doctor.rows-failed-remedy'));
     }
 
     // Compilar las herramientas y proyectar la unidad cubre dos caminos; el resto de los contratos con el
@@ -730,10 +737,9 @@ switch (command) {
       const run = spawnSync(process.execPath, ['--test', ...gates], { cwd: packageRoot, encoding: 'utf8' });
       const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
       const failed = run.status !== 0 || /failing tests/.test(output);
-      line(!failed, 'las puertas de contrato con el harness pasan (salida, proyección, catálogo, modo automático, comandos, filas del menú)',
-        'ejecuta «npm test» y mira la primera prueba en rojo: dice qué contrato se rompió y con qué dato');
+      line(!failed, tr('cli.doctor.gates-ok'), tr('cli.doctor.gates-remedy'));
     } catch (error) {
-      line(false, `no se pudieron ejecutar las puertas del harness: ${error.message}`, 'npm install');
+      line(false, tr('cli.doctor.gates-failed', { message: error.message }), tr('cli.doctor.tools-failed-remedy'));
     }
 
     // ── La propiedad del puesto: se informa, no se suspende por ella ───────────────────────────────
@@ -743,23 +749,32 @@ switch (command) {
     // que nadie ha tomado enseña a ignorar el rojo. Lo que sí importa decir: el estado real (no sólo
     // «sin declarar»: también una declaración rota) y si el barrido del puesto pudo ser completo.
     try {
-      const { inventario: inventariar, leerPropiedad: leer, proyectosConocidos: proyectos, SOLO_DSH: soloDsh, MAQUINA: maquina } = await import(pathToFileURL(join(packageRoot, 'lib', 'scope.mjs')).href);
+      const {
+        inventario: inventariar, leerPropiedad: leer, proyectosConocidos: proyectos, SOLO_DSH: soloDsh, MAQUINA: maquina,
+        estadoEnTexto, motivoEnTexto,
+      } = await import(pathToFileURL(join(packageRoot, 'lib', 'scope.mjs')).href);
       const declaracion = leer({ root });
       const datos = inventariar({ root, curada: curatedLibraryRoot(), proyectos: proyectos({ root }) });
       const cobertura = datos.completo
-        ? `barrido completo (${datos.totales.ids} identificadores, ${datos.totales.colisiones} choque(s))`
-        : `barrido INCOMPLETO: ${datos.sinLeer.map((fuente) => `${fuente.nombre} (${fuente.estado})`).join(', ')}`;
+        ? tr('cli.doctor.coverage-full', { ids: datos.totales.ids, colisiones: datos.totales.colisiones })
+        : tr('cli.doctor.coverage-partial', { fuentes: datos.sinLeer.map((fuente) => `${fuente.nombre} (${estadoEnTexto(fuente.estado)})`).join(', ') });
       line(declaracion.estado !== 'invalida' && declaracion.estado !== 'ilegible', declaracion.estado === 'declarada'
-        ? `propiedad del puesto: «${declaracion.ownership}» — ${cobertura}`
-        : `propiedad del puesto: ${declaracion.estado.toUpperCase()} (${declaracion.motivo}) — declárala con «ownership ${soloDsh}» o «ownership ${maquina}»; ${cobertura}`,
-        'la declaración existe y no se puede usar: mientras siga así se aplica la política segura y se dice en cada propuesta');
+        ? tr('cli.doctor.ownership-declared', { ownership: declaracion.ownership, cobertura })
+        : tr('cli.doctor.ownership-other', {
+          estado: estadoEnTexto(declaracion.estado).toUpperCase(),
+          motivo: motivoEnTexto(declaracion.motivo),
+          dshOnly: soloDsh,
+          machine: maquina,
+          cobertura,
+        }),
+        tr('cli.doctor.ownership-remedy'));
     } catch (error) {
-      line(false, `no se pudo leer la propiedad del puesto: ${error.message}`, 'revisa lib/scope.mjs');
+      line(false, tr('cli.doctor.ownership-failed', { message: error.message }), tr('cli.doctor.ownership-failed-remedy'));
     }
 
     process.stdout.write(bad === 0
-      ? '\ntodo en su sitio: el plugin puede activarse\n'
-      : `\n${bad} problema(s): con esto el plugin falla al activarse\n`);
+      ? `\n${tr('cli.doctor.all-ok')}\n`
+      : `\n${tr('cli.doctor.bad', { n: bad })}\n`);
     process.exit(bad === 0 ? 0 : 1);
   }
 
@@ -776,45 +791,55 @@ switch (command) {
       process.exit(informe.totals.error + informe.totals.unreadable > 0 ? 1 : 0);
     }
 
-    const salida = [`\nauditoría del almacén — solo lectura`, '', resumenDeAuditoria(informe), ''];
+    const salida = [tr('cli.audit.title'), '', resumenDeAuditoria(informe), ''];
 
     if (informe.byRule.length > 0) {
-      salida.push('por regla (primero lo que más arregla):');
+      salida.push(tr('cli.audit.by-rule'));
       for (const regla of informe.byRule) {
-        salida.push(`  [${regla.severity}] ${regla.rule} × ${regla.count} · ${regla.skills.length} skill(s)`);
-        salida.push(`         corrige: ${regla.fix}`);
+        salida.push(tr('cli.audit.rule-row', {
+          severity: regla.severity, rule: regla.rule, count: regla.count, skills: regla.skills.length,
+        }));
+        salida.push(tr('cli.audit.rule-fix', { fix: regla.fix }));
       }
       salida.push('');
     }
 
     if (informe.contenedores.length > 0) {
-      salida.push('en el contenedor:');
-      for (const c of informe.contenedores) salida.push(`  [${c.severity}] ${c.message}`);
+      salida.push(tr('cli.audit.container'));
+      for (const c of informe.contenedores) salida.push(tr('cli.audit.container-row', { severity: c.severity, message: c.message }));
       salida.push('');
     }
 
     // El detalle: por defecto lo que NO pasa, que es lo que hay que mirar. `--todo` incluye las que pasan.
     const conHallazgo = informe.skills.filter((s) => flags.todo || s.status !== 'PASS');
     if (conHallazgo.length > 0) {
-      salida.push(`detalle (${conHallazgo.length} de ${informe.totals.total}):`);
+      salida.push(tr('cli.audit.detail-header', { shown: conHallazgo.length, total: informe.totals.total }));
       for (const skill of conHallazgo) {
         const m = skill.medidas;
-        salida.push(`\n  ${skill.status.padEnd(10)} ${skill.key}  [${skill.estadoLegible}]`);
-        salida.push(`             descripción ${m ? m.description : '?'} · disparador ${m ? m.whenToUse : '?'} · cuerpo ${m ? m.body : '?'} · secciones ${m ? m.secciones : '?'}`);
+        salida.push(`\n${tr('cli.audit.skill-row', { status: skill.status.padEnd(10), key: skill.key, estado: skill.estadoLegible })}`);
+        salida.push(tr('cli.audit.measures', {
+          description: m ? m.description : '?',
+          whenToUse: m ? m.whenToUse : '?',
+          body: m ? m.body : '?',
+          secciones: m ? m.secciones : '?',
+        }));
         for (const f of skill.findings) {
           if (!flags.todo && f.severity === 'info') continue;
-          const detalle = f.threshold !== null ? ` (observado ${JSON.stringify(f.observed)}, umbral ${JSON.stringify(f.threshold)})` : ` (observado ${JSON.stringify(f.observed)})`;
-          salida.push(`    · [${f.severity}] ${f.rule}${detalle}`);
-          salida.push(`      ${f.message}`);
-          salida.push(`      corrige: ${f.fix}`);
+          salida.push(f.threshold !== null
+            ? tr('cli.audit.finding-observed', {
+              severity: f.severity, rule: f.rule, observed: JSON.stringify(f.observed), threshold: JSON.stringify(f.threshold),
+            })
+            : tr('cli.audit.finding-plain', { severity: f.severity, rule: f.rule, observed: JSON.stringify(f.observed) }));
+          salida.push(tr('cli.audit.finding-message', { message: f.message }));
+          salida.push(tr('cli.audit.finding-fix', { fix: f.fix }));
         }
       }
       salida.push('');
     }
 
     salida.push(informe.totals.error + informe.totals.unreadable > 0
-      ? `${informe.totals.error + informe.totals.unreadable} skill(s) con error: esto es un diagnóstico, no una reparación — nada se ha modificado`
-      : 'ninguna skill con error');
+      ? tr('cli.audit.errors', { n: informe.totals.error + informe.totals.unreadable })
+      : tr('cli.audit.no-errors'));
     process.stdout.write(`${salida.join('\n')}\n`);
     process.exit(informe.totals.error + informe.totals.unreadable > 0 ? 1 : 0);
   }
@@ -830,47 +855,53 @@ switch (command) {
     const r = reparar(id, key, { root, curated: curatedLibraryRoot(), cwd: process.cwd() });
     if (r.status === 'missing') { process.stderr.write(`${r.reason}\n`); process.exit(1); }
     const lineas = [];
-    lineas.push(`\nreparar ${id} — proyecto ${key}`);
+    lineas.push(tr('cli.repair.title', { id, key }));
     if (r.status === 'nothing-to-do') {
-      lineas.push(`  nada que reparar: ${r.reason}`, '');
+      lineas.push(tr('cli.repair.nothing', { reason: r.reason }), '');
       process.stdout.write(`${lineas.join('\n')}\n`);
       break;
     }
-    lineas.push(`  base: ${r.base.state} (huella ${String(r.base.hash).slice(0, 12)})`);
-    lineas.push(`  nivel de la corrección: ${r.nivel}${r.nivel === 1 ? ' (mecánica)' : r.nivel === 2 ? ' (semántica acotada)' : ''}`);
+    lineas.push(tr('cli.repair.base', { state: r.base.state, hash: String(r.base.hash).slice(0, 12) }));
+    lineas.push(`${tr('cli.repair.level', { nivel: r.nivel })}${r.nivel === 1 ? tr('cli.repair.level-1') : r.nivel === 2 ? tr('cli.repair.level-2') : ''}`);
     if (r.reparaciones?.length) {
-      lineas.push('  reparaciones:');
-      for (const rep of r.reparaciones) lineas.push(`    · [n${rep.nivel}] ${rep.regla}: ${rep.describe}`);
+      lineas.push(tr('cli.repair.repairs'));
+      for (const rep of r.reparaciones) lineas.push(tr('cli.repair.repair-row', { level: rep.nivel, rule: rep.regla, describe: rep.describe }));
     }
-    if (r.movidas?.length) lineas.push(`  material movido: ${r.movidas.map((m) => `${m.titulo} -> ${m.ruta}`).join(', ')}`);
+    if (r.movidas?.length) lineas.push(tr('cli.repair.moved', { list: r.movidas.map((m) => `${m.titulo} -> ${m.ruta}`).join(', ') }));
     if (r.status === 'blocked') {
-      lineas.push('  BLOQUEADA — no se ha creado ninguna propuesta:');
-      for (const b of r.bloqueos) lineas.push(`    · ${b.rule}: ${b.motivo}`);
+      lineas.push(tr('cli.repair.blocked'));
+      for (const b of r.bloqueos) lineas.push(tr('cli.repair.block-row', { rule: b.rule, motivo: b.motivo }));
       lineas.push(`    ${r.reason}`);
     } else if (r.status !== 'proposed') {
-      lineas.push(`  NO SE HA CREADO NINGUNA PROPUESTA (${r.status}):`);
-      for (const e of r.errors ?? []) lineas.push(`    · ${e}`);
-      for (const x of r.conflicts ?? []) lineas.push(`    · choca con ${x.id} (${x.reason})`);
+      lineas.push(tr('cli.repair.no-proposal', { status: r.status }));
+      for (const e of r.errors ?? []) lineas.push(tr('cli.repair.error-row', { error: e }));
+      for (const x of r.conflicts ?? []) lineas.push(tr('cli.repair.conflict-row', { id: x.id, reason: x.reason }));
       if (r.reason) lineas.push(`    ${r.reason}`);
-      lineas.push('    Nada se ha modificado.');
+      lineas.push(tr('cli.repair.nothing-changed'));
     } else {
-      lineas.push(`  diff: +${r.diff?.lineas?.anadidas?.length ?? 0}/-${r.diff?.lineas?.eliminadas?.length ?? 0} línea(s) · forma: ${r.forma.bytesAntes} -> ${r.forma.bytesDespues} bytes (${r.forma.transformaciones.join(', ') || 'sin cambios de forma'})`);
+      lineas.push(tr('cli.repair.diff', {
+        added: r.diff?.lineas?.anadidas?.length ?? 0,
+        removed: r.diff?.lineas?.eliminadas?.length ?? 0,
+        before: r.forma.bytesAntes,
+        after: r.forma.bytesDespues,
+        transformations: r.forma.transformaciones.join(', ') || tr('cli.repair.no-transform'),
+      }));
       const check = checkProposal(id, key, { root, curated: curatedLibraryRoot() });
-      lineas.push(`  puerta de la propuesta: ${check.ok ? 'en verde' : `ROJA — ${check.errors[0]}`}`);
-      lineas.push('', `  siguiente: node bin/skill-compiler.mjs promote ${id} --nivel ${r.nivel}   (activar, con pruebas)`);
-      lineas.push(`             node bin/skill-compiler.mjs show ${id}                        (leerla entera)`);
+      lineas.push(tr('cli.repair.gate', {
+        gate: check.ok ? tr('cli.repair.gate-ok') : tr('cli.repair.gate-fail', { error: check.errors[0] }),
+      }));
+      lineas.push('', tr('cli.repair.next-promote', { id, nivel: r.nivel }));
+      lineas.push(tr('cli.repair.next-show', { id }));
     }
     if (r.notas?.length) {
-      lineas.push('', '  avisos del motor:');
+      lineas.push('', tr('cli.repair.engine-notes'));
       for (const nota of r.notas) {
-        lineas.push(nota === 'seccion-ajena'
-          ? '    · el cuerpo ya tiene una sección «Material consultable» del autor: se respeta tal cual y no se añade otra; revisa a mano si falta alguna referencia'
-          : `    · ${nota}`);
+        lineas.push(nota === 'seccion-ajena' ? tr('cli.repair.foreign-section') : `    - ${nota}`);
       }
     }
     if (r.sinReparacion?.length) {
-      lineas.push('', '  no reparable por el motor:');
-      for (const s of r.sinReparacion) lineas.push(`    · ${s.rule}: ${s.motivo ?? 'sin catálogo'}`);
+      lineas.push('', tr('cli.repair.not-fixable'));
+      for (const s of r.sinReparacion) lineas.push(tr('cli.repair.block-row', { rule: s.rule, motivo: s.motivo ?? tr('cli.repair.no-catalogue') }));
     }
     process.stdout.write(`${lineas.join('\n')}\n`);
     break;
@@ -887,7 +918,7 @@ switch (command) {
       ? String(flags.nivel).split(',').map((n) => Number(n.trim())).filter((n) => Number.isFinite(n))
       : [];
     if (niveles.includes(3)) {
-      process.stderr.write('el nivel 3 no se promociona automáticamente: esos cambios (seguridad, permisos, secretos, aislamiento, facturación) los aprueba una persona con `approve`. Quita el 3 de --nivel.\n');
+      process.stderr.write(`${tr('cli.promote.level-3')}\n`);
       process.exit(2);
     }
     if (flags.dry) {
@@ -896,32 +927,41 @@ switch (command) {
       const { readFileSync: leer, existsSync: hay } = await import('node:fs');
       const { join: unir } = await import('node:path');
       const metaFile = unir(root, 'projects', key, 'proposed', id, 'meta.json');
-      if (!hay(metaFile)) { process.stderr.write(`no hay ninguna propuesta ${id} en ${key}\n`); process.exit(1); }
+      if (!hay(metaFile)) { process.stderr.write(`${tr('cli.promote.no-proposal', { id, key })}\n`); process.exit(1); }
       const meta = JSON.parse(leer(metaFile, 'utf8'));
       const r = pruebasDeRegresion(id, key, meta, { root, curated: curatedLibraryRoot() });
-      process.stdout.write([`\npruebas de regresión de ${id} — sin escribir nada`, ...r.pruebas.map((p) => `  ${p.ok ? 'ok  ' : 'FALLA'} ${p.nombre.padEnd(22)} ${p.detalle}`), `\n  resultado: ${r.ok ? 'pasa' : 'NO pasa'}`, ''].join('\n'));
+      process.stdout.write([
+        tr('cli.promote.dry-title', { id }),
+        ...r.pruebas.map((p) => tr('cli.promote.test-row', { mark: p.ok ? tr('cli.mark.ok') : tr('cli.mark.fail'), name: p.nombre.padEnd(22), detail: p.detalle })),
+        tr('cli.promote.dry-result', { result: r.ok ? tr('cli.promote.pass') : tr('cli.promote.fail') }),
+        '',
+      ].join('\n'));
       process.exit(r.ok ? 0 : 1);
     }
     const r = promover(id, key, { root, curated: curatedLibraryRoot(), cwd: process.cwd(), niveles });
-    const texto = [`\npromover ${id} — proyecto ${key}`, `  nivel de la corrección: ${r.nivel ?? '?'}`];
+    const texto = [tr('cli.promote.title', { id, key }), tr('cli.promote.level', { nivel: r.nivel ?? '?' })];
     // El lote se anota también en el resultado del CLI: cuando espera por el lote, se ve por qué espera.
-    if (r.grupo) texto.push(`  lote: ${r.grupo}`);
-    if (r.regresion) for (const p of r.regresion.pruebas) texto.push(`  ${p.ok ? 'ok  ' : 'FALLA'} ${p.nombre.padEnd(22)} ${p.detalle}`);
+    if (r.grupo) texto.push(tr('cli.promote.batch', { group: r.grupo }));
+    if (r.regresion) {
+      for (const p of r.regresion.pruebas) {
+        texto.push(tr('cli.promote.test-row', { mark: p.ok ? tr('cli.mark.ok') : tr('cli.mark.fail'), name: p.nombre.padEnd(22), detail: p.detalle }));
+      }
+    }
     texto.push('');
     if (r.status === 'promoted') {
-      texto.push(`  PROMOVIDA: ${String(r.hashAnterior).slice(0, 12)} -> ${String(r.hashResultante).slice(0, 12)}`);
-      texto.push(`  la versión anterior queda apartada y entera en ${r.superseded ?? '(sin versión anterior)'}`);
+      texto.push(tr('cli.promote.promoted', { before: String(r.hashAnterior).slice(0, 12), after: String(r.hashResultante).slice(0, 12) }));
+      texto.push(tr('cli.promote.previous', { path: r.superseded ?? tr('cli.promote.no-previous') }));
     } else if (r.status === 'reverted') {
-      texto.push(`  REVERTIDA (${r.reason})`);
-      texto.push(`  la versión anterior está de vuelta, con su huella ${String(r.hashRestaurado).slice(0, 12)}`);
+      texto.push(tr('cli.promote.reverted', { reason: r.reason }));
+      texto.push(tr('cli.promote.reverted-hash', { hash: String(r.hashRestaurado).slice(0, 12) }));
     } else if (r.status === 'pending') {
-      texto.push(`  sin activar: ${r.reason}`);
-      if (r.nivel <= 2) texto.push(`  para activarla: node bin/skill-compiler.mjs promote ${id} --nivel ${r.nivel}`);
-      else texto.push(`  esta corrección exige aprobación humana: node bin/skill-compiler.mjs approve ${id}`);
+      texto.push(tr('cli.promote.pending', { reason: r.reason }));
+      if (r.nivel <= 2) texto.push(tr('cli.promote.activate', { id, nivel: r.nivel }));
+      else texto.push(tr('cli.promote.needs-human', { id }));
     } else {
-      texto.push(`  ${r.status.toUpperCase()}: ${r.reason}`);
+      texto.push(tr('cli.promote.status', { status: r.status.toUpperCase(), reason: r.reason }));
     }
-    if (r.status !== 'promoted' && r.status !== 'reverted') texto.push('  nada se ha modificado');
+    if (r.status !== 'promoted' && r.status !== 'reverted') texto.push(tr('cli.promote.unchanged'));
     texto.push('');
     process.stdout.write(texto.join('\n'));
     process.exit(r.status === 'promoted' || r.status === 'pending' || r.status === 'reverted' ? 0 : 1);
@@ -931,18 +971,31 @@ switch (command) {
     const { historial, ciclos } = await import('../lib/promote.mjs');
     const key = scope();
     const filas = historial(key, { root, id: positional[0] ?? null, grupo: flags.grupo ?? null });
-    if (filas.length === 0) { process.stdout.write(`\nSin promociones registradas en ${key}.\n`); break; }
-    const texto = [`\nhistorial de correcciones — ${key}`];
+    if (filas.length === 0) { process.stdout.write(`${tr('cli.history.empty', { key })}\n`); break; }
+    const texto = [tr('cli.history.title', { key })];
     for (const f of filas) {
-      texto.push(`  ${f.at}  ${(f.decision ?? '?').padEnd(24)} ${f.id}  nivel ${f.nivel}${f.group ? `  lote ${f.group}` : ''}`);
-      texto.push(`      reglas: ${f.reglas.join(', ') || '(sin reglas)'} · pruebas: ${f.pruebas.join(' ')}`);
-      if (f.anterior || f.resultado) texto.push(`      ${String(f.anterior).slice(0, 12)} -> ${String(f.resultado ?? '(sin resultado)').slice(0, 12)}`);
-      if (f.why) texto.push(`      motivo: ${f.why}`);
+      texto.push(tr('cli.history.row', {
+        at: f.at,
+        decision: (f.decision ?? '?').padEnd(24),
+        id: f.id,
+        nivel: f.nivel,
+        group: f.group ? tr('cli.history.group', { group: f.group }) : '',
+      }));
+      texto.push(tr('cli.history.rules', { rules: f.reglas.join(', ') || tr('cli.history.no-rules'), tests: f.pruebas.join(' ') }));
+      if (f.anterior || f.resultado) {
+        texto.push(tr('cli.history.hashes', {
+          before: String(f.anterior).slice(0, 12),
+          after: String(f.resultado ?? tr('cli.history.no-result')).slice(0, 12),
+        }));
+      }
+      if (f.why) texto.push(tr('cli.history.why', { why: f.why }));
     }
     const repetidas = ciclos({ key, root });
     if (repetidas.length > 0) {
-      texto.push('', '  POSIBLES CICLOS (la misma corrección, una y otra vez):');
-      for (const c of repetidas) texto.push(`    · ${c.id} (${c.reglas}): ${c.promociones} promociones, la última ${c.ultima}`);
+      texto.push('', tr('cli.history.cycles'));
+      for (const c of repetidas) {
+        texto.push(tr('cli.history.cycle-row', { id: c.id, rules: c.reglas, promotions: c.promociones, last: c.ultima }));
+      }
     }
     texto.push('');
     process.stdout.write(texto.join('\n'));
@@ -966,13 +1019,13 @@ switch (command) {
     });
     const actual = await review.listen();
     process.stdout.write([
-      `Revisión de skills — proyecto ${key}`,
+      tr('cli.review.title', { key }),
       '',
       `  ${review.urlFor(actual)}`,
       '',
-      'Ábrela en el navegador. Escucha solo en 127.0.0.1 y el token es de un solo uso:',
-      'sin él, la página no responde ni dice que existe.',
-      'Ctrl+C para cerrarla.',
+      tr('cli.review.open'),
+      tr('cli.review.no-token'),
+      tr('cli.review.ctrl-c'),
       '',
     ].join('\n'));
     break;

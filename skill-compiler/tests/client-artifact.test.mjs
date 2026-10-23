@@ -325,7 +325,8 @@ describe('artefacto de interfaz · decidir no puede contar una pregunta como hec
   });
 
   it('una respuesta que pregunta el ámbito se cuenta como pendiente, no como hecha', () => {
-    assert.match(client, /const SCOPE_ASK = '¿Dónde quieres que viva'/);
+    assert.match(client, /const SCOPE_ASK = 'Dime donde quieres que viva'/);
+    assert.match(client, /resultado\?\.code === 'scope-ask'/, 'y el codigo del contrato manda sobre la prosa');
     assert.match(client, /salida\.startsWith\(SCOPE_ASK\)/, 'y se apunta como motivo antes de comprobar el efecto');
   });
 
@@ -338,7 +339,8 @@ describe('artefacto de interfaz · decidir no puede contar una pregunta como hec
     const byName = Object.fromEntries(skillCommands({ root: s.root }).map((c) => [c.name, c]));
     const r = byName['skill-approve'].handler({ agent: { session: { header: { cwd: s.base } } }, rawInput: 'measured-decision-check' });
     assert.equal(r.kind, 'success', 'para el humano sigue siendo una respuesta, no un fallo');
-    assert.ok(r.text.startsWith('¿Dónde quieres que viva'), `el marcador del panel no casa con el comando: «${r.text.slice(0, 40)}»`);
+    assert.equal(r.code, 'scope-ask', 'la pregunta viaja como codigo, no solo como prosa');
+    assert.ok(r.text.startsWith('Dime donde quieres que viva'), `el marcador del panel no casa con el comando: «${r.text.slice(0, 40)}»`);
     assert.equal(projectKey(s.base).length > 0, true);
   });
 });

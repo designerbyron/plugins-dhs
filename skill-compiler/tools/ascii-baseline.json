@@ -1,5 +1,5 @@
 {
-  "generado": "2026-10-23T10:33:56.162Z",
+  "generado": "2026-10-23T10:52:03.096Z",
   "ficheros": {
     "lib/audit.mjs": 309,
     "lib/auto-approve.mjs": 170,
@@ -16,10 +16,10 @@
     "lib/scope.mjs": 572,
     "lib/security.mjs": 474,
     "lib/i18n/codes.mjs": 11,
-    "lib/i18n/en.mjs": 23,
-    "lib/i18n/es.mjs": 172,
+    "lib/i18n/en.mjs": 0,
+    "lib/i18n/es.mjs": 0,
     "lib/i18n/index.mjs": 45,
-    "bin/skill-compiler.mjs": 722,
+    "bin/skill-compiler.mjs": 524,
     "client.js": 906,
     "index.js": 327
   }

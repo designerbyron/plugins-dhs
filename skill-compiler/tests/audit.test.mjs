@@ -36,6 +36,9 @@ import { folderHash, projectKey, propose, treeOf } from '../lib/compiler.mjs';
 import { auditarAlmacen, NOMBRE_DE_ESTADO, resumenDeAuditoria } from '../lib/audit.mjs';
 import { cleanupSandboxes, sandbox } from './helpers.mjs';
 
+// La prosa de este fichero se afirma en espanol: el idioma se fija explicitamente (el base es `en`).
+process.env.DSH_LANG = 'es';
+
 after(cleanupSandboxes);
 
 const CWD = 'C:\\xampp\\htdocs\\saas-corporative';

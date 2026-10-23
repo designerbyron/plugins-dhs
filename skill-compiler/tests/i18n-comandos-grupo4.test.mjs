@@ -140,7 +140,7 @@ describe('F1.2 · grupo 4 en los dos idiomas', () => {
     assert.equal(es.kind, 'success');
 
     assert.match(en.text, /Skill systems on this machine/);
-    assert.match(en.text, /Ownership: AUSENTE/);
+    assert.match(en.text, /Ownership: ABSENT/);
     assert.match(en.text, /Answer: \/skill-ownership dsh-only/);
     assert.doesNotMatch(en.text, /Sistemas de skills|Sin choques|Respuesta:/);
 

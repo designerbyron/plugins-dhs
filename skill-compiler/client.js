@@ -78,11 +78,12 @@ window.__ModuleLoader__.load({
     // decisión lo que queda se ofrece en el propio bloque, sin volver a pedir la lista.
     const LIST_COMMANDS = ['skill-proposals', 'skill-show', 'skill-retired', 'skill-publish', 'skill-scope'];
     /**
-     * Con qué empieza la respuesta de `skill-aprobar` cuando **no** ha aprobado: pregunta el ámbito. Es texto
-     * del comando (siempre en español), no de la interfaz, y se comprueba aquí porque el resultado sólo trae
-     * `kind` y `text`: contar esa respuesta como aprobada ya costó diez aprobaciones que no ocurrieron.
+     * Con qué empieza la respuesta de `skill-approve` cuando **no** ha aprobado: pregunta el ámbito. Es texto
+     * del comando (el de su idioma, hoy ASCII), no de la interfaz, y se comprueba aquí porque contar esa
+     * respuesta como aprobada ya costó diez aprobaciones que no ocurrieron. La primera comprobación es el
+     * `code` del contrato (`scope-ask`), que no depende del idioma; la prosa queda como reserva.
      */
-    const SCOPE_ASK = '¿Dónde quieres que viva';
+    const SCOPE_ASK = 'Dime donde quieres que viva';
     /** El host no devolvió resultado: no se ejecutó nada. Se dice con estas palabras, no como éxito. */
     const NO_RESULT = 'el host no devolvió resultado: el comando no se ejecutó';
 
@@ -824,8 +825,9 @@ window.__ModuleLoader__.load({
             };
           }
 
-          // 2) Pidió el ámbito: la orden llegó, sólo faltaba `--local`. Otra firma no lo arregla.
-          if (salida.startsWith(SCOPE_ASK)) {
+          // 2) Pidió el ámbito: la orden llegó, sólo faltaba `--local`. Otra firma no lo arregla. Manda el
+          //    código del contrato; la prosa es la reserva para un anfitrión que todavía no lo manda.
+          if (resultado?.code === 'scope-ask' || salida.startsWith(SCOPE_ASK)) {
             motivos.push(`${forma.nombre}: el comando preguntó el ámbito`);
             break;
           }

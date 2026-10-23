@@ -157,7 +157,7 @@ describe('comandos · /skill-proposals', () => {
     const { byName } = commands('C:\\tmp');
     const result = byName['skill-proposals'].handler({ agent: {}, rawInput: '' });
     assert.equal(result.kind, 'error');
-    assert.match(result.text, /Sin ámbito/);
+    assert.match(result.text, /Sin ambito/);
   });
 
   it('distingue lo pendiente de lo aprobado y enseña los ids', () => {
@@ -169,7 +169,7 @@ describe('comandos · /skill-proposals', () => {
     const { byName } = commands(s.root);
     const result = byName['skill-proposals'].handler({ agent, rawInput: '' });
     assert.equal(result.kind, 'success');
-    assert.match(result.text, /Pendientes de tu aprobación \(1\)/);
+    assert.match(result.text, /Pendientes de tu aprobacion \(1\)/);
     assert.match(result.text, /otro-tema-distinto/);
     assert.match(result.text, /Aprobadas y activas \(1\)/);
     assert.match(result.text, /measured-decision-check/);
@@ -199,7 +199,7 @@ describe('comandos · /skill-show', () => {
     const { byName } = commands(s.root);
     const result = byName['skill-show'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(result.kind, 'success');
-    assert.match(result.text, /Propuesta pendiente de aprobación/);
+    assert.match(result.text, /Propuesta pendiente de aprobacion/);
     assert.match(result.text, /## Procedure/, 'el cuerpo entero, no un resumen');
   });
 
@@ -223,7 +223,7 @@ describe('comandos · /skill-approve', () => {
 
     const result = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(result.kind, 'success', 'preguntar no es un fallo: es la pregunta');
-    assert.match(result.text, /¿Dónde quieres que viva/);
+    assert.match(result.text, /Dime donde quieres que viva/);
     assert.match(result.text, /--local/, 'tiene que ofrecer el proyecto');
     assert.match(result.text, /--global/, 'y tiene que ofrecer la biblioteca de usuario');
     assert.match(result.text, /skill-publish/, 'y el nombre de su fila, para el ratón');
@@ -238,7 +238,7 @@ describe('comandos · /skill-approve', () => {
     const { byName } = commands(s.root);
     const result = byName['skill-approve'].handler({ agent, rawInput: '' });
     assert.equal(result.kind, 'success', 'debe listar, no exigir que el humano recuerde un id');
-    assert.match(result.text, /Pendientes de tu aprobación/);
+    assert.match(result.text, /Pendientes de tu aprobacion/);
     assert.match(result.text, /Aprobadas y activas/);
   });
 
@@ -277,7 +277,7 @@ describe('comandos · /skill-approve', () => {
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check', 'SKILL.md')), true);
     assert.equal(catalog.count(), 1, 'el aviso al catálogo es lo que la hace usable sin reiniciar');
     assert.match(result.text, /sin reiniciar/);
-    assert.match(result.text, /Invocarla tú: \/measured-decision-check/);
+    assert.match(result.text, /Invocarla tu: \/measured-decision-check/);
   });
 
   it('con avisos exige confirmación explícita, y la acepta con --force', () => {
@@ -400,7 +400,7 @@ describe('comandos · filas de pendientes', () => {
 
     const result = rows.find((row) => row.name === 'skill-show-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'success');
-    assert.match(result.text, /Puerta de validación: pasa\./);
+    assert.match(result.text, /Puerta de validacion: pasa\./);
     assert.match(result.text, /aviso/);
     assert.match(result.text, /Aprobarla con estos avisos exige decirlo/);
     // Y el contenido entero, para poder leer antes de decidir.
@@ -436,14 +436,14 @@ describe('comandos · filas de pendientes', () => {
 
     const result = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check --local' });
     assert.equal(result.kind, 'success');
-    assert.match(result.text, /Pendientes de tu aprobación \(1\):/);
+    assert.match(result.text, /Pendientes de tu aprobacion \(1\):/);
     assert.match(result.text, /otro-tema-distinto/);
     assert.equal(result.text.includes('measured-decision-check — ') && /Pendientes[\s\S]*measured-decision-check — /.test(result.text), false,
       'la recién aprobada no puede seguir apareciendo como pendiente');
 
     // Y cuando no queda nada, se dice sin rodeos.
     const ultima = byName['skill-approve'].handler({ agent, rawInput: 'otro-tema-distinto --local' });
-    assert.match(ultima.text, /Pendientes de tu aprobación \(0\):[\s\S]*ninguna/);
+    assert.match(ultima.text, /Pendientes de tu aprobacion \(0\):[\s\S]*ninguna/);
   });
 
   it('aprobar algo apartado, o apartar algo activo, lo dice con el estado real', () => {
@@ -454,7 +454,7 @@ describe('comandos · filas de pendientes', () => {
 
     const apartada = byName['skill-approve'].handler({ agent, rawInput: 'measured-decision-check' });
     assert.equal(apartada.kind, 'error');
-    assert.match(apartada.text, /está apartada/);
+    assert.match(apartada.text, /esta apartada/);
     assert.match(apartada.text, /rejected/);
 
     const deNuevo = byName['skill-reject'].handler({ agent, rawInput: 'measured-decision-check' });
@@ -490,8 +490,8 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
 
     const result = byName['skill-approve'].handler({ agent, rawInput: 'dhs-nexus-protocol --local' });
     assert.equal(result.kind, 'error', 'no había nada con ese id: se dice');
-    assert.match(result.text, /No hay ninguna propuesta «dhs-nexus-protocol»/);
-    assert.match(result.text, /¿Querías decir «dsh-nexus-protocol»\?/);
+    assert.match(result.text, /No hay ninguna propuesta "dhs-nexus-protocol"/);
+    assert.match(result.text, /Querias decir "dsh-nexus-protocol"\?/);
     assert.match(result.text, /skill-proposals/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'dsh-nexus-protocol')), false, 'y no se movió nada');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'proposed', 'dsh-nexus-protocol')), true);
@@ -504,8 +504,8 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
 
     const result = byName['skill-approve'].handler({ agent, rawInput: 'otra-cosa-muy-distinta --local' });
     assert.equal(result.kind, 'error');
-    assert.doesNotMatch(result.text, /¿Querías decir/);
-    assert.match(result.text, /Míralas con \/skill-proposals/);
+    assert.doesNotMatch(result.text, /Querias decir/);
+    assert.match(result.text, /Miralas con \/skill-proposals/);
   });
 
   it('con dos candidatos igual de cerca, elige siempre el mismo', () => {
@@ -516,7 +516,7 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
 
     const primera = byName['skill-approve'].handler({ agent, rawInput: 'medida-unz --local' });
     const segunda = byName['skill-approve'].handler({ agent, rawInput: 'medida-unz --local' });
-    assert.match(primera.text, /¿Querías decir «medida-una»\?/, 'el empate lo rompe el orden, no el azar');
+    assert.match(primera.text, /Querias decir "medida-una"\?/, 'el empate lo rompe el orden, no el azar');
     assert.equal(primera.text, segunda.text);
   });
 
@@ -528,7 +528,7 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     for (const comando of ['skill-show', 'skill-reject']) {
       const result = byName[comando].handler({ agent, rawInput: 'dsh-nexus-protoocl' });
       assert.equal(result.kind, 'error', comando);
-      assert.match(result.text, /¿Querías decir «dsh-nexus-protocol»\?/, comando);
+      assert.match(result.text, /Querias decir "dsh-nexus-protocol"\?/, comando);
     }
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'dsh-nexus-protocol')), false);
   });
@@ -548,7 +548,7 @@ describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
 
     const { byName } = commands(s.root);
     const listado = byName['skill-proposals'].handler({ agent, rawInput: '' });
-    assert.match(listado.text, /actualización de la versión activa/);
+    assert.match(listado.text, /actualizacion de la version activa/);
     // Y la etiqueta del medidor: si el import falta, esto era «no se pudo medir» y la suite no se enteraba.
     assert.match(listado.text, /auto-actualizable|exige humano/, listado.text.split('\n').slice(0, 5).join(' | '));
     assert.doesNotMatch(listado.text, /no se pudo medir/);
@@ -564,7 +564,7 @@ describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     const fila = pending({ root: s.root, key: KEY }).find((p) => p.id === 'measured-decision-check');
     assert.equal(fila.updatesActive, false);
-    assert.doesNotMatch(filasTexto(s), /actualización de la versión activa/);
+    assert.doesNotMatch(filasTexto(s), /actualizacion de la version activa/);
   });
 
   const filasTexto = (s) => commands(s.root).byName['skill-proposals'].handler({ agent, rawInput: '' }).text;
@@ -604,7 +604,7 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const { byName } = commands(s.root);
     const r = byName['skill-approve'].handler({ agent, rawInput: `${ids.join(',')} --local` });
     assert.equal(r.kind, 'success', r.text);
-    assert.match(r.text, /Lote de 3: 3 aprobada\(s\) · 0 con fallo/);
+    assert.match(r.text, /Lote de 3: 3 aprobada\(s\) - 0 con fallo/);
     for (const id of ids) {
       assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', id, 'SKILL.md')), true, id);
       assert.match(r.text, new RegExp(`ok +${id}`));
@@ -631,7 +631,7 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const { byName } = commands(s.root);
     const r = byName['skill-approve'].handler({ agent, rawInput: `${ids[0]},${ids[1]},no-existe --local` });
     assert.equal(r.kind, 'error', 'un lote con un fallo necesita que alguien lo mire');
-    assert.match(r.text, /Lote de 3: 2 aprobada\(s\) · 1 con fallo/);
+    assert.match(r.text, /Lote de 3: 2 aprobada\(s\) - 1 con fallo/);
     assert.match(r.text, new RegExp(`ok +${ids[0]}`));
     assert.match(r.text, /FALLO no-existe — No hay ninguna propuesta/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', ids[0], 'SKILL.md')), true);
@@ -644,7 +644,7 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     byName['skill-approve'].handler({ agent, rawInput: `${ids[0]} --local` });
     const r = byName['skill-approve'].handler({ agent, rawInput: `${ids[0]},${ids[1]} --local` });
     assert.equal(r.kind, 'success', r.text);
-    assert.match(r.text, /Lote de 2: 2 aprobada\(s\) · 0 con fallo/);
+    assert.match(r.text, /Lote de 2: 2 aprobada\(s\) - 0 con fallo/);
     assert.match(r.text, /Ya estaba activa/);
   });
 
@@ -654,7 +654,7 @@ describe('comandos · aprobar en lote (plural), local y global', () => {
     const { byName } = commands(s.root);
     const r = byName['skill-approve'].handler({ agent, rawInput: ids.join(',') });
     assert.equal(r.kind, 'success', 'es la pregunta, no un fallo');
-    assert.match(r.text, /¿Dónde quieres que vivan estas 3\?/);
+    assert.match(r.text, /Dime donde quieres que vivan estas 3\./);
     assert.match(r.text, /--local/);
     assert.match(r.text, /--global/);
     for (const id of ids) {

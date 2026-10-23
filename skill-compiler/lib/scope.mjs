@@ -725,6 +725,73 @@ export function proyectosConocidos({ root } = {}) {
   return [...proyectos].sort();
 }
 
+/**
+ * Los diagnosticos (`estado`, `motivo`) son **datos**: viven en espanol, en minusculas y con la forma que
+ * fijo el contrato, y ningun consumidor decide por su prosa. Pero se pintan dentro de un marco que ya esta
+ * traducido, y ahi un motivo en espanol dentro de una frase inglesa se lee como un defecto del plugin.
+ *
+ * Estas dos tablas son de **representacion**, no de datos: se aplican en el punto de presentacion, y un
+ * motivo que no este en la tabla se pinta tal cual (nunca la clave cruda, y nunca se pierde el dato).
+ * Anadir un diagnostico nuevo no obliga a tocar nada: sale en espanol hasta que tenga su clave.
+ */
+const ESTADOS_EN_TEXTO = Object.freeze({
+  ausente: 'scope.estado.ausente',
+  declarada: 'scope.estado.declarada',
+  invalida: 'scope.estado.invalida',
+  ilegible: 'scope.estado.ilegible',
+  accesible: 'scope.estado.accesible',
+  parcial: 'scope.estado.parcial',
+  inaccesible: 'scope.estado.inaccesible',
+  inexistente: 'scope.estado.inexistente',
+});
+
+/**
+ * Un motivo puede ser una frase fija o llevar su detalle pegado (el codigo del sistema, la ruta, el numero de
+ * entradas), y ese detalle NO se traduce: se transporta como parametro. Por eso la tabla guarda un patron y,
+ * cuando hace falta, como sacar los parametros de la coincidencia.
+ */
+const MOTIVOS_EN_TEXTO = Object.freeze([
+  { patron: /^nadie ha respondido$/, clave: 'scope.motivo.no-answer' },
+  { patron: /^la declaraci\u00f3n no es un objeto$/, clave: 'scope.motivo.not-object' },
+  { patron: /^la declaraci\u00f3n existe y no se pudo leer \((.+)\)$/, clave: 'scope.motivo.unreadable', params: (m) => ({ detalle: m[1] }) },
+  { patron: /^la declaraci\u00f3n no es JSON v\u00e1lido \((.+)\)$/, clave: 'scope.motivo.invalid-json', params: (m) => ({ detalle: m[1] }) },
+  { patron: /^la declaraci\u00f3n trae campos que este contrato no conoce: (.+)$/, clave: 'scope.motivo.unknown-fields', params: (m) => ({ campos: m[1] }) },
+  { patron: /^la declaraci\u00f3n no dice \u00ab([^\u00bb]+)\u00bb ni \u00ab([^\u00bb]+)\u00bb$/, clave: 'scope.motivo.not-an-answer', params: (m) => ({ dshOnly: m[1], machine: m[2] }) },
+  { patron: /^declarada$/, clave: 'scope.motivo.declared' },
+  { patron: /^no hay ruta$/, clave: 'scope.motivo.no-path' },
+  { patron: /^alguna de las dos rutas no es utilizable$/, clave: 'scope.motivo.unusable-path' },
+  { patron: /^dentro del \u00e1mbito$/, clave: 'scope.motivo.inside' },
+  { patron: /^fuera del \u00e1mbito autorizado \((.+)\)$/, clave: 'scope.motivo.outside', params: (m) => ({ ruta: m[1] }) },
+  { patron: /^no hay ruta que leer$/, clave: 'scope.motivo.no-path-to-read' },
+  { patron: /^enlace roto \((.+)\)$/, clave: 'scope.motivo.broken-link', params: (m) => ({ destino: m[1] }) },
+  { patron: /^la ruta no existe$/, clave: 'scope.motivo.path-missing' },
+  { patron: /^no se pudo consultar la ruta \((.+)\)$/, clave: 'scope.motivo.path-unqueryable', params: (m) => ({ detalle: m[1] }) },
+  { patron: /^la ruta existe y no es una carpeta$/, clave: 'scope.motivo.not-a-folder' },
+  { patron: /^no se pudo listar la carpeta \((.+)\)$/, clave: 'scope.motivo.folder-unlistable', params: (m) => ({ detalle: m[1] }) },
+  { patron: /^(\d+) entrada\(s\) sin poder leer$/, clave: 'scope.motivo.entries-unread', params: (m) => ({ n: m[1] }) },
+  { patron: /^le\u00eddo entero$/, clave: 'scope.motivo.read-whole' },
+  { patron: /^(\d+) carpeta\(s\) sin poder leer$/, clave: 'scope.motivo.folders-unread', params: (m) => ({ n: m[1] }) },
+  { patron: /^(\d+) copia\(s\) sin poder leer$/, clave: 'scope.motivo.copies-unread', params: (m) => ({ n: m[1] }) },
+]);
+
+/** El nombre de un estado, en el idioma de quien lee. El dato sigue siendo el de siempre. */
+export function estadoEnTexto(estado) {
+  const dato = String(estado ?? '');
+  const clave = ESTADOS_EN_TEXTO[dato];
+  return clave === undefined ? dato : t(clave);
+}
+
+/** El motivo de un diagnostico, en el idioma de quien lee; si no hay traduccion, el motivo original. */
+export function motivoEnTexto(motivo) {
+  const dato = String(motivo ?? '');
+  for (const { patron, clave, params } of MOTIVOS_EN_TEXTO) {
+    const coincidencia = patron.exec(dato);
+    if (coincidencia === null) continue;
+    return t(clave, params === undefined ? {} : params(coincidencia));
+  }
+  return dato;
+}
+
 /** El texto de la pregunta, para que se lea igual en el comando, en el menu y en la documentacion. */
 export function textoDeLaPregunta() {
   return [
@@ -756,14 +823,14 @@ export function textoDelEstado(estado) {
     ].join('\n');
   }
   if (estado.estado === 'ausente') {
-    return [textoDeLaPregunta(), '', t('scope.state.undeclared', { motivo: estado.motivo })].join('\n');
+    return [textoDeLaPregunta(), '', t('scope.state.undeclared', { motivo: motivoEnTexto(estado.motivo) })].join('\n');
   }
   const problema = estado.estado === 'invalida'
     ? t('scope.state.invalid-title')
     : t('scope.state.unreadable-title');
   return [
     problema,
-    t('scope.state.line', { estado: estado.estado, motivo: estado.motivo }),
+    t('scope.state.line', { estado: estadoEnTexto(estado.estado), motivo: motivoEnTexto(estado.motivo) }),
     t('scope.state.file', { ruta: estado.ruta }),
     t('scope.state.no-policy'),
     estado.estado === 'invalida'
@@ -787,7 +854,7 @@ export function textoDeSistemas({ datos, estado }) {
     const marca = sistema.existe ? '-' : t('scope.systems.missing');
     const cola = sistema.estado === 'accesible'
       ? ''
-      : t('scope.systems.row-detail', { estado: sistema.estado, motivo: sistema.motivo });
+      : t('scope.systems.row-detail', { estado: estadoEnTexto(sistema.estado), motivo: motivoEnTexto(sistema.motivo) });
     const enlace = sistema.enlace ? (sistema.enlaceRoto ? t('scope.systems.link-broken') : t('scope.systems.link')) : '';
     lineas.push(t('scope.systems.row', {
       marca,
@@ -808,7 +875,7 @@ export function textoDeSistemas({ datos, estado }) {
       fecha: estado.declaredAt ?? t('scope.state.no-date'),
       huella: corte(estado.huella),
     })
-    : t('scope.systems.ownership-state', { estado: estado.estado.toUpperCase(), motivo: estado.motivo }));
+    : t('scope.systems.ownership-state', { estado: estadoEnTexto(estado.estado).toUpperCase(), motivo: motivoEnTexto(estado.motivo) }));
   if (estado.estado !== 'declarada') {
     lineas.push(t('scope.systems.answer', { dshOnly: SOLO_DSH, machine: MAQUINA }));
   }
@@ -858,8 +925,8 @@ export function textoDeSistemas({ datos, estado }) {
     for (const fuente of datos.sinLeer) {
       lineas.push(t('scope.systems.incomplete-row', {
         nombre: fuente.nombre,
-        estado: fuente.estado,
-        motivo: fuente.motivo,
+        estado: estadoEnTexto(fuente.estado),
+        motivo: motivoEnTexto(fuente.motivo),
       }));
     }
   }

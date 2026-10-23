@@ -38,6 +38,9 @@ const root = join(arena, 'skill-compiler');
 const curated = join(arena, 'skills');
 mkdirSync(root, { recursive: true });
 mkdirSync(curated, { recursive: true });
+// La prosa que se afirma aqui es la espanola: el idioma se fija explicitamente (el base es `en`), y el
+// subproceso lo hereda por `...process.env`.
+process.env.DSH_LANG = 'es';
 const env = { ...process.env, DSH_HOME: arena };
 
 /** El CLI real, con la arena como almacén. Devuelve lo que devuelve: código y salida. */
@@ -74,7 +77,7 @@ const skill = {
 // 1) La primera versión: se aprueba a mano, como siempre.
 assert.equal(propose(skill, opts).status, 'proposed');
 assert.match(cli('check', ID).out, /en verde/);
-assert.match(cli('approve', ID).out, new RegExp(`Aprobada ${ID}`));
+assert.match(cli('approve', ID).out, new RegExp(`Activa: ${ID}`));
 
 // 2) Un parche sin revisión: no pasa.
 const sinEvidencia = propose({ ...skill, body: `${skill.body}\n4. Un paso más.` }, opts);

@@ -102,7 +102,7 @@ describe('CLI real (subproceso, arena) · corregir sin cambiar el estado', () =>
     assert.equal(cli(arena, 'repair', id, '--project-key', KEY).code, 0);
     const a = cli(arena, 'approve', id, '--local', '--preserve-state', '--project-key', KEY);
     assert.notEqual(a.code, 0);
-    assert.match(a.salida, /sólo tiene sentido con una skill apagada/);
+    assert.match(a.salida, /solo tiene sentido con una skill apagada/);
     assert.equal(bytes(join(arena.root, 'projects', KEY, 'approved', id)) > 8000, true, 'no se ha tocado la activa');
   });
 });
@@ -185,8 +185,11 @@ describe('CLI real (subproceso, arena) · una propuesta con avisos', () => {
     // El comando es del plugin (no de la CLI): se comprueba que la CLI lo anuncia en su ayuda.
     const r = cli(arena, 'where');
     assert.equal(r.code, 0, r.salida);
-    const ayuda = readFileSync(CLI, 'utf8');
-    assert.match(ayuda, /skill-pending/);
+    // La ayuda se pinta desde el catalogo (`cli.usage.*` / `cli.help.*`), no desde un comentario del fichero:
+    // se comprueba la salida real, que es lo que lee una persona.
+    const ayuda = cli(arena);
+    assert.equal(ayuda.code, 2, 'sin comando, la ayuda sale con 2 (uso)');
+    assert.match(ayuda.salida, /skill-pending/);
   });
 });
 

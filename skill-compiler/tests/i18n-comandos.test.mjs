@@ -55,14 +55,14 @@ describe('F1.2 · el idioma de la superficie humana', () => {
     assert.match(r.text, /Approved and active \(0\):/);
     assert.match(r.text, /One order for all: \/skill-approve measured-decision-check --local/);
     // Y no queda prosa española escondida en la salida.
-    assert.equal(/Pendientes de tu aprobación|Aprobadas y activas|Sin ámbito/.test(r.text), false, r.text);
+    assert.equal(/Pendientes de tu aprobacion|Aprobadas y activas|Sin ambito/.test(r.text), false, r.text);
   });
 
   it('con DSH_LANG=es se lee español, la misma lista', () => {
     const s = sembrar();
     const r = con('es', () => comando(s.root, 'skill-proposals').handler({ agent: fakeExec(CWD).agent }));
     assert.equal(r.kind, 'success');
-    assert.match(r.text, /Pendientes de tu aprobación \(1\):/);
+    assert.match(r.text, /Pendientes de tu aprobacion \(1\):/);
     assert.match(r.text, /Aprobadas y activas \(0\):/);
     assert.match(r.text, /Una orden para todas: \/skill-approve measured-decision-check --local/);
   });

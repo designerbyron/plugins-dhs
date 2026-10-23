@@ -153,7 +153,7 @@ describe('el CLI y el comando dicen lo mismo', () => {
   it('`ownership <respuesta>` declara, y el comando lee lo declarado', () => {
     const s = sandbox();
     const salida = cli('ownership dsh-only', s.base);
-    assert.match(salida, /Declarada la propiedad: «dsh-only»/);
+    assert.match(salida, /Declarada la propiedad: "dsh-only"/);
     assert.match(salida, /huella/);
     assert.equal(leerPropiedad({ root: s.root }).ownership, 'dsh-only');
     assert.match(skillCommands({ root: s.root }).find((c) => c.name === 'skill-ownership').handler({}).text, /"dsh-only"/);

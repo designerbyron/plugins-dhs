@@ -4,10 +4,10 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 
 ## SHA y rama
 
-- HEAD de codigo al entrar en esta sesion: **`1fbe4c6`** (checkpoint del grupo 4 inspeccionado). Antes: `4a240c9` (F1.2 grupo 3), `4f3a0d3` (grupo 2), `1a4b170` (grupo 1), `f9b8421` (F1.3), `eb9bbb4` (PROTOCOL).
+- HEAD de codigo al cerrar el grupo 5: **`98ca50f`** (F1.2 grupo 4) mas el commit del grupo 5. Antes: `4a240c9` (F1.2 grupo 3), `4f3a0d3` (grupo 2), `1a4b170` (grupo 1), `f9b8421` (F1.3), `eb9bbb4` (PROTOCOL).
 - Este documento se versiona en el mismo commit que el codigo (en esta sesion, sin push).
 - Rama `main`, remoto `designerbyron/plugins-dsh`, arbol limpio, divergencia **0/0**.
-- Version declarada: **3.9.3**. Sin tag `v4.0.0`: no se publica hasta cerrar F1.2, F1.1-menu, F2 y F4.
+- Version declarada: **3.9.3**. Sin tag `v4.0.0`: no se publica hasta cerrar F1.1-menu, F2, F3 y F4.
 
 ## Fases
 
@@ -16,7 +16,7 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 | F0 | cerrada | `lib/i18n/{index,es,en}.mjs`, resolucion `DSH_LANG` -> `config.json` -> `en`, `lang` en CLI, `doctor` con idioma y fuente |
 | F1.1 | parcial | 16 comandos canonicos + 15 alias con `aliasOf`/`deprecatedIn`, mismo codigo y efecto (probado). **Menu real sin verificar** |
 | **F1.3** | **cerrada** | superficie completa congelada + texto visible al modelo en ASCII puro |
-| **F1.2** | **grupos 1-4 cerrados; falta el 5** | 237 claves por idioma. Grupo 4 (ownership/systems/auto) migrado y probado ES/EN |
+| **F1.2** | **cerrada (grupos 1-5)** | 527 claves por idioma. Grupo 5: toda la prosa de `bin/` + diagnosticos de `scope.mjs` |
 | F1.4 | parcial | 18 casos en `definitions-schema` (antes 4), 5 en `i18n-comandos` (nuevo), 7 de la puerta i18n, paridad de catalogos |
 | F1.5 | cerrada | `docs/ANFITRION.md`: fallback de prosa en 4.0.0-4.1.x, retirada en **4.2.0** |
 | F2 | parcial | el panel lee `code`, `bulk_ids_hint` corregido, reserva `en` |
@@ -71,25 +71,20 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 ## Mediciones reales de este arbol
 
 ```
-npm test                 -> 707/707 (172 suites)
+npm test                 -> 725/725 (176 suites)
 npm run test:hermetic    -> hermetico (huella del almacen identica antes y despues)
-node tools/i18n-gate.mjs -> en orden (167 claves por idioma · 15 alias)
-node tools/ascii-gate.mjs-> 8.614 caracteres heredados, tope 8.614 (ninguno nuevo)
+node tools/i18n-gate.mjs -> en orden (527 claves por idioma · 15 alias)
+node tools/ascii-gate.mjs-> 8.120 caracteres heredados, tope 8.120 (ninguno nuevo)
 node --test tests/definitions-schema.test.mjs -> 18/18
 ```
 
 ## Proximo paso exacto (en orden)
 
-1. **F1.2 grupo 4 y 5** (ver la seccion del grupo 4 al final: inspeccion ya medida, 639 no ASCII en scope.mjs):
-   claves en `es`/`en`, `t(key, params)`, `code` cuando sea veredicto, y `DSH_LANG=es` en el fichero de
-   pruebas que afirme prosa):
-   - grupo 3: `reject` / `disable` / `enable` / `retire` / `retired`
-   - grupo 4: `ownership` / `systems` / `auto` (`rejectProposal` ya esta en el grupo 3; la prosa de la
-     propiedad vive en `lib/scope.mjs`: se migra alli)
-   - grupo 5: `bin/` (ayuda, errores, `lang`, `doctor`) y `textoDeSistemas`
-2. **F1.1 · menu real**: localizar en el harness el punto de registro/presentacion de comandos; si no
+1. **F1.1 · menu real**: localizar en el harness el punto de registro/presentacion de comandos; si no
    filtra `aliasOf`, filtrar ahi. Anotar que parte se verifico y cual no.
-3. **F2**: pruebas por idioma del panel (claves 78/78) y reserva `en`.
+2. **F2**: pruebas por idioma del panel (claves 78/78) y reserva `en`.
+3. **F3**: la deuda de diagnosticos que queda (ver «Limites» del grupo 5): `auto`/`textoDeMedidas`,
+   `motivoDeIdInseguro`, `r.reason` y `estadoLegible` de `audit`.
 4. **F4**: version 4.0.0, CHANGELOG (>500 caracteres), README (version + recuento de pruebas desde el
    binario), gates, tag y release, verificando `gh release view --json isDraft,isPrerelease,tagName`.
 
@@ -159,5 +154,93 @@ Todo lo que sigue esta medido despues de la migracion.
 
 ### Siguiente
 
-Grupo 5: mensajes humanos de `bin/skill-compiler.mjs` (722 caracteres no ASCII), y despues F1.1-menu, F1.4,
-F2, F3 y F4.
+Grupo 5 (cerrado abajo): mensajes humanos de `bin/skill-compiler.mjs`, diagnosticos de `scope.mjs` y ASCII del
+catalogo espanol. Despues F1.1-menu, F1.4, F2, F3 y F4.
+
+## Grupo 5 (CLI y diagnosticos mezclados): cerrado
+
+Base al entrar: `98ca50f`, arbol limpio, version 3.9.3, 237 claves por idioma, ASCII 8.513, suite 716/716.
+
+### Que se migro
+
+- `bin/skill-compiler.mjs`: **toda** la prosa humana (267 llamadas a `tr()`), no una parte: ayuda y uso,
+  errores de argumento y de opcion, `lang`, `doctor` entero, `where`, `list`, `show`, `check`, `approve`
+  (incluido el lote), `scope`, `disable`, `enable`, `delete`, `retired`, `restore`, `reject`, `active`,
+  `vendor`, `upstream`, `provenance`, `ownership`, `security`, `auto`, `audit`, `repair`, `promote`,
+  `history` y `review`.
+- **La ayuda deja de ser un comentario.** Vivia en la cabecera del fichero y se imprimia leyendo el propio
+  fichero (`split('*/')[0]`): una sola version, en espanol, y `--help` no podia traducirse. Ahora es la tabla
+  `AYUDA` (sintaxis = dato; descripcion = clave `cli.help.*`) y `usage()` la pinta. `tests/coherencia.test.mjs`
+  compara esa tabla con los `case` implementados: el contrato (ni un comando de mas ni uno de menos) sigue
+  igual, con otra fuente.
+- Los nombres de comando, flags, `code`, rutas, claves de proyecto, ids y contadores **no** se traducen: son
+  datos. El codigo de salida es el mismo en los dos idiomas y esta probado comando a comando.
+- `bin` 722 -> **524** caracteres no ASCII. Lo que queda son **comentarios de mantenimiento** (el espanol del
+  proyecto), no prosa de usuario: no se reescribieron para no convertir un commit de i18n en 60 lineas de
+  comentario retocado.
+
+### El defecto que este grupo cierra (diagnosticos mezclados)
+
+- `lib/scope.mjs` interpolaba `estado.motivo` (dato en espanol) dentro de un marco ya traducido: en ingles se
+  leia `State: undeclared (nadie ha respondido).`
+- Ahora hay dos tablas de **representacion**, no de datos: `ESTADOS_EN_TEXTO` y `MOTIVOS_EN_TEXTO` (patron +
+  clave + como sacar los parametros). `estadoEnTexto()` y `motivoEnTexto()` se aplican en los cinco puntos de
+  presentacion (`scope.state.undeclared`, `scope.state.line`, `scope.systems.row-detail`,
+  `scope.systems.ownership-state`, `scope.systems.incomplete-row`) y en `doctor`.
+- **El dato no cambia**: `estado.estado` y `estado.motivo` siguen siendo los de siempre, con la misma forma y
+  las mismas pruebas de `scope.test.mjs`, y un motivo sin clave se pinta tal cual. Los patrones llevan las
+  tildes escapadas (`\u00xx`) para casar con el dato sin meter no ASCII en el fichero.
+- El detalle del motivo (codigo de error, ruta, cuenta) viaja como parametro y **no** se toca:
+  `fuera del ambito autorizado (C:/otro/sitio)` -> `outside the authorised scope (C:/otro/sitio)`.
+- `doctor` pasa de `propiedad del puesto: AUSENTE (nadie ha respondido)` a
+  `machine ownership: ABSENT (nobody has answered)`.
+
+### ASCII del catalogo espanol (grupos 1-3)
+
+- `lib/i18n/es.mjs` 172 -> **0**: las 88 claves con tilde de los grupos 1-3 pasaron a espanol ASCII por
+  bloques (idioma, `code.*`, listar/ver, aprobar/publicar/ambito, ciclo de vida), conservando el significado:
+  `«»` -> `"`, `·` -> `-`, `—` -> `-`, `→` -> `->`, tildes fuera y las interrogativas reescritas en imperativo
+  (`¿Dónde quieres que viva...?` -> `Dime donde quieres que viva...`) para no perder el signo de apertura.
+- `lib/i18n/en.mjs` 23 -> **0**: las nueve claves inglesas que aun llevaban `«»`/`—` (todas de `lang.*` y
+  `code.*`) pasaron a comillas rectas y guion.
+- Las pruebas que afirman esa prosa **se ajustaron, no se borraron** (`commands`, `activation`,
+  `aprendizaje-en-lote`, `cli-integracion`, `scope-concurrencia`, `client-artifact`, `i18n-comandos`,
+  `update-real.e2e`), y el control cruzado de `i18n-comandos` usa el texto ASCII real: con la cadena vieja
+  habria pasado por no encontrarla.
+
+### Defecto real encontrado: el marcador del panel
+
+- `client.js` reconocia la pregunta del ambito por su prosa (`SCOPE_ASK = '¿Dónde quieres que viva'`). Con el
+  texto nuevo el marcador no casaba, y con el ingles no habria casado nunca. Ahora manda el `code` del
+  contrato (`scope-ask`) y la prosa queda como reserva; `client-artifact` lo prueba por los dos lados.
+
+### Mediciones
+
+- Catalogo: 237 -> **527 claves por idioma** (290 nuevas: `cli.*`, `scope.estado.*`, `scope.motivo.*`).
+- ASCII: 8.513 -> **8.120** (`es.mjs` 172->0, `en.mjs` 23->0, `bin` 722->524; `scope.mjs` 572->572 y
+  `client.js` 906->906, ninguno crece). Linea base reescrita al total nuevo.
+- Suite: 716 -> **725/725**, con `tests/i18n-cli-grupo5.test.mjs` (9 casos: ayuda, opcion desconocida,
+  `where`/`list`/`retired`/`active`/`provenance`, `lang`, `doctor` en los dos idiomas, las tablas de
+  representacion y una declaracion de propiedad rota de verdad en disco).
+- Hermetico en verde; `definitions-schema` 18/18; `i18n-gate` 527 claves; `ascii-gate` 8.120.
+
+### Limites que este grupo NO cierra (medidos)
+
+- **`auto` y las medidas de actualizacion**: el CLI sigue imprimiendo `textoDeMedidas()` de
+  `lib/auto-update.mjs` en espanol (`regla`, `observado`, `umbral`, `detalle`, `resumen`). Son diagnosticos
+  como los `motivo` de `scope.mjs`, pero de otro modulo: migrarlos pide su propia tabla y toca tambien
+  `promote` y el `cmd.list.auto-*` del listado.
+- **`motivoDeIdInseguro`** (`lib/security.mjs`) viaja como parametro `{motivo}` dentro de `cmd.ids.unsafe`:
+  mismo caso, otro modulo.
+- **`r.reason`** de `repair` y de `declararPropiedad` se imprime tal cual: es dato de retorno de otro modulo.
+- **`estadoLegible`** de `lib/audit.mjs` sale en la fila de detalle de `audit` en espanol.
+- **El prefijo de los alias** (`Alias obsoleto de /X: se retira en 5.0.0.`) sigue en espanol en los dos
+  idiomas; `tests/f1-contrato.test.mjs` lo fija como contrato.
+- Los comentarios de `bin/skill-compiler.mjs` siguen en espanol con tildes: no son prosa de usuario.
+
+### Trampas nuevas (pagadas aqui)
+
+- Para tocar ~120 mensajes se uso un script `.py` con anclas exactas y **conteo por ancla**: si una ancla no
+  casa exactamente una vez, el script no escribe nada y dice cual fallo. Nada de sustituciones globales.
+- El primer argumento del CLI **no** pasa por el parser de opciones (`command = argv[0]`): `--lo-que-sea`
+  como primer argumento cae en `usage(2)`, no en «opcion desconocida». Se prueba con `list --lo-que-sea`.
