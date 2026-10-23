@@ -30,10 +30,13 @@ medias, y el aviso del turno **cuenta por tipo y se retira**. **v2.0.0** publica
 calidad vigente, `audit`, `repair`/`promote` con los tres niveles de riesgo y la promoción automática
 **apagada** por defecto.
 
-**Estado del candidato v5.0.0** (rama local `release/v5.0.0`, **sin publicar**): **860 pruebas en verde** (209
-suites) y suite hermética en verde (huella del almacén real idéntica antes y después); i18n **695 claves por
-idioma** y 16 operaciones x 2 nombres; ASCII **8.353 medidas con tope 8.353** en **26/26** ficheros de primera
-parte. Los 805/8.401/24 de la rama `hardening/post-4.0.1` eran el estado de esa rama sola, no el integrado.
+**v5.0.0**, publicada el 2026-10-23: tag anotado `v5.0.0` sobre el commit de cierre de ese acto
+(`git rev-parse v5.0.0^{}`; la versión y el CHANGELOG entran en `354e93a`) y release estable en
+`designerbyron/plugins-dsh`. **889 pruebas en verde** en **220 suites**, suite hermética en verde (huella del
+almacén real idéntica antes y después); i18n **938 claves por idioma** y 16 operaciones x 2 nombres; ASCII
+**8.308 medidos con tope 8.308** en **26/26** ficheros de primera parte. Cambio de contrato: **un nombre de
+comando por operación en el idioma activo** y el modelo de alias, retirado. Antes, los 805/8.401/24 eran el
+estado de la rama `hardening/post-4.0.1` sola, y los 860/695/8.353 el del primer candidato integrado.
 
 ## Almacén: el objetivo del `DIAGNOSTICO-2026-10-15`, alcanzado
 
@@ -573,7 +576,7 @@ de `/skill-approve` a `/skill-aprobar` **sin reiniciar**), asi que se autorizo m
   cuyo texto no cambia con el idioma: deuda declarada, con su fichero); y los nombres de **fila**
   (`skill-approve-<id>`) siguen en ingles en los dos idiomas a proposito (marcador de maquina del panel).
 
-## Candidato 2026-10-23 — v5.0.0 integrado, **sin publicar** (rama `release/v5.0.0`)
+## Candidato 2026-10-23 — estado intermedio de la v5.0.0 (historia: lo cerró el acto siguiente)
 
 Rama local desde `main` (`8393977`, el commit del tag `v4.0.1`); `main` y `origin/main` intactos, sin push, sin
 mover etiquetas, sin release. **Al cerrar el acto el arbol vuelve a `main`** (`8393977`): el plugin esta instalado
@@ -602,8 +605,8 @@ por `link:` a esta carpeta, asi que lo que arrancara es el codigo publicado y no
   `doctor` verde sobre una copia del almacen real (exit 0, «everything in place»). `audit`/`security` en solo
   lectura sobre la misma copia: 44 skills,
   PASS 43, WARN 1 (`absolute-path`, el preexistente), ERROR 0; `security` 0 bloqueos y cadena valida.
-- **Lo que impide el PASS de v5.0.0 (§5E del mandato, medido, no supuesto)**: la prosa humana que vive fuera del
-  catalogo sigue en espanol fijo. `audit` bajo `DSH_LANG=en` imprime **9 lineas en espanol** (cabecera
+- **Lo que entonces impedía el PASS (§5E del mandato, medido, no supuesto; cerrado después)**: la prosa humana
+  que vive fuera del catalogo seguia en espanol fijo. `audit` bajo `DSH_LANG=en` imprimía **9 lineas en espanol** (cabecera
   «skills auditadas», «archivadas … no se auditan», los nombres de estado, los `fixes:` y el detalle de la regla);
   la misma deuda esta en `lib/security.mjs`, en los mensajes de integridad de `lib/compiler.mjs` (`check`),
   `lib/vendor.mjs`, `lib/promote.mjs`, `lib/review.mjs` y `lib/projection.mjs`, y en la capa del modelo
@@ -613,3 +616,32 @@ por `link:` a esta carpeta, asi que lo que arrancara es el codigo publicado y no
   (cabecera, estados, `fixes` y detalle) y `lib/security.mjs` (detalle y `fix` de cada regla), conservando el
   DATO (`rule`, `observed`, `fix` como valor y el vocabulario del diario) y traduciendo solo en el punto de
   presentacion, con la prueba en los dos idiomas sobre el texto real del binario.
+
+## Cierre 2026-10-23 — v5.0.0 publicada
+
+El acto que cerró el bloqueo anterior, con lo medido al publicar:
+
+- **La prosa humana salió del catalogo**, por módulos y sin mover el DATO: `lib/audit.mjs` y `lib/security.mjs`
+  (tabla `PROSA_DE_REGLA`, `messageCode`/`fixCode`, `estadoEnTexto`, `lineasDePuerta`), `lib/compiler.mjs`
+  (reglas de calidad y la integridad que imprime `check`), `lib/projection.mjs`, `lib/vendor.mjs` (etiquetas de
+  los patrones con código, avisos `{code, params, text}`), `lib/review.mjs` (la página entera), `lib/promote.mjs`
+  (`reasonCode`/`detalleCode` sin mover el `reason`) y los marcadores de `ficherosQueDifieren`
+  (`[{ruta, cambio}]`). `lib/i18n/index.mjs` gana `textoDeCodigo`, el único sitio donde se decide la reserva
+  (clave ausente → dato crudo, nunca una clave).
+- **La capa del modelo no se migra a propósito**: `lib/definitions.mjs` es la superficie que lee el modelo y su
+  texto forma parte del contrato congelado; `client.js` resuelve su texto por el servicio `locale` del
+  anfitrion. Las dos se declaran como tales, no como deuda.
+- **Medido**: `npm test` **889/889 en 220 suites**; `test:hermetic` verde con huella identica; i18n **938 claves
+  por idioma**; ASCII **8.308 con tope 8.308** en **26/26** (bajó de 8.353 al salir la prosa de los módulos).
+  Con el binario y `DSH_LANG=en` sobre una copia fija del almacén: `audit`, `security`, `doctor`, `list`,
+  `active`, `retired`, `systems`, `ownership` y `where` con **0 prosa española**; el JSON de `audit` es **el mismo
+  dato** en los dos idiomas (44 skills en esa copia, PASS 43 · WARN 1 · ERROR 0, 32 archivadas, mismas reglas y
+  severidades). Sobre el **almacén de la máquina**, solo lectura y con la huella del árbol idéntica antes y
+  después: `doctor` exit 0, `audit` 50 auditadas (PASS 49 · WARN 1 · ERROR 0) y `security` 45 revisadas con 0
+  bloqueos y cadena válida.
+- **Lo que NO se toca y sigue declarado**: el recorte de `normalizeResult` a `{kind, text}` en el anfitrion, con
+  la reserva de prosa activa y su retirada condicionada a una medición (no a una versión); la visibilidad del
+  menu `/` no se puede medir sin pantalla y se informa aparte de la invocabilidad y del registro.
+- **Publicación**: `package.json` y `package-lock.json` a 5.0.0, entrada `[5.0.0]` en el CHANGELOG, portada y
+  `docs/` con los números medidos, tag anotado `v5.0.0` sobre el commit de cierre y release estable en
+  `designerbyron/plugins-dsh`. Las releases `v4.0.0` y `v4.0.1` quedan intactas y el historial no se reescribió.

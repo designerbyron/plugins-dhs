@@ -67,9 +67,13 @@ español y `security`, `check`, `repair`, `vendor`, `review` y `promote` tenían
 - `node tools/i18n-gate.mjs`: en orden, **938 claves por idioma**, 16 operaciones × 2 nombres.
 - `node tools/ascii-gate.mjs`: **8.308 caracteres heredados con tope 8.308**, **26/26** ficheros de primera parte
   vigilados, 0 excluidos. Bajó de 8.401 al salir la prosa de los módulos; ningún tope sube.
-- Salidas reales con el binario sobre una **copia** del almacén: `audit` y `security` en `en` con **0 líneas de
-  prosa española** (antes 11 y 25 caracteres no ASCII en prosa), y el mismo dato en los dos idiomas (44 skills,
-  PASS 43 · WARN 1 · ERROR 0, 32 archivadas; mismos hallazgos, reglas y severidades por skill).
+- Salidas reales con el binario sobre una **copia fija** del almacén (para comparar los dos idiomas sin que el
+  almacén se mueva): `audit` y `security` en `en` con **0 líneas de prosa española** (antes 11 y 25 caracteres no
+  ASCII en prosa), y el mismo dato en los dos idiomas (44 skills en esa copia, PASS 43 · WARN 1 · ERROR 0, 32
+  archivadas; mismos hallazgos, reglas y severidades por skill).
+- Sobre el **almacén de la máquina** al cerrar (solo lectura, huella del árbol idéntica antes y después):
+  `doctor` exit 0, `audit` 50 skills auditadas (PASS 49 · WARN 1 · ERROR 0, 32 archivadas) y `security` 45
+  revisadas con 0 bloqueos, 0 avisos y cadena válida. El WARN es el `absolute-path` preexistente.
 - `doctor` y los subcomandos de solo lectura (`audit`, `security`, `list`, `active`, `retired`, `systems`,
   `ownership`, `where`) en `en`: **0 prosa española** en la salida.
 - `tests/update-real.e2e.test.mjs`: el último guion manual pasa a prueba descubierta, con mutación controlada

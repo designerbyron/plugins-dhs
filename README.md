@@ -132,8 +132,8 @@ criterios y un compromiso.
   proyecciones), no contra dobles escritos a mano.
 - `doctor` verde: cada comprobación **ejecuta** el camino que vigila, no lo reimplementa.
 - `audit` mide el almacén sin tocarlo y `security` verifica ids, contenido, árboles y la cadena del diario
-  (0 bloqueos, 0 avisos, cadena válida; en la medición de la 5.0.0, **44 skills auditadas** —PASS 43 · WARN 1 ·
-  ERROR 0— con **32 archivadas** fuera del recuento y **44 revisadas**). En
+  (0 bloqueos, 0 avisos, cadena válida; estado del almacén de la máquina al cerrar la 5.0.0: **50 skills
+  auditadas** —PASS 49 · WARN 1 · ERROR 0— con **32 archivadas** fuera del recuento y **45 revisadas**). En
   `WARN` puede quedar una propuesta esperando decisión humana —estado, no defecto— o una skill ya aprendida con
   un aviso de ámbito: hoy hay **una**, `absolute-path` sobre una skill del almacén, que se cierra localizándola o
   parametrizando la ruta; se declara y no se oculta.
