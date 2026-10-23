@@ -29,6 +29,7 @@ import {
   textoDeSistemas, textoDelEstado,
 } from '../lib/scope.mjs';
 import { leerDiario, verificarCadena } from '../lib/security.mjs';
+import { arregloDeHallazgo, estadoEnTexto, fraseDeHallazgo } from '../lib/audit.mjs';
 
 /**
  * La ruta de este propio CLI. Se deriva en tiempo de ejecucion en vez de escribirse: el mensaje que la
@@ -89,11 +90,7 @@ if (flags.lang !== undefined && command !== 'lang') {
  * funciones. La FRASE se compone aqui, con el catalogo, en el idioma de la sesion. Y si la clave no estuviera, se
  * dice el dato tal cual antes que ensenar una clave cruda a una persona.
  */
-const etiquetaDeEstado = (skill) => {
-  const clave = `cli.audit.state.${skill.estado}`;
-  const texto = tr(clave);
-  return texto === clave ? skill.estadoLegible : texto;
-};
+const etiquetaDeEstado = (skill) => estadoEnTexto(skill.estado);
 const motivoDeReparacion = (r) => {
   if (r.reasonCode === undefined) return r.reason;
   const clave = `cli.repair.reason.${r.reasonCode}`;
@@ -192,9 +189,23 @@ function checkSkill(id, key) {
   return checkProposal(id, key, { root });
 }
 
+/**
+ * Las lineas de la puerta de `check`, en el idioma de la sesion.
+ *
+ * Los hallazgos traen su codigo (`messageCode` o la tabla por regla) y la integridad de la base viaja ya
+ * codificada (`errorLines`). Si el numero de frases compuestas no cuadra con `errors`/`warnings`, se pintan los
+ * textos crudos: perder una linea de una puerta es peor que ensenar una frase en el otro idioma.
+ */
+const lineasDePuerta = (findings, severidad, codificadas, crudas) => {
+  const deHallazgos = (findings ?? []).filter((f) => f.severity === severidad).map((f) => fraseDeHallazgo(f));
+  const propias = severidad === 'error' ? (codificadas ?? []).map((l) => fraseDeHallazgo(l)) : [];
+  const compuestas = [...deHallazgos, ...propias];
+  return compuestas.length === (crudas ?? []).length ? compuestas : (crudas ?? []);
+};
+
 function printCheck(id, key, result) {
-  for (const e of result.errors) process.stderr.write(`${tr('cli.check.fail', { error: e })}\n`);
-  for (const w of result.warnings) process.stderr.write(`${tr('cli.check.warning', { aviso: w })}\n`);
+  for (const e of lineasDePuerta(result.findings, 'error', result.errorLines, result.errors)) process.stderr.write(`${tr('cli.check.fail', { error: e })}\n`);
+  for (const w of lineasDePuerta(result.findings, 'warn', null, result.warnings)) process.stderr.write(`${tr('cli.check.warning', { aviso: w })}\n`);
   if (result.ok) {
     process.stdout.write(`${result.warnings.length ? tr('cli.check.green-warnings', { id }) : tr('cli.check.green', { id })}\n`);
   }
@@ -545,15 +556,15 @@ switch (command) {
           const { findings } = auditarCarpeta(dir, { id });
           for (const h of findings) {
             if (!/^(security|secret)/.test(String(h.rule ?? ''))) continue;
-            if (h.severity === 'error') { bloqueos += 1; process.stdout.write(`${tr('cli.security.block', { estado, id, rule: h.rule, message: h.message })}\n`); }
-            else { avisos += 1; process.stdout.write(`${tr('cli.security.warning', { estado, id, rule: h.rule, message: h.message })}\n`); }
+            if (h.severity === 'error') { bloqueos += 1; process.stdout.write(`${tr('cli.security.block', { estado, id, rule: h.rule, message: fraseDeHallazgo(h) })}\n`); }
+            else { avisos += 1; process.stdout.write(`${tr('cli.security.warning', { estado, id, rule: h.rule, message: fraseDeHallazgo(h) })}\n`); }
           }
         }
       }
       const diario = leerDiario(join(root, 'projects', proyecto, 'journal.jsonl'));
       if (!diario.existe) continue;
       const cadena = verificarCadena(diario.entradas);
-      for (const r of cadena.roturas) rotos.push(`${proyecto}: ${r.message}`);
+      for (const r of cadena.roturas) rotos.push(`${proyecto}: ${fraseDeHallazgo(r)}`);
       if (cadena.sinHuella > 0) process.stdout.write(`${tr('cli.security.old-entries', { proyecto, n: cadena.sinHuella })}\n`);
       if (diario.ilegibles > 0) rotos.push(tr('cli.security.broken-line', { proyecto, n: diario.ilegibles }));
     }
@@ -903,14 +914,14 @@ switch (command) {
         salida.push(tr('cli.audit.rule-row', {
           severity: regla.severity, rule: regla.rule, count: regla.count, skills: regla.skills.length,
         }));
-        salida.push(tr('cli.audit.rule-fix', { fix: regla.fix }));
+        salida.push(tr('cli.audit.rule-fix', { fix: arregloDeHallazgo(regla) }));
       }
       salida.push('');
     }
 
     if (informe.contenedores.length > 0) {
       salida.push(tr('cli.audit.container'));
-      for (const c of informe.contenedores) salida.push(tr('cli.audit.container-row', { severity: c.severity, message: c.message }));
+      for (const c of informe.contenedores) salida.push(tr('cli.audit.container-row', { severity: c.severity, message: fraseDeHallazgo(c) }));
       salida.push('');
     }
 
@@ -934,8 +945,8 @@ switch (command) {
               severity: f.severity, rule: f.rule, observed: JSON.stringify(f.observed), threshold: JSON.stringify(f.threshold),
             })
             : tr('cli.audit.finding-plain', { severity: f.severity, rule: f.rule, observed: JSON.stringify(f.observed) }));
-          salida.push(tr('cli.audit.finding-message', { message: f.message }));
-          salida.push(tr('cli.audit.finding-fix', { fix: f.fix }));
+          salida.push(tr('cli.audit.finding-message', { message: fraseDeHallazgo(f) }));
+          salida.push(tr('cli.audit.finding-fix', { fix: arregloDeHallazgo(f) }));
         }
       }
       salida.push('');

@@ -481,7 +481,8 @@ describe('solo lectura y reproducibilidad', () => {
     romper(sembrar(arena, skillDe('numeracion-de-facturas')), { description: 'Otra cosa distinta y muy corta.' });
     const informe = auditarAlmacen({ root: arena.root, curated: arena.curated });
     const resumen = resumenDeAuditoria(informe);
-    assert.match(resumen, /skills auditadas: 2 · PASS 1 · WARN 0 · ERROR 1/);
+    // Los separadores son ASCII (el texto del plugin no lleva tipografia); las cifras y el estado son el dato.
+    assert.match(resumen, /skills auditadas: 2 - PASS 1 - WARN 0 - ERROR 1/);
     assert.match(resumen, /aprobada/);
   });
 });
@@ -507,9 +508,10 @@ describe('la CLI: el comando audit, por la superficie que usa una persona', () =
     const r = cli(arena, 'audit');
     assert.equal(r.code, 1, 'con una skill en error, el código de salida lo dice');
     assert.match(r.out, /solo lectura/);
-    assert.match(r.out, /skills auditadas: 2 · PASS 1 · WARN 0 · ERROR 1/);
+    // El separador es ASCII y la frase sale del catalogo espanol (sin tildes): esto mide la presentacion.
+    assert.match(r.out, /skills auditadas: 2 - PASS 1 - WARN 0 - ERROR 1/);
     assert.match(r.out, /\[error\] description-min \(observado 6, umbral 60\)/);
-    assert.match(r.out, /corrige: Reescribe la descripción/);
+    assert.match(r.out, /corrige: Reescribe la descripcion/);
     assert.match(r.out, /nada se ha modificado/);
   });
 

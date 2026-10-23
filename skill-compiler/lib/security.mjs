@@ -85,17 +85,20 @@ export function esIdSeguro(id) {
 /**
  * Credenciales. Un bloqueo: una skill se sirve en cada sesión y el almacén no es una caja fuerte. Lo que
  * parece un secreto, se trata como un secreto.
+ *
+ * Cada patron lleva `[regex, motivo, codigo]`: el `motivo` es el dato que ya viajaba en el hallazgo y el
+ * `codigo` elige la frase del catalogo, para que el aviso se lea en el idioma de la sesion.
  */
 const CREDENCIALES = [
-  [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'clave privada PEM'],
-  [/\bAKIA[0-9A-Z]{16}\b/, 'clave de acceso de AWS'],
-  [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/, 'token de GitHub'],
-  [/\bxox[abprs]-[A-Za-z0-9-]{10,}\b/, 'token de Slack'],
-  [/\bAIza[0-9A-Za-z_-]{30,}\b/, 'clave de API de Google'],
-  [/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/, 'JWT'],
-  [/\b(password|passwd|secret|api[_-]?key|token|credential)\b\s*[:=]\s*["']?[^\s"']{8,}/i, 'asignación de credencial'],
-  [/\b(authorization|proxy-authorization)\s*:\s*(bearer|basic|token|digest)\s+\S+/i, 'cabecera de autorización'],
-  [/\bBearer\s+[A-Za-z0-9._-]{20,}/, 'cabecera Bearer con token'],
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'clave privada PEM', 'pem-private-key'],
+  [/\bAKIA[0-9A-Z]{16}\b/, 'clave de acceso de AWS', 'aws-access-key'],
+  [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/, 'token de GitHub', 'github-token'],
+  [/\bxox[abprs]-[A-Za-z0-9-]{10,}\b/, 'token de Slack', 'slack-token'],
+  [/\bAIza[0-9A-Za-z_-]{30,}\b/, 'clave de API de Google', 'google-api-key'],
+  [/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/, 'JWT', 'jwt'],
+  [/\b(password|passwd|secret|api[_-]?key|token|credential)\b\s*[:=]\s*["']?[^\s"']{8,}/i, 'asignación de credencial', 'credential-assignment'],
+  [/\b(authorization|proxy-authorization)\s*:\s*(bearer|basic|token|digest)\s+\S+/i, 'cabecera de autorización', 'authorization-header'],
+  [/\bBearer\s+[A-Za-z0-9._-]{20,}/, 'cabecera Bearer con token', 'bearer-header'],
 ];
 
 /**
@@ -104,14 +107,14 @@ const CREDENCIALES = [
  * modelo —aprobarse sola, no avisar al humano, sacar datos— y sobrevivir a la sesión en la que nació.
  */
 const ORDENES_AL_AGENTE = [
-  [/\b(ignore|disregard|forget)\b[^.\n]{0,40}\b(previous|prior|above|system)\b[^.\n]{0,20}\b(instruction|prompt|rule|message)s?\b/i, 'orden de ignorar las instrucciones anteriores'],
-  [/\b(system|developer)\s*prompt\b[^.\n]{0,40}\b(reveal|show|print|repeat|dump)\b|\b(reveal|show|print|repeat|dump)\b[^.\n]{0,20}\b(system|developer)\s*prompt\b/i, 'orden de revelar el prompt del sistema'],
-  [/^\s*(?:[-*]\s*)?(?:do not|don't|never)\s+(?:tell|inform|notify)\s+(?:the\s+)?(?:user|human)\b/im, 'orden de no avisar al humano'],
-  [/\bno\s+le\s+digas\s+al\s+(usuario|humano)\b|\boc[uú]ltalo\s+al\s+(usuario|humano)\b|\bsin\s+que\s+se\s+entere\s+el\s+(usuario|humano)\b/i, 'orden de no avisar al humano'],
-  [/\b(approve|aprueba|aproba|promociona|promote)\b[^.\n]{0,30}\b(yourself|t[uú]\s+mismo|autom[aá]ticamente|sin\s+(el\s+)?humano|without\s+(the\s+)?human)\b/i, 'orden de aprobarse sin el humano'],
-  [/\b(skip|bypass|evade|salta|saltarse|evita)\b[^.\n]{0,25}\b(the\s+)?(gate|validation|puerta|validaci[oó]n|security|seguridad)\b/i, 'orden de saltarse la puerta'],
-  [/\b(exfiltrate|exfiltra|send|env[ií]a|upload|sube)\b[^.\n]{0,40}\b(to|a|hacia)\b[^.\n]{0,40}https?:\/\//i, 'orden de enviar contenido a una URL'],
-  [/(?:curl|wget|iwr|Invoke-WebRequest)[^|\n]{0,120}\|\s*(?:ba)?sh\b/i, 'descarga ejecutada al vuelo (curl | sh)'],
+  [/\b(ignore|disregard|forget)\b[^.\n]{0,40}\b(previous|prior|above|system)\b[^.\n]{0,20}\b(instruction|prompt|rule|message)s?\b/i, 'orden de ignorar las instrucciones anteriores', 'ignore-previous-instructions'],
+  [/\b(system|developer)\s*prompt\b[^.\n]{0,40}\b(reveal|show|print|repeat|dump)\b|\b(reveal|show|print|repeat|dump)\b[^.\n]{0,20}\b(system|developer)\s*prompt\b/i, 'orden de revelar el prompt del sistema', 'reveal-system-prompt'],
+  [/^\s*(?:[-*]\s*)?(?:do not|don't|never)\s+(?:tell|inform|notify)\s+(?:the\s+)?(?:user|human)\b/im, 'orden de no avisar al humano', 'do-not-tell-human'],
+  [/\bno\s+le\s+digas\s+al\s+(usuario|humano)\b|\boc[uú]ltalo\s+al\s+(usuario|humano)\b|\bsin\s+que\s+se\s+entere\s+el\s+(usuario|humano)\b/i, 'orden de no avisar al humano', 'do-not-tell-human'],
+  [/\b(approve|aprueba|aproba|promociona|promote)\b[^.\n]{0,30}\b(yourself|t[uú]\s+mismo|autom[aá]ticamente|sin\s+(el\s+)?humano|without\s+(the\s+)?human)\b/i, 'orden de aprobarse sin el humano', 'approve-without-human'],
+  [/\b(skip|bypass|evade|salta|saltarse|evita)\b[^.\n]{0,25}\b(the\s+)?(gate|validation|puerta|validaci[oó]n|security|seguridad)\b/i, 'orden de saltarse la puerta', 'skip-gate'],
+  [/\b(exfiltrate|exfiltra|send|env[ií]a|upload|sube)\b[^.\n]{0,40}\b(to|a|hacia)\b[^.\n]{0,40}https?:\/\//i, 'orden de enviar contenido a una URL', 'exfiltrate-url'],
+  [/(?:curl|wget|iwr|Invoke-WebRequest)[^|\n]{0,120}\|\s*(?:ba)?sh\b/i, 'descarga ejecutada al vuelo (curl | sh)', 'curl-pipe-shell'],
 ];
 
 /**
@@ -119,12 +122,12 @@ const ORDENES_AL_AGENTE = [
  * tocar el registro de una máquina ajena); aviso cuando puede ser legítimo en un procedimiento documentado.
  */
 const DESTRUCTIVAS = [
-  [/\brm\s+(-[a-z]*[rf][a-z]*\s+){0,3}\/(?:\s|$|\*)/i, 'borrado de la raíz del sistema'],
-  [/\b(del|rd|rmdir)\s+\/s\b[^\n]{0,40}\b[a-z]:\\?(?:\s|$|\*)/i, 'borrado recursivo de una unidad'],
-  [/\bformat\s+[a-z]:/i, 'formateo de una unidad'],
-  [/\bdiskpart\b|\bcleandisk\b/i, 'particionado del disco'],
-  [/\breg\s+delete\s+HKLM/i, 'borrado del registro de la máquina'],
-  [/\bbcdedit\b|\bvssadmin\s+delete\b/i, 'manipulación del arranque o de las sombras'],
+  [/\brm\s+(-[a-z]*[rf][a-z]*\s+){0,3}\/(?:\s|$|\*)/i, 'borrado de la raíz del sistema', 'root-delete'],
+  [/\b(del|rd|rmdir)\s+\/s\b[^\n]{0,40}\b[a-z]:\\?(?:\s|$|\*)/i, 'borrado recursivo de una unidad', 'drive-recursive-delete'],
+  [/\bformat\s+[a-z]:/i, 'formateo de una unidad', 'drive-format'],
+  [/\bdiskpart\b|\bcleandisk\b/i, 'particionado del disco', 'disk-partition'],
+  [/\breg\s+delete\s+HKLM/i, 'borrado del registro de la máquina', 'registry-machine-delete'],
+  [/\bbcdedit\b|\bvssadmin\s+delete\b/i, 'manipulación del arranque o de las sombras', 'boot-or-shadows'],
 ];
 
 /** Destruir una unidad entera no tiene lectura legítima en una skill; lo demás depende del procedimiento. */
@@ -132,11 +135,11 @@ const DESTRUCTIVAS_SIN_EXCUSA = 3;
 
 /** Rutas que apuntan a material sensible: aviso (un procedimiento legítimo puede citarlas para prohibirlas). */
 const RUTAS_SENSIBLES = [
-  [/(?:^|[\s"'`(])(?:~|\/home\/[^/\s]+|\/root|%USERPROFILE%|[a-z]:\\Users\\[^\\\s]+)\\[^\s"')]*\.ssh\b/i, 'ruta al almacén de claves SSH'],
-  [/(?:^|[\s"'`(])(?:~|\/home\/[^/\s]+|%USERPROFILE%|[a-z]:\\Users\\[^\\\s]+)\\[^\s"')]*\.aws\b/i, 'ruta a credenciales de AWS'],
-  [/\b(id_rsa|id_ed25519|\.netrc|\.git-credentials|cookies\.sqlite|\bLogin Data\b|\bkey4\.db\b)/i, 'nombre de un fichero de credenciales o de cookies'],
-  [/(?:^|[\s"'`(])\/etc\/(?:passwd|shadow)\b/i, 'ruta a credenciales del sistema'],
-  [/\bSAM\b[^\n]{0,20}\bSYSTEM\b|\bconfig\\SAM\b/i, 'colmenas del registro con credenciales'],
+  [/(?:^|[\s"'`(])(?:~|\/home\/[^/\s]+|\/root|%USERPROFILE%|[a-z]:\\Users\\[^\\\s]+)\\[^\s"')]*\.ssh\b/i, 'ruta al almacén de claves SSH', 'ssh-store'],
+  [/(?:^|[\s"'`(])(?:~|\/home\/[^/\s]+|\/root|%USERPROFILE%|[a-z]:\\Users\\[^\\\s]+)\\[^\s"')]*\.aws\b/i, 'ruta a credenciales de AWS', 'aws-credentials'],
+  [/\b(id_rsa|id_ed25519|\.netrc|\.git-credentials|cookies\.sqlite|\bLogin Data\b|\bkey4\.db\b)/i, 'nombre de un fichero de credenciales o de cookies', 'credential-file-name'],
+  [/(?:^|[\s"'`(])\/etc\/(?:passwd|shadow)\b/i, 'ruta a credenciales del sistema', 'system-credentials'],
+  [/\bSAM\b[^\n]{0,20}\bSYSTEM\b|\bconfig\\SAM\b/i, 'colmenas del registro con credenciales', 'registry-hives'],
 ];
 
 const recortar = (texto, max = 120) => {
@@ -163,7 +166,16 @@ export function escanear({ id = '', description = '', whenToUse = '', tags = [],
   // El id no es contenido: si es inseguro, no hay nada que escanear con sentido.
   const idInseguro = motivoDeIdInseguro(id);
   if (idInseguro) {
-    bloqueos.push({ rule: 'security-id', observed: recortar(id), message: `el id no es utilizable: ${idInseguro}`, fix: 'Elige un id kebab-case ASCII, sin puntos, de hasta 64 caracteres' });
+    bloqueos.push({
+      rule: 'security-id',
+      observed: recortar(id),
+      message: `el id no es utilizable: ${idInseguro}`,
+      messageCode: 'finding.security-id.message',
+      messageParams: { motivo: idInseguro },
+      fix: 'Elige un id kebab-case ASCII, sin puntos, de hasta 64 caracteres',
+      fixCode: 'finding.security-id.fix',
+      fixParams: {},
+    });
   }
 
   const superficies = [
@@ -174,21 +186,36 @@ export function escanear({ id = '', description = '', whenToUse = '', tags = [],
 
   const mirar = (lista, clase) => {
     for (const { etiqueta, numero, linea } of superficies) {
-      for (const [re, motivo] of lista) {
+      for (const [re, motivo, motivoCode] of lista) {
         if (!re.test(linea)) continue;
         const donde = `${etiqueta}:${numero} · ${recortar(linea, 90)}`;
         const credencial = clase === 'credencial';
         const hallazgo = {
           rule: credencial ? 'secret' : (clase === 'aviso' ? 'security-warn' : 'security-block'),
           observed: donde,
+          // El `motivo` es el DATO de la tabla de patrones; su representacion viaja en `motivoCode` y la compone
+          // el catalogo (`security.motivo.*`). El hallazgo lleva las dos cosas, como el resto del repo.
+          motivo,
+          motivoCode,
           message: credencial
             ? `parece contener una credencial (${motivo}): una skill no lleva secretos nunca — ${recortar(linea, 80)}`
             : `${motivo} — ${recortar(linea, 90)}`,
+          messageCode: credencial
+            ? 'finding.secret.message'
+            : (clase === 'aviso' ? 'finding.security-warn.message' : 'finding.security-block.message'),
+          // La `muestra` es lo que se recorto de la linea: el mismo valor que ya viajaba en la frase cruda.
+          messageParams: credencial
+            ? { motivo, motivoCode, muestra: recortar(linea, 80) }
+            : { motivo, motivoCode, muestra: recortar(linea, 90) },
           fix: credencial
             ? 'Quita la credencial y sustitúyela por una referencia al almacén de secretos'
             : clase === 'aviso'
               ? 'Revisa si de verdad hace falta; si es legítimo, un humano lo aprueba con --force y queda su decisión'
               : 'Quita el contenido: una skill no lleva órdenes dirigidas al agente ni operaciones destructivas, y esto no se aprueba ni con --force',
+          fixCode: credencial
+            ? 'finding.secret.fix'
+            : (clase === 'aviso' ? 'finding.security-warn.fix' : 'finding.security-block.fix'),
+          fixParams: {},
         };
         (clase === 'aviso' ? avisos : bloqueos).push(hallazgo);
       }
@@ -219,7 +246,16 @@ export function revisarArbol(dir, { maxFicheros = 200 } = {}) {
     try {
       entradas = readdirSync(ruta, { withFileTypes: true });
     } catch (error) {
-      problemas.push({ rule: 'security-tree', observed: rel || '(raíz)', message: `no se pudo leer: ${error.code ?? error.message}`, fix: 'Revisa permisos antes de aprobar' });
+      problemas.push({
+        rule: 'security-tree',
+        observed: rel || '(raíz)',
+        message: `no se pudo leer: ${error.code ?? error.message}`,
+        messageCode: 'finding.security-tree.unreadable.message',
+        messageParams: { codigo: error.code ?? error.message },
+        fix: 'Revisa permisos antes de aprobar',
+        fixCode: 'finding.security-tree.fix',
+        fixParams: {},
+      });
       return;
     }
     for (const entrada of entradas) {
@@ -229,11 +265,29 @@ export function revisarArbol(dir, { maxFicheros = 200 } = {}) {
       try {
         info = lstatSync(hijo);
       } catch {
-        problemas.push({ rule: 'security-tree', observed: relativo, message: 'no se pudo inspeccionar', fix: 'Revisa permisos antes de aprobar' });
+        problemas.push({
+          rule: 'security-tree',
+          observed: relativo,
+          message: 'no se pudo inspeccionar',
+          messageCode: 'finding.security-tree.uninspectable.message',
+          messageParams: {},
+          fix: 'Revisa permisos antes de aprobar',
+          fixCode: 'finding.security-tree.fix',
+          fixParams: {},
+        });
         continue;
       }
       if (info.isSymbolicLink()) {
-        problemas.push({ rule: 'security-tree', observed: relativo, message: 'es un enlace simbólico: una skill no sale de su carpeta', fix: 'Sustitúyelo por el fichero de verdad' });
+        problemas.push({
+          rule: 'security-tree',
+          observed: relativo,
+          message: 'es un enlace simbólico: una skill no sale de su carpeta',
+          messageCode: 'finding.security-tree.symlink.message',
+          messageParams: {},
+          fix: 'Sustitúyelo por el fichero de verdad',
+          fixCode: 'finding.security-tree.symlink.fix',
+          fixParams: {},
+        });
         continue;
       }
       if (info.isDirectory()) {
@@ -241,7 +295,16 @@ export function revisarArbol(dir, { maxFicheros = 200 } = {}) {
         continue;
       }
       if (!info.isFile()) {
-        problemas.push({ rule: 'security-tree', observed: relativo, message: 'no es un fichero normal (dispositivo, tubería…)', fix: 'Quita ese elemento del árbol' });
+        problemas.push({
+          rule: 'security-tree',
+          observed: relativo,
+          message: 'no es un fichero normal (dispositivo, tubería…)',
+          messageCode: 'finding.security-tree.not-a-file.message',
+          messageParams: {},
+          fix: 'Quita ese elemento del árbol',
+          fixCode: 'finding.security-tree.not-a-file.fix',
+          fixParams: {},
+        });
       }
     }
   };
@@ -249,7 +312,16 @@ export function revisarArbol(dir, { maxFicheros = 200 } = {}) {
   if (problemas.length === 0) {
     const cuenta = contar(dir);
     if (cuenta > maxFicheros) {
-      problemas.push({ rule: 'security-tree', observed: `${cuenta} ficheros`, message: `el árbol tiene ${cuenta} ficheros y el máximo es ${maxFicheros}`, fix: 'Una skill con doscientos ficheros no es una skill: divide o poda' });
+      problemas.push({
+        rule: 'security-tree',
+        observed: `${cuenta} ficheros`,
+        message: `el árbol tiene ${cuenta} ficheros y el máximo es ${maxFicheros}`,
+        messageCode: 'finding.security-tree.too-many.message',
+        messageParams: { n: cuenta, maximo: maxFicheros },
+        fix: 'Una skill con doscientos ficheros no es una skill: divide o poda',
+        fixCode: 'finding.security-tree.too-many.fix',
+        fixParams: {},
+      });
     }
   }
   return { ok: problemas.length === 0, problemas };
@@ -381,11 +453,25 @@ export function verificarCadena(entradas = []) {
     const numero = i + 1;
     if (typeof entrada?.huella !== 'string' || entrada.huella === '') { sinHuella += 1; anterior = null; return; }
     if (anterior !== null && entrada.huellaAnterior !== anterior) {
-      roturas.push({ numero, rule: 'journal-chain', message: `la entrada ${numero} encadena con «${String(entrada.huellaAnterior).slice(0, 12)}…» y la anterior termina en «${String(anterior).slice(0, 12)}…»: falta o sobra algo` });
+      const encadenada = String(entrada.huellaAnterior).slice(0, 12);
+      const esperada = String(anterior).slice(0, 12);
+      roturas.push({
+        numero,
+        rule: 'journal-chain',
+        message: `la entrada ${numero} encadena con «${encadenada}…» y la anterior termina en «${esperada}…»: falta o sobra algo`,
+        messageCode: 'finding.journal-chain.message',
+        messageParams: { numero, anterior: encadenada, esperado: esperada },
+      });
     }
     const calculada = huellaDeEntrada(entrada);
     if (calculada !== entrada.huella) {
-      roturas.push({ numero, rule: 'journal-tamper', message: `la entrada ${numero} no coincide con su huella: fue editada después de escribirse` });
+      roturas.push({
+        numero,
+        rule: 'journal-tamper',
+        message: `la entrada ${numero} no coincide con su huella: fue editada después de escribirse`,
+        messageCode: 'finding.journal-tamper.message',
+        messageParams: { numero },
+      });
     }
     anterior = entrada.huella;
   });

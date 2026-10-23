@@ -1,10 +1,10 @@
 {
-  "generado": "2026-10-23T19:05:24.665Z",
+  "generado": "2026-10-23T20:02:29.479Z",
   "ficheros": {
     "bin/skill-compiler.mjs": 0,
     "client.js": 903,
     "index.js": 327,
-    "lib/audit.mjs": 309,
+    "lib/audit.mjs": 301,
     "lib/auto-approve.mjs": 170,
     "lib/auto-update.mjs": 276,
     "lib/catalog-signal.mjs": 214,

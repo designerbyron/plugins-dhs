@@ -21,6 +21,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 import { auditarCarpeta, curatedLibraryRoot, defaultRoot, isOurs, listProjects } from './compiler.mjs';
+import { t } from './i18n/index.mjs';
 
 /**
  * Los estados que **se auditan**: todo lo que puede llegar a servirse o a decidirse.
@@ -101,7 +102,18 @@ function ficha(dir, { root, estado, projectKey, id, cwd }) {
     // `auditarCarpeta` no debería lanzar; si el entorno se las arregla para que sí, la auditoría entera no
     // se pierde por esta skill.
     resultado = {
-      findings: [{ severity: 'error', rule: 'unreadable', observed: error.code ?? error.message, threshold: null, message: `no se pudo auditar: ${error.message}`, fix: 'Revisa los permisos de esa carpeta' }],
+      findings: [{
+        severity: 'error',
+        rule: 'unreadable',
+        observed: error.code ?? error.message,
+        threshold: null,
+        message: `no se pudo auditar: ${error.message}`,
+        messageCode: 'finding.unreadable.audit.message',
+        messageParams: { detalle: error.message },
+        fix: 'Revisa los permisos de esa carpeta',
+        fixCode: 'finding.unreadable.folder.fix',
+        fixParams: {},
+      }],
       unreadable: true,
       medidas: null,
     };
@@ -136,8 +148,10 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
   const fichas = [];
   const quiere = (estado) => estados === null || estados.includes(estado);
 
-  const anotaContenedor = (severity, rule, observado, message, fix) => {
-    contenedores.push({ severity, rule, observado, message, fix });
+  // Cada hallazgo del contenedor lleva su frase cruda (`message`/`fix`, el dato que ya viajaba) y la clave
+  // con sus parametros: la representacion se compone al pintar (`fraseDeHallazgo`), en el idioma de la sesion.
+  const anotaContenedor = (severity, rule, observado, prosa) => {
+    contenedores.push({ severity, rule, observado, ...prosa });
   };
 
   // ── 1. Los proyectos y todos sus estados ────────────────────────────────────────────────────────
@@ -145,7 +159,14 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
   try {
     claves = listProjects(root);
   } catch (error) {
-    anotaContenedor('error', 'store-unreadable', root, `no se pudo listar el almacén: ${error.message}`, 'Revisa los permisos de la carpeta del almacén');
+    anotaContenedor('error', 'store-unreadable', root, {
+      message: `no se pudo listar el almacén: ${error.message}`,
+      messageCode: 'finding.store-unreadable.message',
+      messageParams: { detalle: error.message },
+      fix: 'Revisa los permisos de la carpeta del almacén',
+      fixCode: 'finding.store-unreadable.fix',
+      fixParams: {},
+    });
   }
 
   const archivadas = [];
@@ -160,7 +181,14 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
       const dir = join(base, estado);
       const { nombres, error } = subcarpetas(dir);
       if (error) {
-        anotaContenedor('error', 'state-unreadable', aRelativa(root, dir), `no se pudo leer el estado «${estado}» de ${projectKey}: ${error}`, 'Revisa los permisos de esa carpeta');
+        anotaContenedor('error', 'state-unreadable', aRelativa(root, dir), {
+          message: `no se pudo leer el estado «${estado}» de ${projectKey}: ${error}`,
+          messageCode: 'finding.state-unreadable.project.message',
+          messageParams: { estado, proyecto: projectKey, detalle: error },
+          fix: 'Revisa los permisos de esa carpeta',
+          fixCode: 'finding.unreadable.folder.fix',
+          fixParams: {},
+        });
         continue;
       }
       for (const id of nombres) fichas.push(ficha(join(dir, id), { root, estado, projectKey, id, cwd }));
@@ -170,7 +198,14 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
     const conocidos = new Set([...ESTADOS_DE_PROYECTO, ...ESTADOS_ARCHIVADOS, '.git']);
     for (const nombre of enProyecto) {
       if (!conocidos.has(nombre)) {
-        anotaContenedor('warn', 'unknown-state', aRelativa(root, join(base, nombre)), `«${nombre}» no es un estado conocido: se ha quedado fuera de la auditoría`, 'Comprueba si el almacén estrena un estado que el auditor debe conocer');
+        anotaContenedor('warn', 'unknown-state', aRelativa(root, join(base, nombre)), {
+          message: `«${nombre}» no es un estado conocido: se ha quedado fuera de la auditoría`,
+          messageCode: 'finding.unknown-state.message',
+          messageParams: { nombre },
+          fix: 'Comprueba si el almacén estrena un estado que el auditor debe conocer',
+          fixCode: 'finding.unknown-state.fix',
+          fixParams: {},
+        });
       }
     }
   }
@@ -185,7 +220,14 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
     const dir = estado === 'global' ? curated : join(curated, estado.replace(/^global-/, ''));
     const { nombres, error } = subcarpetas(dir);
     if (error) {
-      anotaContenedor('error', 'state-unreadable', `global/${estado.replace(/^global-/, '')}`, `no se pudo leer la biblioteca global («${estado}»): ${error}`, 'Revisa los permisos de esa carpeta');
+      anotaContenedor('error', 'state-unreadable', `global/${estado.replace(/^global-/, '')}`, {
+        message: `no se pudo leer la biblioteca global («${estado}»): ${error}`,
+        messageCode: 'finding.state-unreadable.global.message',
+        messageParams: { estado, detalle: error },
+        fix: 'Revisa los permisos de esa carpeta',
+        fixCode: 'finding.unreadable.folder.fix',
+        fixParams: {},
+      });
       continue;
     }
     for (const id of nombres) {
@@ -197,7 +239,17 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
         nuestra = isOurs(destino);
       } catch { nuestra = false; }
       if (!nuestra) {
-        contenedores.push({ severity: 'info', rule: 'not-ours', observado: aRelativa(curated, destino), message: `«${estado}/${id}» no es de este plugin: queda fuera de la auditoría (su puerta no es la nuestra)`, fix: 'Nada: es de otro sistema' });
+        contenedores.push({
+          severity: 'info',
+          rule: 'not-ours',
+          observado: aRelativa(curated, destino),
+          message: `«${estado}/${id}» no es de este plugin: queda fuera de la auditoría (su puerta no es la nuestra)`,
+          messageCode: 'finding.not-ours.message',
+          messageParams: { estado, id },
+          fix: 'Nada: es de otro sistema',
+          fixCode: 'finding.not-ours.fix',
+          fixParams: {},
+        });
         continue;
       }
       fichas.push(ficha(destino, { root: curated, estado, projectKey: 'global', id, cwd }));
@@ -226,7 +278,19 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
   for (const skill of fichas) {
     for (const finding of skill.findings) {
       const clave = `${finding.severity}|${finding.rule}`;
-      if (!porRegla.has(clave)) porRegla.set(clave, { rule: finding.rule, severity: finding.severity, count: 0, fix: finding.fix, skills: [] });
+      if (!porRegla.has(clave)) {
+        porRegla.set(clave, {
+          rule: finding.rule,
+          severity: finding.severity,
+          count: 0,
+          // La frase cruda y su codigo viajan juntos: la representacion se compone al pintar, y la tabla por
+          // regla (o el codigo de la variante) resuelve el idioma sin volver a mirar el texto.
+          fix: finding.fix,
+          fixCode: finding.fixCode,
+          fixParams: finding.fixParams,
+          skills: [],
+        });
+      }
       const entrada = porRegla.get(clave);
       entrada.count += 1;
       entrada.skills.push(skill.key);
@@ -252,17 +316,149 @@ export function auditarAlmacen({ root = defaultRoot(), curated = curatedLibraryR
   };
 }
 
-/** El informe en líneas, para leerlo de un vistazo sin abrir el JSON. */
+/** El informe en líneas, para leerlo de un vistazo sin abrir el JSON.
+ *
+ * Las cifras y los nombres de estado son el dato; la frase se compone con el catalogo en el idioma de la sesion.
+ * Los separadores son ASCII a proposito: el texto del plugin no lleva tipografia.
+ */
 export function resumenDeAuditoria(informe) {
   const lineas = [
-    `skills auditadas: ${informe.totals.total} · PASS ${informe.totals.pass} · WARN ${informe.totals.warn} · ERROR ${informe.totals.error} · ilegibles ${informe.totals.unreadable}`,
-    ...(informe.archivadas.length > 0
-      ? [`archivadas: ${informe.archivadas.length} · no se auditan (evidencia congelada: su nombre y su cuerpo son los del archivo)`]
-      : []),
+    t('audit.summary.counts', {
+      total: informe.totals.total,
+      pass: informe.totals.pass,
+      warn: informe.totals.warn,
+      error: informe.totals.error,
+      unreadable: informe.totals.unreadable,
+    }),
+    ...(informe.archivadas.length > 0 ? [t('audit.summary.archived', { n: informe.archivadas.length })] : []),
   ];
   for (const [estado, c] of Object.entries(informe.byState)) {
-    lineas.push(`  ${(NOMBRE_DE_ESTADO[estado] ?? estado).padEnd(15)} ${String(c.total).padStart(3)}   PASS ${c.pass} · WARN ${c.warn} · ERROR ${c.error}${c.unreadable ? ` · ilegibles ${c.unreadable}` : ''}`);
+    lineas.push(t('audit.summary.state-row', {
+      estado: estadoEnTexto(estado).padEnd(15),
+      total: String(c.total).padStart(3),
+      pass: c.pass,
+      warn: c.warn,
+      error: c.error,
+      ilegibles: c.unreadable ? t('audit.summary.unreadable-suffix', { n: c.unreadable }) : '',
+    }));
   }
-  if (informe.contenedores.length > 0) lineas.push(`  contenedores: ${informe.contenedores.length} hallazgo(s)`);
+  if (informe.contenedores.length > 0) lineas.push(t('audit.summary.containers', { n: informe.contenedores.length }));
   return lineas.join('\n');
+}
+
+// -- La prosa de los hallazgos: una tabla, dos idiomas ---------------------------------------------
+//
+// El **dato** de un hallazgo es `rule`, `observed`, `threshold` y `severity`: eso no se traduce ni se toca, y es
+// lo que afirman las pruebas y lo que viaja al informe JSON. La **frase** (`message`, `fix`) es su representacion
+// y se compone al pintar, con el catalogo, en el idioma de la sesion.
+//
+// Dos caminos, y solo dos:
+//
+//   1. una regla con UNA redaccion: la tabla de abajo da la clave, y los valores viajan en `messageParams`;
+//   2. una regla con VARIAS redacciones (`security-tree`, `unreadable`, `state-unreadable`): el sitio que crea el
+//      hallazgo anade `messageCode` + `messageParams`, y esa clave manda sobre la tabla.
+//
+// Si la clave no existiera se pinta el texto crudo que ya traia el hallazgo: nunca una clave a la vista. Y no se
+// deduce nada comparando la frase: la decision es por regla y por codigo.
+export const PROSA_DE_REGLA = Object.freeze({
+  'reference-path': Object.freeze({ message: 'finding.reference-path.message', fix: 'finding.reference-path.fix' }),
+  'reference-escape': Object.freeze({ message: 'finding.reference-escape.message', fix: 'finding.reference-escape.fix' }),
+  'reference-not-a-file': Object.freeze({ message: 'finding.reference-not-a-file.message', fix: 'finding.reference-not-a-file.fix' }),
+  'reference-duplicate': Object.freeze({ message: 'finding.reference-duplicate.message', fix: 'finding.reference-duplicate.fix' }),
+  'reference-empty': Object.freeze({ message: 'finding.reference-empty.message', fix: 'finding.reference-empty.fix' }),
+  'link-escape': Object.freeze({ message: 'finding.link-escape.message', fix: 'finding.link-escape.fix' }),
+  'link-is-directory': Object.freeze({ message: 'finding.link-is-directory.message', fix: 'finding.link-is-directory.fix' }),
+  'link-unverifiable': Object.freeze({ message: 'finding.link-unverifiable.message', fix: 'finding.link-unverifiable.fix' }),
+  'link-missing': Object.freeze({ message: 'finding.link-missing.message', fix: 'finding.link-missing.fix' }),
+  'reference-budget': Object.freeze({ message: 'finding.reference-budget.message', fix: 'finding.reference-budget.fix' }),
+  'id-format': Object.freeze({ message: 'finding.id-format.message', fix: 'finding.id-format.fix' }),
+  'id-max': Object.freeze({ message: 'finding.id-max.message', fix: 'finding.id-max.fix' }),
+  'description-min': Object.freeze({ message: 'finding.description-min.message', fix: 'finding.description-min.fix' }),
+  'description-max': Object.freeze({ message: 'finding.description-max.message', fix: 'finding.description-max.fix' }),
+  'description-multiline': Object.freeze({ message: 'finding.description-multiline.message', fix: 'finding.description-multiline.fix' }),
+  'whenToUse-min': Object.freeze({ message: 'finding.whenToUse-min.message', fix: 'finding.whenToUse-min.fix' }),
+  'whenToUse-multiline': Object.freeze({ message: 'finding.whenToUse-multiline.message', fix: 'finding.whenToUse-multiline.fix' }),
+  'body-min': Object.freeze({ message: 'finding.body-min.message', fix: 'finding.body-min.fix' }),
+  'body-max': Object.freeze({ message: 'finding.body-max.message', fix: 'finding.body-max.fix' }),
+  'body-budget': Object.freeze({ message: 'finding.body-budget.message', fix: 'finding.body-budget.fix' }),
+  'body-no-sections': Object.freeze({ message: 'finding.body-no-sections.message', fix: 'finding.body-no-sections.fix' }),
+  'body-sections-min': Object.freeze({ message: 'finding.body-sections-min.message', fix: 'finding.body-sections-min.fix' }),
+  'body-sections-soft': Object.freeze({ message: 'finding.body-sections-soft.message', fix: 'finding.body-sections-soft.fix' }),
+  // La regla de la etiqueta no canonica lleva acento en su id y no se toca: su sitio pone `messageCode`/`fixCode`
+  // en vez de resolver por tabla, para que esta tabla (y el catalogo) sean ASCII.
+  'personal-path': Object.freeze({ message: 'finding.personal-path.message', fix: 'finding.personal-path.fix' }),
+  'absolute-path': Object.freeze({ message: 'finding.absolute-path.message', fix: 'finding.absolute-path.fix' }),
+  'absolute-path-ambigua': Object.freeze({ message: 'finding.absolute-path-ambigua.message', fix: 'finding.absolute-path-ambigua.fix' }),
+  'absolute-path-ejemplo': Object.freeze({ message: 'finding.absolute-path-ejemplo.message', fix: 'finding.absolute-path-none.fix' }),
+  'absolute-path-cita': Object.freeze({ message: 'finding.absolute-path-cita.message', fix: 'finding.absolute-path-none.fix' }),
+  'evidence-missing': Object.freeze({ message: 'finding.evidence-missing.message', fix: 'finding.evidence-missing.fix' }),
+  'skill-missing': Object.freeze({ message: 'finding.skill-missing.message', fix: 'finding.skill-missing.fix' }),
+  'reference-missing-file': Object.freeze({ message: 'finding.reference-missing-file.message', fix: 'finding.reference-missing-file.fix' }),
+  'reference-integrity': Object.freeze({ message: 'finding.reference-integrity.message', fix: 'finding.reference-integrity.fix' }),
+  'security-id': Object.freeze({ message: 'finding.security-id.message', fix: 'finding.security-id.fix' }),
+  secret: Object.freeze({ message: 'finding.secret.message', fix: 'finding.secret.fix' }),
+  'security-block': Object.freeze({ message: 'finding.security-block.message', fix: 'finding.security-block.fix' }),
+  'security-warn': Object.freeze({ message: 'finding.security-warn.message', fix: 'finding.security-warn.fix' }),
+  // Reglas con VARIAS redacciones: el sitio que crea el hallazgo pone `messageCode`; aqui queda la que se usa si
+  // un hallazgo llegara sin codigo (una reserva, no la regla).
+  'security-tree': Object.freeze({ message: 'finding.security-tree.uninspectable.message', fix: 'finding.security-tree.fix' }),
+  unreadable: Object.freeze({ message: 'finding.unreadable.skill.message', fix: 'finding.unreadable.folder.fix' }),
+  'state-unreadable': Object.freeze({ message: 'finding.state-unreadable.project.message', fix: 'finding.unreadable.folder.fix' }),
+  'journal-chain': Object.freeze({ message: 'finding.journal-chain.message', fix: null }),
+  'journal-tamper': Object.freeze({ message: 'finding.journal-tamper.message', fix: null }),
+  'store-unreadable': Object.freeze({ message: 'finding.store-unreadable.message', fix: 'finding.store-unreadable.fix' }),
+  'unknown-state': Object.freeze({ message: 'finding.unknown-state.message', fix: 'finding.unknown-state.fix' }),
+  'not-ours': Object.freeze({ message: 'finding.not-ours.message', fix: 'finding.not-ours.fix' }),
+});
+
+/** Los parametros de la frase de un hallazgo: los de la variante, y los del arreglo si van aparte. */
+const parametrosDe = (hallazgo) => {
+  const params = { ...(hallazgo?.messageParams ?? {}), ...(hallazgo?.params ?? {}), ...(hallazgo?.fixParams ?? {}) };
+  // `motivoCode` es el unico valor anidado: el motivo del patron de seguridad se dice en el idioma de la sesion,
+  // y si el catalogo no lo tuviera se queda el motivo crudo que ya traia el hallazgo (nunca una clave).
+  if (typeof params.motivoCode === 'string') {
+    const clave = `security.motivo.${params.motivoCode}`;
+    const motivo = t(clave);
+    params.motivo = motivo === clave ? params.motivo : motivo;
+  }
+  return params;
+};
+
+/** Compone una clave con el catalogo; si no existe, el texto crudo. Nunca devuelve una clave cruda. */
+const resolver = (codigo, params, crudo) => {
+  if (typeof codigo !== 'string') return crudo;
+  const texto = t(codigo, params);
+  return texto === codigo ? crudo : texto;
+};
+
+/**
+ * La frase de un hallazgo, en el idioma de la sesion.
+ *
+ * Acepta el hallazgo entero (`rule`/`messageCode`/`messageParams`/`message`) o una linea ya codificada
+ * (`{code, params, texto}`), que es como `checkProposal` entrega la integridad de la puerta.
+ */
+export function fraseDeHallazgo(hallazgo) {
+  const crudo = String(hallazgo?.message ?? hallazgo?.texto ?? '');
+  const codigo = hallazgo?.messageCode ?? hallazgo?.code ?? PROSA_DE_REGLA[hallazgo?.rule]?.message;
+  return resolver(codigo, parametrosDe(hallazgo), crudo);
+}
+
+/** El arreglo de un hallazgo, en el idioma de la sesion: misma regla, misma reserva. */
+export function arregloDeHallazgo(hallazgo) {
+  const crudo = String(hallazgo?.fix ?? hallazgo?.arreglo ?? '');
+  const codigo = hallazgo?.fixCode ?? PROSA_DE_REGLA[hallazgo?.rule]?.fix;
+  return resolver(codigo, parametrosDe(hallazgo), crudo);
+}
+
+/**
+ * El nombre legible de un estado de la auditoria, en el idioma de la sesion.
+ *
+ * El estado persistido (`approved`, `global-disabled`...) no se toca: esto es su etiqueta. Si el estado es nuevo
+ * y el catalogo no lo conoce, se dice el estado tal cual antes que una clave.
+ */
+export function estadoEnTexto(estado) {
+  const clave = `cli.audit.state.${estado}`;
+  const texto = t(clave);
+  if (texto !== clave) return texto;
+  return NOMBRE_DE_ESTADO[estado] ?? String(estado);
 }
