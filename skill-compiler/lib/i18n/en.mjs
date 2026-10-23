@@ -95,6 +95,13 @@ export default Object.freeze({
   'cmd.show.gate-error': '  FAIL  {error}',
   'cmd.show.gate-warning': '  warning  {aviso}',
   'cmd.show.force-hint': 'Approving it with these warnings requires saying so: /skill-approve {id} --force',
+  // descripciones del menu "/" para el grupo 1, y la fila de otro proyecto
+  'cmd.proposals.description': 'Which learned skills are waiting for your approval in this project, and which ones are already active.',
+  'cmd.pending.description': 'The ids waiting for a decision, on one line: what the card asks before deciding.',
+  'cmd.show.description': 'Read a learned skill of this project: the pending proposal or the one already active.',
+  'cmd.row.other-project': '"{id}" is pending in {project}, not in this session.',
+  'cmd.row.this-session': 'This session works in {cwd}.',
+  'cmd.row.open-there': 'Open it from the project it belongs to: scope is not chosen by hand.',
 
   // comandos: aprobar / publicar / ambito (F1.2 grupo 2)
   'cmd.approve.description': 'Activate a proposed skill, if it passes the validation gate: in this project, or for all your projects if you say so. Without saying where, it asks. Approving is yours: the model cannot.',

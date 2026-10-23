@@ -117,6 +117,27 @@ describe('F3 · cada defecto pone en rojo su puerta', () => {
     assert.match(r.salida, /FALLO ascii-nuevo · lib\/scope\.mjs/);
   });
 
+  it('el no-ASCII sembrado en un modulo que antes NO estaba vigilado tambien la pone en rojo', () => {
+    // Los tres modulos que se entregaron fuera de la puerta: si vuelven a quedar fuera, esto se pone rojo
+    // porque la lista de vigilados es la unica que da tope, y aqui el acento es de un caracter.
+    for (const rel of ['lib/vendor.mjs', 'lib/catalog-signal.mjs', 'lib/review.mjs']) {
+      const base = copia();
+      sembrarAlFinal(base, rel, 'export const DEUDA = "\u00f1";');
+      const r = ascii(base);
+      assert.equal(r.code, 1, `${rel} quedo fuera de la puerta:\n${r.salida}`);
+      assert.match(r.salida, /FALLO ascii-nuevo/);
+    }
+  });
+
+  it('un fichero de primera parte sin clasificar pone la puerta en rojo', () => {
+    const base = copia();
+    writeFileSync(join(base, 'lib', 'modulo-sin-clasificar.mjs'), 'export const x = 1;\n');
+    const r = gates(base);
+    assert.equal(r.code, 1, r.salida);
+    assert.match(r.salida, /FALLO ascii-sin-clasificar · lib\/modulo-sin-clasificar\.mjs/);
+    assert.match(r.salida, /GATES: la puerta ascii esta en rojo/);
+  });
+
   it('un alias con destino invalido', () => {
     const base = copia();
     sembrar(base, 'lib/commands.mjs', "'skill-ver': 'skill-show'", "'skill-ver': 'skill-show-typo'");

@@ -94,6 +94,13 @@ export default Object.freeze({
   'cmd.show.gate-error': '  FALLO  {error}',
   'cmd.show.gate-warning': '  aviso  {aviso}',
   'cmd.show.force-hint': 'Aprobarla con estos avisos exige decirlo: /skill-approve {id} --force',
+  // descripciones del menu "/" para el grupo 1, y la fila de otro proyecto
+  'cmd.proposals.description': 'Que skills aprendidas esperan tu aprobacion en este proyecto y cuales estan activas.',
+  'cmd.pending.description': 'Los ids que esperan decision, en una linea: lo que la tarjeta consulta antes de decidir.',
+  'cmd.show.description': 'Lee una skill aprendida de este proyecto: la propuesta pendiente o la ya activa.',
+  'cmd.row.other-project': '"{id}" esta pendiente en {project}, no en esta sesion.',
+  'cmd.row.this-session': 'Esta sesion trabaja en {cwd}.',
+  'cmd.row.open-there': 'Abrela desde el proyecto que le corresponde: el ambito no se elige a mano.',
 
   // comandos: aprobar / publicar / ambito (F1.2 grupo 2)
   'cmd.approve.description': 'Activa una skill propuesta, si pasa la puerta de validacion: en este proyecto, o para todos los tuyos si lo dices. Sin decir donde, pregunta. Aprobar es tuyo: el modelo no puede.',

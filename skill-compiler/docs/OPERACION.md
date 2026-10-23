@@ -405,14 +405,13 @@ node bin/skill-compiler.mjs auto [<id>]  # ¿puede actualizarse sola? cada medid
 ## Comprobaciones de salud
 
 ```sh
-npm test                # puertas (i18n + ASCII) y las 768 pruebas, en caja de arena
+npm test                # puertas (i18n + ASCII) y las 805 pruebas, en caja de arena
 npm run test:hermetic   # lo mismo + huella del almacén real antes y después
 npm run gate            # solo las puertas: para un cambio de texto o de catálogo
-node tests/vendor-real.e2e.mjs   # la cadena completa contra la red real (necesita internet)
 ```
 
 `npm test` ejecuta antes `tools/gates-obligatorios.mjs` (por `pretest`): si una puerta falla, la suite no
-llega a correr. Las tres primeras no necesitan red ni tocan tus datos.
+llega a correr. Ninguna de las tres necesita red ni toca tus datos.
 
 ## La capa de seguridad, en dos frases
 

@@ -389,7 +389,13 @@ describe('comandos · filas de pendientes', () => {
 
     const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
-    assert.match(result.text, /no en esta sesión/);
+    // El mensaje vive ahora en el catalogo y se escribe en ASCII: se afirma la forma real que ve el
+    // humano, y ademas que sigue nombrando el proyecto de origen y la sesion actual (tres lineas).
+    assert.match(result.text, /no en esta sesion/);
+    assert.equal(result.text.split('\n').length, 3);
+    assert.match(result.text, /esta pendiente en otro-proyecto/);
+    assert.match(result.text, /Esta sesion trabaja en/);
+    assert.match(result.text, /no se elige a mano/);
     assert.equal(existsSync(join(s.root, 'projects', projectKey(otro), 'approved', 'measured-decision-check')), false);
   });
 
