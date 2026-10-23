@@ -99,6 +99,11 @@ conocida (`references/harness-contracts.md`), confirmada aqui en la ruta real de
   reinvocacion correcta): si. **La actualizacion del menu en vivo queda INFERIDA, no observada.**
 - Por tanto: **no se declara resuelto el menu**. Lo que se declara resuelto es el mecanismo de registro (medido)
   y la maquina de estados del cambio (medido, 18 casos).
+- **Coste declarado de migrar UNA operacion**: en `en`, `/skill-aprobar` deja de ser invocable (medido:
+  `undefined`), porque un nombre por operacion significa que el nombre del otro idioma NO se registra. Los
+  otros 14 alias espanoles siguen vivos en los dos idiomas, asi que el menu queda mixto hasta que la
+  migracion sea completa. Es el precio de demostrar el mecanismo con una sola operacion, y se dice antes de
+  que nadie lo descubra en el menu.
 - Si el operador confirma en pantalla que el menu cambia sin reiniciar, la migracion de los 16 se autoriza con
   este mismo mecanismo. Si el menu **no** cambia, la limitacion es del adaptador de UI (`invalidateAll` suave),
   no del registro, y las salidas soportadas son: (a) reiniciar el cliente, (b) una accion del plugin en
@@ -143,3 +148,25 @@ conocida (`references/harness-contracts.md`), confirmada aqui en la ruta real de
 
 La linea base ASCII **no sube**: el total baja de 7580 a 7579 (un caracter menos en `lib/pending-rows.mjs`, que
 ya estaba por debajo de su tope) y el fichero nuevo entra con 0.
+
+## 8 · Comprobacion manual del menu, en dos minutos (la hace el operador)
+
+Lo automatizado termina en el evento `commands/change`; lo que sigue es lo unico que queda por ver con los
+ojos. La app carga el plugin por `link:` a esta carpeta, asi que **hay que estar en la rama del prototipo**
+para verlo (y volver a `main` despues).
+
+1. `git switch proto/i18n-live-commands` en el repositorio del plugin. Arrancar DeepSeek Harness 0.2.1-rc.2.
+   Sin `DSH_LANG` en el entorno y sin `config.json` con `lang`, el arranque es `en`.
+2. Escribir `/` y teclear `approve`: debe aparecer **`/skill-approve`**, y `aprobar` **no** debe ofrecer nada.
+   Anotar cuantas filas pinta el menu (con la operacion migrada son las mismas que antes: el total no cambia).
+3. Ejecutar `/skill-compiler-language --es`. El resultado debe decir «Idioma fijado en es (antes en)...».
+4. Volver a abrir `/` **sin reiniciar** y teclear `aprobar`: debe aparecer **`/skill-aprobar`**, y `approve`
+   no debe ofrecer nada. Con la flecha hasta la fila y Enter, la fila se ejecuta (el id se pide despues).
+5. Ejecutar `/skill-compiler-language --en` y comprobar que `/skill-approve` vuelve sin reiniciar.
+6. Si en el paso 4 el menu sigue mostrando `skill-approve`, cerrar y reabrir el menu `/` una vez: la
+   invalidacion es suave y la repoblacion es asincrona. Si aun asi no cambia, **anotarlo y NO reiniciar la
+   app**: ese dato es exactamente el que decide entre migrar los 16 o cambiar de estrategia de UI.
+7. Al terminar: `git switch main` (el arranque siguiente debe cargar el codigo publicado, 4.0.1).
+
+El paso 3 escribe `config.json` en el almacen real (`lang`). Es la misma preferencia que escribe
+`skill-compiler lang --es`; el paso 5 la devuelve a `en` si se quiere dejar como estaba.
