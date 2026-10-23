@@ -1,11 +1,19 @@
 # MEMORY — estado vivo de la colección
 
 Memoria durable del repositorio. No es el historial de una sesión: es lo que hay que saber al entrar.
-Última actualización: 2026-10-16.
+Última actualización: 2026-10-23.
 
 ## Versión publicada
 
-**v3.2.0** en `main` local, **sin commitear** (el acto no autoriza commit ni push): la propiedad con
+**v4.0.1**, publicada el 2026-10-23: tag anotado `v4.0.1` sobre `8393977`, release estable en
+`designerbyron/plugins-dsh`. Cierra el defecto que daba por bueno un almacén que no se podía leer (el
+`ENOENT` de `projects/` es «todavía no hay», no «no pude leer»), y deja el contrato de verbos del panel
+probado con cuatro arenas. **v4.0.0** (tag `v4.0.0`) fue la entrega del idioma ES/EN con el contrato del
+modelo congelado, las puertas obligatorias y el contrato de resultado por elemento.
+
+### Historia de las versiones anteriores (registro, no estado de hoy)
+
+**v3.2.0**, en su día y sin commitear mientras se validaba: la propiedad con
 **cuatro estados** (`ausente` · `declarada` · `invalida` · `ilegible`), el inventario que distingue
 **inaccesible de inexistente** y declara el barrido incompleto, la identidad clasificada con procedencia
 —la huella informa, no decide—, las rutas resueltas hasta el ancestro que existe, la escritura bajo el
@@ -22,8 +30,10 @@ medias, y el aviso del turno **cuenta por tipo y se retira**. **v2.0.0** publica
 calidad vigente, `audit`, `repair`/`promote` con los tres niveles de riesgo y la promoción automática
 **apagada** por defecto.
 
-519 pruebas en verde, suite hermética en verde (huella del almacén real idéntica antes y después), `doctor`
-verde.
+**805 pruebas en verde** (196 suites), suite hermética en verde (huella del almacén real idéntica antes y
+después), `doctor` verde, y las puertas del repositorio en verde: i18n **572 claves por idioma** y ASCII
+**8.401 medidas con tope 8.401**, en **24/24** ficheros de primera parte vigilados. Es el estado medido el
+2026-10-23 al cerrar la rama `hardening/post-4.0.1` (local, sin push y sin release).
 
 ## Almacén: el objetivo del `DIAGNOSTICO-2026-10-15`, alcanzado
 
@@ -443,3 +453,43 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
   `doctor` cuenta 31 filas); la prosa de `observado`/`umbral` y los `motivo` de bloqueo de `repair` (viajan como
   DATO); y las dos retiradas declaradas —alias en 5.0.0, prosa del panel en 4.2.0 **condicionada** a que el
   anfitrion transporte el resultado completo.
+
+## Acto 2026-10-23 (cierre) — endurecimiento posterior a la 4.0.1
+
+Rama **`hardening/post-4.0.1`**, creada desde `8393977` (el commit del tag `v4.0.1`): **local, sin push, sin
+release**, y los tags `v4.0.0` y `v4.0.1` sin mover. Cuatro commits de endurecimiento (ASCII, catalogo,
+e2e, anfitrion) y uno documental: este, sin una linea de codigo.
+
+- **La puerta ASCII tenia una lista cerrada y nada la comparaba con el arbol.** `lib/vendor.mjs` (546),
+  `lib/catalog-signal.mjs` (214) y `lib/review.mjs` (75) se entregaron fuera de la puerta. Ahora todo fichero
+  de primera parte (`lib/` y `bin/` recursivos, `index.js`, `client.js`) tiene que estar en `FICHEROS` o en
+  `EXCLUIDOS` **con su motivo**; un modulo nuevo sin clasificar es rojo (`ascii-sin-clasificar`) y un fichero
+  que la linea base vigilaba y ya no existe tambien (`ascii-ausente`). `--update` no sube un tope existente
+  sin `--allow-raise`.
+- **El tope sube por cobertura, no por deuda**: de 7.580 (sobre 7.579 medidos: habia 1 de holgura en
+  `pending-rows.mjs`, 306 contra 305) a **8.414 exactos**. +835 son exactamente los caracteres que YA
+  existian en los tres modulos no vigilados (546+214+75) y -1 la holgura retirada. Cero caracteres nuevos.
+- **Cuatro cadenas visibles mas al catalogo**: las descripciones de `skill-proposals`, `skill-pending` y
+  `skill-show` (el texto del menu `/`) y las tres lineas del error de la fila de otro proyecto.
+  **566 -> 572 claves** por idioma. El español del catalogo es ASCII, asi que `commands.mjs` baja de 583 a 570
+  y el total ASCII de 8.414 a **8.401** (la linea base se ajusto a lo medido: es lo unico que puede hacer).
+- **Los dos `.e2e` ya no son guiones sin aserciones.** `propose-real.e2e.test.mjs` propone el cuerpo real
+  (guardado en `tests/fixtures/propose-real-body.md`) y afirma la propuesta en disco, la huella, el cuerpo
+  entero, la aprobacion y el servicio byte a byte, en arena. `vendor-real.e2e.test.mjs` usa un `fetch`
+  inyectado con la forma de GitHub y recorre `parseSource -> fetchSource -> propose -> approve ->
+  upstreamStatus` mirando el disco, no el resultado que devuelve la funcion. **Mutaciones controladas de las
+  dos**: quitar el cuerpo del `SKILL.md` compuesto -> rojo («lineas del cuerpo que no llegaron»); quitar la URL
+  del origen de `provenance.json` -> rojo en dos casos; restaurado, verde.
+- **Los tres limites del anfitrion, reafirmados con su condicion de salida** en `docs/ANFITRION.md` §5:
+  recorte de `code`/`items` por `normalizeResult`, respaldo de prosa activo y su retirada condicionada a una
+  medicion, y alias invocables y visibles sin mecanismo de ocultacion. No se toco el `app.asar`, no se retiro
+  la prosa y no se anadio ningun regex ni texto centinela.
+- **Medido con el binario en una copia del almacen real** (`DSH_HOME` de arena, stdio sin tty): `audit` 44
+  skills - PASS 43 - WARN 1 (`absolute-path` x1, el preexistente) - ERROR 0, con 32 archivadas fuera del
+  recuento; `security` 0 bloqueos - 0 avisos y cadena valida; `doctor` exit 0, «everything in place».
+- **Suite 777 -> 805** (196 suites). `definitions-schema` 18/18. Gates en verde: i18n 572 claves e ASCII
+  8.401 con tope 8.401.
+- **Sigue abierto**: la verificacion visual del menu (este puesto no tiene navegador), la prosa de
+  `observado`/`umbral` y los `motivo` de bloqueo de `repair` (viajan como DATO), las dos retiradas declaradas
+  (alias en 5.0.0; prosa del panel en 4.2.0, condicionada a que el anfitrion transporte el resultado) y
+  `tests/update-real.e2e.mjs`, que sigue siendo un guion manual como los otros dos lo eran.
