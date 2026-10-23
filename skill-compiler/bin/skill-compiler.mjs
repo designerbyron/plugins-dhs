@@ -494,11 +494,22 @@ switch (command) {
     let avisos = 0;
     const rotos = [];
     let proyectos = [];
-    try { proyectos = fs.readdirSync(join(root, 'projects'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { proyectos = []; }
+    // ENOENT es "todavia no hay" (un almacen recien instalado: valido). ENOTDIR o EACCES es "no pude
+    // leer", y eso no puede salir en verde: un catch mudo contaba un projects que es un fichero como
+    // "0 proyectos" y el comando cerraba diciendo "sin bloqueos y con el diario integro".
+    let ilegible = null;
+    try { proyectos = fs.readdirSync(join(root, 'projects'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch (error) {
+      if (error?.code !== 'ENOENT') ilegible = { ruta: join(root, 'projects'), codigo: error?.code ?? error?.message ?? 'desconocido' };
+      proyectos = [];
+    }
     for (const proyecto of proyectos.sort()) {
       for (const estado of ['proposed', 'approved', 'disabled', 'published', 'rejected']) {
         let ids = [];
-        try { ids = fs.readdirSync(join(root, 'projects', proyecto, estado), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { continue; }
+        try { ids = fs.readdirSync(join(root, 'projects', proyecto, estado), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch (error) {
+          // Un estado que no existe no dice nada; uno que existe y no se puede leer, si.
+          if (error?.code !== 'ENOENT') rotos.push(`${proyecto}/${estado}: ${error?.code ?? error?.message}`);
+          continue;
+        }
         for (const id of ids.sort()) {
           const dir = join(root, 'projects', proyecto, estado, id);
           if (!fs.existsSync(join(dir, 'SKILL.md'))) continue;
@@ -518,12 +529,13 @@ switch (command) {
       if (cadena.sinHuella > 0) process.stdout.write(`${tr('cli.security.old-entries', { proyecto, n: cadena.sinHuella })}\n`);
       if (diario.ilegibles > 0) rotos.push(tr('cli.security.broken-line', { proyecto, n: diario.ilegibles }));
     }
+    if (ilegible !== null) process.stdout.write(`${tr('cli.doctor.security-unreadable', ilegible)}\n`);
     process.stdout.write(`${tr('cli.security.header', { skills, proyectos: proyectos.length })}\n`);
     process.stdout.write(`${tr('cli.security.counts', { blocked: bloqueos, warnings: avisos })}\n`);
     process.stdout.write(rotos.length === 0
       ? `${tr('cli.security.journals-ok')}\n`
       : `${tr('cli.security.journals-broken', { n: rotos.length })}\n${rotos.map((r) => tr('cli.security.broken-row', { message: r })).join('\n')}\n`);
-    if (bloqueos > 0 || rotos.length > 0) { process.stdout.write(`${tr('cli.security.stop')}\n`); process.exit(1); }
+    if (bloqueos > 0 || rotos.length > 0 || ilegible !== null) { process.stdout.write(`${tr('cli.security.stop')}\n`); process.exit(1); }
     process.stdout.write(`${tr('cli.security.ok')}\n`);
     process.exit(0);
   }
