@@ -1,230 +1,168 @@
 # Plan · plugin en inglés canónico, con opción de idioma ES/EN (v4.0.0)
 
-**Estado: propuesto (revisión 2). No hay nada implementado.** Se aprueba o se corrige antes de tocar código.
-Auditoría que lo sostiene: [`docs/AUDITORIA-2026-10-22-multidioma.md`](../docs/AUDITORIA-2026-10-22-multidioma.md).
+**Estado: revisión 3 — incorpora la revisión independiente del 2026-10-22.** Aprobado el rumbo; F0 en curso.
 
-Base: `64372c4`, 614 pruebas, `audit` 48 · PASS 47 · WARN 1 (propuesta pendiente) · ERROR 0.
+Auditoría: [`docs/AUDITORIA-2026-10-22-multidioma.md`](../docs/AUDITORIA-2026-10-22-multidioma.md).
 
-> **Qué cambia respecto a la revisión 1.** La primera traducía los textos y dejaba los identificadores como
-> estaban. La dirección correcta es la contraria: **el plugin se normaliza al inglés** —comandos, flags, textos y
-> códigos— y el español pasa a ser una **opción de presentación**. La auditoría lo confirma (F-9): la CLI y los
-> flags ya son ingleses; los 16 comandos de sesión y los textos son el único resto en español.
+---
+
+## 0 · Verificación externa previa (obligatoria, hecha)
+
+| Comprobación | Resultado |
+|---|---|
+| `git fetch origin --prune` | sin novedades |
+| `HEAD` / `origin/main` / `main` | **`8f6b25c`** los tres; 0 ficheros sin commitear |
+| README remoto vs local | mismo contenido: hash **LF** `b0e82562…` en los tres (remoto, índice git y copia de trabajo sin CR) |
+| Plan remoto | `200` |
+
+La vista de GitHub que mostraba «v1.8.0 / 276 pruebas» es **caché de la página renderizada**, no divergencia:
+el blob servido por `raw.githubusercontent.com` en `main` ya dice `v3.9.3 · 614 pruebas` y coincide byte a byte
+(tras normalizar CRLF, que es lo que fija `.gitattributes`).
 
 ---
 
 ## 1 · Decisión
 
-**Inglés canónico, español opcional.** Una sola lengua para todo lo que es contrato —nombres de comando, flags,
-códigos, valores de estado— y dos para lo que lee una persona, elegida con `/skill-compiler --language es|en`.
+**Inglés canónico, español opcional.** Una sola lengua para lo que es contrato —nombres de comando, flags,
+códigos, valores persistidos— y dos para lo que lee una persona, elegida con `/skill-compiler --language es|en`.
 
 | Capa | Idioma | ¿Se traduce? |
 |---|---|---|
-| Nombres de comando, flags, códigos, ids, rutas, `meta.json`, frontmatter | **inglés** | no: son contrato |
+| Nombres de comando, flags, códigos, ids, rutas, `meta.json`, frontmatter | **inglés** | no: contrato |
 | Textos de comandos, CLI, errores, panel | inglés por defecto; español si se pide | sí |
-| Descripciones de herramientas y protocolo (lo que lee el modelo) | **inglés** | no |
-| `decision` del diario (`aprobada`, `publicada`…) | **español, congelado** | no: es evidencia |
+| Descripciones de herramientas y protocolo (S-5, lo que lee el modelo) | **inglés fijo** | no: una sola versión |
+| `decision` del diario (`aprobada`, `publicada`…) | **español, congelado** | no: evidencia; etiqueta traducida al mostrar |
 | Cuerpos de las `SKILL.md` | el que escriba la persona | no |
-| Documentación del repositorio | español en esta versión; README en inglés (F4) | aparte |
+| Documentación | español; README en inglés + `README.es.md` (F4) | aparte |
 
-La excepción del diario no es comodidad: `security` verifica la cadena sobre esos valores y las series históricas
-se leen por ellos. Se quedan como están **para siempre**, y su etiqueta en pantalla se resuelve por una tabla
-(`aprobada` → `approved` / `aprobada`). Traducirlos rompería la evidencia; reescribir el pasado no es una opción.
+### Corrección 1 · S-5 resuelta, sin contradicción
 
----
-
-## 2 · Por qué esto es viable
-
-1. **Ya está medio hecho.** La CLI (26 subórdenes) y los flags son ingleses desde siempre; las herramientas del
-   modelo también. Falta el vocabulario de la sesión: 16 comandos y sus textos.
-2. **El coste está medido.** 596 apariciones de esos 16 nombres en 41 ficheros, pero sólo ~10 son código y
-   documentación viva; el resto son planes y el registro histórico, que **no se tocan** (evidencia).
-3. **Los textos ya tienen una puerta.** El panel usa el servicio `locale` con diccionario `es`/`en`; el servidor
-   no tiene ninguna. `lib/i18n/` es un módulo nuevo, no una cirugía.
-4. **Los datos no se mueven.** Ni ids, ni almacén, ni diario, ni `meta.json`: la migración es de vocabulario y de
-   textos, y por eso es reversible por fase.
-
-Lo que **no** es viable sin coste: renombrar comandos **sin** alias. Hay memoria muscular, documentación y skills
-escritas que invocan `skill-aprobar`. Por eso los nombres viejos sobreviven como **alias**.
+La auditoría dice la verdad: `lib/definitions.mjs` está **en español** (51 descripciones + protocolo). El plan
+anterior decía «ya están en inglés» y era falso. **S-5 entra en el alcance**: se normaliza a **inglés fijo**, una
+sola versión, sin alternar por preferencia. Se acompaña de una revisión **semántica por herramienta** (mismos
+nombres, argumentos, permisos, límites, confirmación humana, auditoría y manejo de errores) con una prueba que
+fija la forma del esquema: si cambia un nombre de herramienta o un parámetro, la prueba falla.
 
 ---
 
-## 3 · Contrato de nombres
-
-### 3.1 · Los 16 comandos
-
-| Hoy (español) | Canónico (inglés) |
-|---|---|
-| `skill-propuestas` | `skill-proposals` |
-| `skill-pendientes` | `skill-pending` |
-| `skill-ver` | `skill-show` |
-| `skill-aprobar` | `skill-approve` |
-| `skill-globalizar` | `skill-publish` |
-| `skill-ambito` | `skill-scope` |
-| `skill-rechazar` | `skill-reject` |
-| `skill-deshabilitar` | `skill-disable` |
-| `skill-habilitar` | `skill-enable` |
-| `skill-eliminar` | `skill-retire` |
-| `skill-retiradas` | `skill-retired` |
-| `skill-propiedad` | `skill-ownership` |
-| `skill-propiedad-dsh-only` | `skill-ownership-dsh-only` |
-| `skill-propiedad-machine` | `skill-ownership-machine` |
-| `skill-sistemas` | `skill-systems` |
-| `skill-auto` | `skill-auto` (ya es inglés) |
-
-**Alias:** los 15 nombres viejos se registran como alias funcionales del canónico, con descripción que empieza
-por `deprecated:` y sin fila en el menú `/`. Se retiran en **5.0.0**, no antes: una versión mayor para quitar,
-como manda la tabla de contrato del README.
-
-**Comando de ajustes:** `skill-compiler`, la puerta única a la configuración del plugin.
+## 2 · Precedencia del idioma (determinista, sin adivinar)
 
 ```
-/skill-compiler                       estado: idioma efectivo y de dónde sale, ámbito, pendientes
-/skill-compiler --language es|en      fija el idioma y lo persiste
-/skill-compiler --language            informa sin cambiar nada
+DSH_LANG (override de pruebas/automatización)
+  → preferencia persistida en $DSH_HOME/skill-compiler/config.json
+    → en
 ```
 
-En la CLI: `node bin/skill-compiler.mjs lang [es|en]` (sin argumento, informa). Mismo ajuste, mismo fichero: dos
-puertas, una verdad.
+**No se detecta el locale del sistema en esta versión.** El diagnóstico lo desaconseja: en Windows suele ser
+`en-US` aunque el operador trabaje en español, y sería una elección implícita disfrazada. Si algún día se quiere
+autodetección, será un modo explícito (*opt-in*), no una fuente silenciosa.
 
-### 3.2 · Lo que **no** cambia de nombre
-
-Ids de skill, valores de `decision`, campos de `meta.json`, claves del frontmatter, rutas del almacén, nombres de
-regla (`body-budget`, `secreto`, `ruta-absoluta`…) y los 26 subórdenes de la CLI. Cambiar cualquiera de ellos es
-romper datos o historia; ninguno hace falta para tener un plugin en inglés.
-
----
-
-## 4 · Arquitectura
-
-```
-lib/i18n/
-  index.mjs      resolveLang(), t(key, params), setLang(), langInfo()
-  es.mjs         catálogo español (completo)
-  en.mjs         catálogo inglés (base y reserva)
-  codes.mjs      códigos estables + parámetros admitidos
-  decisions.mjs  etiqueta por idioma de los valores del diario (sin tocarlos)
-```
-
-- `t(key, params)` con el idioma resuelto **una vez** por proceso. Sin concatenar cadenas para componer mensajes.
-- **Precedencia:** `DSH_LANG` → `config.json` del almacén (`{"lang":"es"}`) → locale del sistema → `en`. Etiquetas
-  normalizadas (`es-ES`, `es_419`, `ES` → `es`); un idioma desconocido no es error: se usa el defecto y `doctor`
-  lo dice.
-- **Resultado de comando:** `{kind, text, code, params}`. El panel decide por `code`; `text` es presentación. El
-  panel conserva el reconocimiento por prosa **una** versión menor (hosts viejos) y se retira después.
-- **Alias:** `ALIASES = {'skill-aprobar': 'skill-approve', …}` registra el nombre viejo apuntando al mismo
-  handler. Una prueba comprueba que alias y canónico producen **el mismo `code` y el mismo efecto**.
-- `tools/i18n-gate.mjs`: falla si aparece un literal con acento fuera de `lib/i18n/`, si un catálogo tiene claves
-  de más o de menos, o si un nombre de comando registrado no es inglés (los alias, exentos y declarados).
-
-### Códigos estables (borrador; se cierra en F1)
-
-| Grupo | Códigos |
-|---|---|
-| Decisión | `activated`, `already-active`, `updated-disabled`, `published`, `set-aside`, `enabled`, `disabled`, `retired`, `rejected` |
-| Pregunta | `scope-ask` (sustituye a `SCOPE_ASK`), `language-ask` |
-| Negativas de la puerta | `no-proposal`, `with-warnings`, `unsafe-id`, `no-scope`, `topic-conflict`, `id-conflict` |
-| Lote | `batch-partial`, `batch-empty` |
-
-Cada uno con sus parámetros (`id`, `key`, `warnings[]`, `done[]`, `failed[]`). `text` se compone desde el
-catálogo; `params` viaja aparte para que el panel no tenga que partir cadenas.
+- Normalización aceptada: `es`, `es-ES`, `es_419`, `ES` → `es`; `en`, `en-US`, `en_GB` → `en`.
+- **Opción explícita inválida** (`--language fr`): error claro, **sin escribir** configuración.
+- **Variable de entorno inválida**: cae a `en` y `doctor` da **un** diagnóstico con el valor recibido.
 
 ---
 
-## 5 · Fases
+## 3 · Un ajuste, dos superficies
 
-### F0 · Cimientos y contrato de nombres (sin cambiar todavía los textos)
-
-- `lib/i18n/{index,es,en,codes,decisions}.mjs`; resolución y normalización de idioma; `config.json`.
-- Renombrar los 16 comandos al inglés **con alias** de los viejos; actualizar filas del menú y descripciones.
-- `skill-compiler --language` y `lang` en la CLI; `doctor` informa idioma, origen y alias activos.
-- Tabla de contrato del README actualizada (canónicos + alias + retirada en 5.0.0).
-- Pruebas: alias ≡ canónico (código y efecto), resolución de idioma, idioma desconocido, `config.json`.
-- **Criterio:** los 614 tests verdes (con los nombres actualizados donde eran contrato), `audit`/`security`/
-  `doctor` idénticos, y el mismo estado en disco usando el nombre viejo o el nuevo.
-
-### F1 · Textos del servidor en inglés, con diccionario
-
-- Migrar al catálogo los textos de los 16 comandos y de la CLI (ayuda, errores, salidas); `en` es la base y `es`
-  la traducción completa.
-- `code` + `params` en cada resultado.
-- **Criterio:** misma decisión y mismo efecto en `es` y `en`; los 32 asserts de prosa pasan a código; ninguna clave
-  cruda.
-
-### F2 · Panel
-
-- Leer `code`/`params` con reserva al regex; arreglar F-2 (`bulk_ids_hint` en el bloque equivocado) y F-3
-  (reserva `es` → base `en`).
-- **Criterio:** paridad bidireccional de claves; en host inglés no aparece una palabra en español, y al revés.
-
-### F3 · Motor y puertas
-
-- Migrar `compiler`, `security`, `repair`, `audit`, `promote`, `scope`, `auto-update`.
-- `tools/i18n-gate.mjs` en verde, **y demostrado en rojo** con un literal nuevo de prueba.
-- **Criterio:** gate verde y suite completa verde.
-
-### F4 · Documentación y release
-
-- `docs/OPERACION.md` (idioma, precedencia, cómo añadir un idioma), `docs/ANFITRION.md` (reserva por prosa una
-  versión), `CHANGELOG` **4.0.0**, README en **inglés** con `README.es.md` enlazado.
-- Release `v4.0.0` con nota de compatibilidad: canónicos + alias, retirada de alias en 5.0.0, y qué no cambió
-  (ids, diario, almacén).
-- **Criterio:** suite + hermética verdes antes de etiquetar; `describe` limpio.
-
-**Esfuerzo:** F0 día y medio (el renombrado con alias es lo que más toca), F1 día, F2 medio día, F3 un día, F4
-medio día. ~4,5 días en cinco entregas verificables.
+- **Harness:** comando `skill-compiler` con entrada `--language es|en`; sin argumento, estado. **Se verifica en
+  el registro real del host** que acepta esa entrada (prueba con el registro de comandos, no con una suposición):
+  los comandos `/` no son un shell.
+- **CLI:** `node bin/skill-compiler.mjs lang [es|en]`. Sin argumento informa.
+- Ambas muestran: **idioma efectivo**, **fuente** (`env` / `config` / `default`), ámbito y resumen (pendientes).
+- La escritura de `config.json` es **atómica** (`.tmp` + `rename`) y **preserva claves desconocidas**: nunca se
+  reescribe el fichero con sólo `{lang}`.
+- **El panel recibe la preferencia** por la misma resolución; si el cambio no puede aplicarse a la vista abierta,
+  se dice («recarga para verlo») en vez de prometer inmediatez.
 
 ---
 
-## 6 · Pruebas
+## 4 · Contrato de resultados
 
-| Prueba | Qué mide |
-|---|---|
-| `tests/i18n.test.mjs` | precedencia, normalización, `config.json`, `lang` de la CLI, idioma desconocido |
-| `tests/i18n-paridad.test.mjs` | claves iguales en `es` y `en`; ninguna cruda; valores no vacíos |
-| `tests/i18n-codigos.test.mjs` | todo `code` emitido existe; todo código tiene texto en los dos idiomas |
-| `tests/i18n-efecto.test.mjs` | la misma orden en `es` y `en` deja **el mismo estado en disco** y el mismo `code` |
-| `tests/i18n-datos.test.mjs` | ids, `decision`, `meta` y frontmatter intactos; vocabulario del diario congelado |
-| `tests/alias.test.mjs` | cada alias existe, resuelve al canónico, mismo `code` y mismo efecto, y está declarado obsoleto |
-| `tools/i18n-gate.mjs` | ningún literal con acento nuevo fuera de `lib/i18n/`; nombres de comando en inglés |
+`{kind, text, code, params}`; `kind` conserva su significado actual.
 
-Y las de siempre: suite completa, hermética, `audit`, `security`, `doctor`, `coherencia`.
-
----
-
-## 7 · Riesgos y reversión
-
-| Riesgo | Contención |
-|---|---|
-| Romper la memoria muscular de quien escribe `skill-aprobar` | alias funcionales durante toda la 4.x; se retiran en 5.0.0 |
-| Panel leyendo prosa traducida (F-1) | `code` primero, regex como reserva una versión, prueba de contrato |
-| Deriva de traducciones (F-2) | paridad bidireccional en cada ejecución |
-| Volver a hardcodear (F-5) | `tools/i18n-gate.mjs` |
-| Tocar datos por «normalizar» | `tests/i18n-datos.test.mjs` falla si cambia un id, una `decision` o una ruta |
-| Alias eternos | fecha de retirada en el contrato y aviso en la descripción del alias |
-
-Reversión: `DSH_LANG=es` devuelve la presentación en español; cada fase es un commit; quitar `config.json` vuelve
-a la resolución por entorno y sistema; ninguna fase escribe en `projects/`, `global/` ni el diario.
+- `code` sale de **`lib/i18n/codes.mjs`**, fuente única, igual en ES/EN, con parámetros **documentados y tipados**
+  (`id`, `key`, `warnings[]`, `done[]`, `failed[]`…). `params` nunca lleva secretos ni cuerpos de mensaje.
+- Cubre **preguntas** (`scope-ask`, `language-ask`), **confirmaciones**, **avisos** (`with-warnings`),
+  **fallo parcial** (`batch-partial`), **errores** (`no-proposal`, `unsafe-id`, `no-scope`, `id-conflict`) y
+  éxito (`activated`, `already-active`, `published`, `set-aside`, `enabled`, `disabled`, `retired`, `rejected`,
+  `updated-disabled`).
+- **Si llega un `code` reconocido, el panel no analiza `text`, nunca.**
+- **`code` desconocido**: fallo **seguro y visible**; no se activa el parser legacy ni se declara éxito.
+- **Ventana legacy**: sin `code` (host o plugin anterior) el parser de prosa sigue funcionando **hasta la 4.1.0**;
+  se retira en 4.2.0. La deuda queda escrita en `docs/ANFITRION.md` con la versión exacta.
+- **Alias**: comparten **el mismo handler** y el mismo contrato; se declaran con metadatos explícitos
+  (`aliasOf`, `deprecatedIn`) y se ocultan del menú por esos metadatos, no por el prefijo del texto.
 
 ---
 
-## 8 · Lo que este plan no hace
+## 5 · Catálogos
 
-- No traduce las `SKILL.md` ni los cuerpos que escribe el usuario.
-- No traduce la documentación (salvo el README, que pasa a inglés con copia en español).
-- No toca las descripciones ni el protocolo del modelo: ya están en inglés y se quedan.
-- No renombra ids, estados del diario, rutas ni campos de `meta.json`.
-- No añade un tercer idioma; deja el camino abierto (un fichero por idioma).
+- Paridad **bidireccional** de claves ES/EN; mismos nombres y forma de *placeholders*.
+- Pruebas de plurales, interpolación, salida multilínea, Unicode, parámetros ausentes y parámetros de más.
+- Falta una traducción → se usa el **inglés**; **nunca** la clave cruda. La paridad **falla en CI** y `doctor`
+  informa del catálogo incompleto: la reserva protege producción, no sustituye a traducir.
+- Se corrige `bulk_ids_hint` (está en el bloque inglés con texto español) y se añade una prueba que detecta
+  **texto español en el catálogo inglés** y viceversa (heurística de palabras funcionales, con lista blanca).
 
 ---
 
-## 9 · Para aprobar
+## 6 · Puerta anti-regresión
 
-Los tres puntos que cambian el resultado:
+`tools/i18n-gate.mjs` no busca acentos: identifica **salidas humanas** en los puntos de salida conocidos
+(resultado de comando, salida de CLI, mensaje de error, texto de panel) y exige `t(key, params)` o el contrato
+localizado. Excepciones explícitas y declaradas: ids, rutas, ejemplos, claves de datos y contenido del usuario.
+Con **pruebas negativas** (un mensaje humano hardcodeado hace fallar la puerta) y **positivas** (un literal de
+máquina permitido no la hace fallar).
 
-1. **Nombres canónicos en inglés con alias** —y retirada de alias en 5.0.0—, en vez de mantener los españoles
-   como canónicos.
-2. **`/skill-compiler --language es|en`** como puerta única de ajustes, persistido en `config.json`; por defecto
-   **`en`**.
-3. **El diario se queda en español**, con etiqueta traducida en pantalla: es evidencia, no interfaz.
+---
 
-Aprobado esto, se empieza por **F0** y se para al final de cada fase con su medición.
+## 7 · Datos históricos
+
+- Los valores de `decision` se **congelan**; no se recalculan ni se reencadenan. Mapa de etiquetas ES/EN
+  **separado** de los valores persistidos.
+- `security` valida **exactamente la misma cadena** antes y después de la versión: se comprueba con la huella de
+  los diarios reales antes de tocar nada y al cerrar la fase.
+
+---
+
+## 8 · Reversión real
+
+- `DSH_LANG=es` restablece **presentación**; no revierte código ni contrato.
+- Rollback de código: `git revert <commit de la fase>`, sin `reset --hard` y sin reescribir historia.
+- `config.json` se puede borrar o restaurar sin afectar a las skills.
+- Cada fase termina en **un commit** cuando la gobernanza lo permita y las pruebas pasen.
+
+---
+
+## 9 · Fases
+
+| Fase | Contenido | Cierre |
+|---|---|---|
+| **F0** | `lib/i18n/` (resolución determinista, `config.json` aditivo y atómico, catálogo de códigos), `lang` en CLI, `doctor` con idioma y fuente, pruebas de resolución. **Sin cambiar salidas.** | suite verde; `audit`/`security`/`doctor` idénticos; ningún texto visible distinto |
+| **F1** | Comandos ingleses + alias con metadatos; textos de servidor y CLI al catálogo; `code`/`params` en **todas** las salidas; **S-5 al inglés fijo** con revisión semántica por herramienta | misma decisión y mismo efecto en ES/EN; 32 asserts de prosa a código; esquema de herramientas fijado por prueba |
+| **F2** | Panel: preferencia única, `code`+`params`, paridad, `bulk_ids_hint`; casos pregunta / éxito / aviso / fallo parcial / cancelar / error | cero claves crudas; en host inglés no aparece español |
+| **F3** | `tools/i18n-gate.mjs` (sinks humanos), contratos de `codes.mjs`, paridad de catálogo y *placeholders*, alias, diario inmutable; hermética | gate verde y **demostrado en rojo**; `security` con la misma cadena |
+| **F4** | README (EN + `README.es.md`), CHANGELOG 4.0.0, OPERACION, ANFITRION; gates completos; `npm pack --dry-run` | sólo entonces `v4.0.0` |
+
+---
+
+## 10 · Criterios de aceptación
+
+1. Ajuste ejecutable desde Harness y CLI, con idioma efectivo y fuente.
+2. `en` por defecto incluso con sistema en español; `es` completo al elegirlo.
+3. Misma operación en ambos idiomas → mismos `code` y **mismos efectos persistidos**; sólo cambia el texto.
+4. Cero claves crudas; paridad de catálogos y *placeholders*.
+5. El panel no deduce resultados de prosa si llega `code`; la ventana legacy está probada y fechada.
+6. Alias funcionan sin duplicar filas; ids, rutas, diario y almacenes no cambian.
+7. S-5 en inglés fijo, con la forma de las herramientas fijada por prueba.
+8. Suite original + nuevas y hermética verdes; `audit`, `security`, `doctor`, empaquetado y remoto/local.
+9. Nada de `projects/`, `global/`, diarios ni contenido de skills como efecto secundario.
+10. Ningún release «estable» con un gate parcial o con una prueba sustituida por una inferencia.
+
+---
+
+## 11 · Lo que no hace
+
+No traduce `SKILL.md`, ni la documentación (salvo README), ni los cuerpos del usuario; no renombra ids, estados
+del diario, rutas ni campos de `meta.json`; no añade un tercer idioma.

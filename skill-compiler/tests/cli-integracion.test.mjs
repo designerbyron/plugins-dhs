@@ -9,7 +9,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
@@ -184,5 +184,57 @@ describe('CLI real (subproceso, arena) · una propuesta con avisos', () => {
     assert.equal(r.code, 0, r.salida);
     const ayuda = readFileSync(CLI, 'utf8');
     assert.match(ayuda, /skill-pendientes/);
+  });
+});
+
+describe('CLI real (subproceso, arena) · idioma del plugin', () => {
+  it('sin preferencia dice en y de dónde sale; fijarlo persiste y se lee en el proceso siguiente', () => {
+    const arena = sandbox();
+    const antes = cli(arena, 'lang');
+    assert.equal(antes.code, 0, antes.salida);
+    assert.match(antes.salida, /^language: en \(source: default\)$/m);
+
+    const puesto = cli(arena, 'lang', 'es');
+    assert.equal(puesto.code, 0, puesto.salida);
+    assert.match(puesto.salida, /idioma fijado en es/);
+
+    const despues = cli(arena, 'lang');
+    assert.match(despues.salida, /^idioma: es \(fuente: config\)$/m);
+  });
+
+  it('un idioma no admitido sale con código 2 y no crea configuración', () => {
+    const arena = sandbox();
+    const r = cli(arena, 'lang', 'fr');
+    assert.equal(r.code, 2, r.salida);
+    assert.match(r.salida, /no admitido|not supported|unsupported/i);
+    assert.equal(existsSync(join(arena.root, 'config.json')), false);
+  });
+
+  it('DSH_LANG manda sobre la preferencia y deja el config intacto', () => {
+    const arena = sandbox();
+    cli(arena, 'lang', 'es');
+    const r = spawnSync(process.execPath, [CLI, 'lang'], {
+      cwd: process.cwd(),
+      env: { ...process.env, DSH_HOME: arena.base, DSH_LANG: 'en' },
+      encoding: 'utf8',
+    });
+    assert.match(String(r.stdout), /^language: en \(source: env\)$/m);
+    assert.equal(JSON.parse(readFileSync(join(arena.root, 'config.json'), 'utf8')).lang, 'es');
+  });
+
+  it('doctor publica el idioma con su fuente', () => {
+    const arena = sandbox();
+    cli(arena, 'lang', 'es');
+    const r = cli(arena, 'doctor');
+    assert.match(r.salida, /idioma: es \(fuente: config\)/);
+  });
+
+  it('el ajuste conserva claves ajenas del config', () => {
+    const arena = sandbox();
+    mkdirSync(arena.root, { recursive: true });
+    writeFileSync(join(arena.root, 'config.json'), `${JSON.stringify({ otra: 'dato', lang: 'en' })}\n`, 'utf8');
+    assert.equal(cli(arena, 'lang', 'es').code, 0);
+    const datos = JSON.parse(readFileSync(join(arena.root, 'config.json'), 'utf8'));
+    assert.deepEqual(datos, { otra: 'dato', lang: 'es' });
   });
 });

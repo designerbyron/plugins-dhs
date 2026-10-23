@@ -10,6 +10,7 @@
  * entre lo que el modelo puede proponer y lo que tú puedes aprobar.
  *
  *   /skill-pendientes                                    # los ids que esperan decisión, en una línea
+ *   node bin/skill-compiler.mjs lang [en|es]           # idioma del plugin (sin argumento: efectivo y fuente)
  *   node bin/skill-compiler.mjs where                     # qué ámbito tiene este directorio
  *   node bin/skill-compiler.mjs list                      # qué hay propuesto y aprobado
  *   node bin/skill-compiler.mjs show <id>                 # leer una propuesta entera
@@ -58,6 +59,7 @@
  *
  * Exit: 0 correcto · 1 problema (check en rojo, aprobación rechazada, vendorizado bloqueado) · 2 uso.
  */
+import { clavesFaltantes, resolveLang, setLang, t as tr } from '../lib/i18n/index.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -515,6 +517,32 @@ switch (command) {
     process.exit(noAptas === 0 ? 0 : 1);
   }
 
+  // ── idioma ───────────────────────────────────────────────────────────────────────────────────────
+  // Una sola resolución para las dos superficies. Sin argumento informa el idioma efectivo **y su fuente**:
+  // sin la fuente, «idioma: es» no dice si fue una decisión de la persona o una variable de la sesión.
+  case 'lang': {
+    const pedido = positional[0];
+    if (pedido === undefined) {
+      const info = resolveLang({ fresh: true });
+      const lineas = [tr('lang.status', { lang: info.lang, source: info.source }, { lang: info.lang })];
+      if (info.invalidEnv !== undefined) lineas.push(tr('lang.env-invalid', { value: info.invalidEnv }, { lang: info.lang }));
+      if (info.invalidConfig !== undefined) lineas.push(tr('lang.config-invalid', { value: info.invalidConfig }, { lang: info.lang }));
+      process.stdout.write(`${lineas.join('\n')}\n`);
+      break;
+    }
+    const puesto = setLang(pedido);
+    if (!puesto.ok) {
+      if (puesto.reason === 'unsupported') {
+        process.stderr.write(`${tr('lang.unsupported', { value: puesto.value, supported: puesto.supported.join(', ') }, { lang: resolveLang().lang })}\n`);
+        process.exit(2);
+      }
+      process.stderr.write(`${puesto.detail ?? puesto.reason}\n`);
+      process.exit(1);
+    }
+    process.stdout.write(`${tr('lang.set', { lang: puesto.lang, path: puesto.path }, { lang: puesto.lang })}\n`);
+    break;
+  }
+
   case 'doctor': {
     // Existe por un fallo real: el plugin importaba un paquete del harness sin declararlo, funcionaba
     // en la máquina donde estaba suelto y fallaba al instalarse en un perfil con «failed to import».
@@ -559,6 +587,17 @@ switch (command) {
         'hay contenido que la capa no deja publicar: `security` dice cuál y por qué');
     } catch (error) {
       line(false, `capa de seguridad: no se pudo revisar (${error.message})`, 'comprueba que el almacén existe y se puede leer');
+    }
+
+    // El idioma, con su fuente. Informativo: un `DSH_LANG` inválido no impide activar el plugin, pero se dice
+    // una vez y con el valor recibido —callarlo sería peor que el propio error—.
+    {
+      const info = resolveLang({ fresh: true });
+      process.stdout.write(`\n${tr('doctor.language', { lang: info.lang, source: info.source }, { lang: info.lang })}\n`);
+      if (info.invalidEnv !== undefined) process.stdout.write(`  ${tr('lang.env-invalid', { value: info.invalidEnv }, { lang: info.lang })}\n`);
+      if (info.invalidConfig !== undefined) process.stdout.write(`  ${tr('lang.config-invalid', { value: info.invalidConfig }, { lang: info.lang })}\n`);
+      const faltan = clavesFaltantes(info.lang);
+      if (faltan.length > 0) process.stdout.write(`  catálogo incompleto: ${faltan.length} clave(s) sin traducir\n`);
     }
 
     process.stdout.write(`\ndependencias declaradas: ${declaredNames.length}\n`);
