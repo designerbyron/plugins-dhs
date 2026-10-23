@@ -94,9 +94,16 @@ hace improbable.
 
 ```sh
 npm install           # OBLIGATORIO antes de nada: el plugin declara sus dependencias del harness
-npm test              # 209 pruebas
-npm run test:hermetic # las mismas + huella del almacén real antes y después
+npm test              # las puertas (i18n + ASCII) y, si pasan, las 768 pruebas
+npm run test:hermetic # lo mismo + huella del almacén real antes y después
+npm run gate          # solo las puertas: para un cambio de texto o de catálogo
 ```
+
+Las dos puertas son **obligatorias por construcción**, no por costumbre: `pretest` las corre antes que
+`node --test`, y `test:hermetic` aborta si alguna está en rojo —y aborta **antes** de la suite, no después—.
+Una puerta que se pudiera olvidar no sería una puerta. `tests/gates-obligatorios.test.mjs` siembra cada
+defecto (clave que falta, código sin texto, placeholders inconsistentes, no-ASCII nuevo, alias inválido,
+contrato de herramientas alterado) en una **copia** del paquete y exige que la puerta se ponga roja.
 
 - `tests/output-contract.test.mjs` — **el valor de cada herramienta contra el esquema que el harness
   valida**, en todas las ramas de su `execute`, con `validateJsonSchemaValue` (el juez real) y el esquema
@@ -171,8 +178,8 @@ Dos garantías que conviene no romper:
   Si el resultado de la instalación dice `restart-required`, reinicia el harness.
 - Criterio de versión: `mayor` cuando cambia el contrato de una herramienta o el formato del almacén;
   `menor` cuando se añade capacidad; `parche` cuando se corrige un defecto.
-- Antes de publicar: `npm run test:hermetic` en verde, `CHANGELOG.md` al día, y ningún secreto en el
-  árbol (`git diff --check` no comprueba eso: míralo tú).
+- Antes de publicar: `npm run test:hermetic` en verde —corre las puertas i18n y ASCII y, si pasan, la
+  suite—, `CHANGELOG.md` al día, y ningún secreto en el árbol (`git diff --check` no comprueba eso: míralo tú).
 - **Una versión publicada se etiqueta**, y la etiqueta no se mueve nunca: se crea en el commit donde la versión
   queda **cerrada y coherente** —`package.json`, su entrada del CHANGELOG y las docs sin afirmaciones
   desfasadas—, con mensaje que resuma el alcance, y se empuja (`git push origin <etiqueta>`). Etiquetar un

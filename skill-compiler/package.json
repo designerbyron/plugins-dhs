@@ -51,8 +51,12 @@
     "zod": "^4.4.3"
   },
   "scripts": {
+    "pretest": "node tools/gates-obligatorios.mjs",
     "test": "node --test",
-    "test:hermetic": "node tests/check-hermetic.mjs"
+    "test:hermetic": "node tests/check-hermetic.mjs",
+    "gate": "node tools/gates-obligatorios.mjs",
+    "gate:i18n": "node tools/i18n-gate.mjs",
+    "gate:ascii": "node tools/ascii-gate.mjs"
   },
   "dsh": {
     "bundle": {

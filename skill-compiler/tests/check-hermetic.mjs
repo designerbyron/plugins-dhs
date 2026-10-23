@@ -36,6 +36,21 @@ function fingerprint(dir) {
   return createHash('sha256').update(entries.join('\n')).digest('hex');
 }
 
+// Las puertas del repo corren AQUI, antes de la suite: `test:hermetic` es la ruta de release, y una puerta
+// que se puede olvidar no es una puerta. Si una falla, no se corre nada y se dice cual.
+const gates = spawnSync(process.execPath, [join(PACKAGE_ROOT, 'tools', 'gates-obligatorios.mjs')], {
+  cwd: PACKAGE_ROOT,
+  stdio: 'inherit',
+});
+if (gates.error) {
+  process.stderr.write(`No se pudieron ejecutar las puertas: ${gates.error.message}\n`);
+  process.exit(2);
+}
+if (gates.status !== 0) {
+  process.stderr.write('\nFALLO: una puerta obligatoria esta en rojo; la suite no se corre hasta que pase.\n');
+  process.exit(gates.status ?? 1);
+}
+
 const before = fingerprint(STORE);
 process.stdout.write(`store real: ${STORE}\nhuella antes:  ${before}\n\n`);
 

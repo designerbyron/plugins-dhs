@@ -14,13 +14,13 @@ Estado reproducible para retomar sin releer la sesion. Todo lo que sigue esta me
 | Fase | Estado | Que hay |
 |---|---|---|
 | F0 | cerrada | `lib/i18n/{index,es,en}.mjs`, resolucion `DSH_LANG` -> `config.json` -> `en`, `lang` en CLI, `doctor` con idioma y fuente |
-| F1.1 | parcial | 16 comandos canonicos + 15 alias con `aliasOf`/`deprecatedIn`, mismo codigo y efecto (probado). **Menu real sin verificar** |
+| **F1.1** | **cerrada** | menu medido en el anfitrion instalado (no puede filtrar alias: descriptor de lista cerrada); `aliasProblems`/`aliasSummary`, linea de `doctor` con las 31 filas, `docs/ANFITRION.md`; 9 casos. **Filas visibles no verificadas** |
 | **F1.3** | **cerrada** | superficie completa congelada + texto visible al modelo en ASCII puro |
-| **F1.2** | **cerrada (grupos 1-5)** | 527 claves por idioma. Grupo 5: toda la prosa de `bin/` + diagnosticos de `scope.mjs` |
-| F1.4 | parcial | 18 casos en `definitions-schema` (antes 4), 5 en `i18n-comandos` (nuevo), 7 de la puerta i18n, paridad de catalogos |
+| **F1.2** | **cerrada (grupos 1-5)** | 566 claves por idioma hoy (527 al cerrar el grupo 5). Grupo 5: toda la prosa de `bin/` + diagnosticos de `scope.mjs` |
+| **F1.4** | **cerrada** | cobertura medida por comando (31, dos idiomas) y por CLI (base `en` sin `DSH_LANG`); 9 casos |
 | F1.5 | cerrada | `docs/ANFITRION.md`: fallback de prosa en 4.0.0-4.1.x, retirada en **4.2.0** |
-| F2 | parcial | el panel lee `code`, `bulk_ids_hint` corregido, reserva `en` |
-| F3 | parcial | `tools/i18n-gate.mjs` (5 reglas) y `tools/ascii-gate.mjs` (linea base) |
+| **F2** | **cerrada** | `items` por elemento en el productor y panel que lo prefiere; prosa como reserva (ya en los dos idiomas); 10 casos. Limite medido: el anfitrion recorta el resultado |
+| **F3** | **cerrada** | `tools/gates-obligatorios.mjs` obligatorio por `pretest` y por `test:hermetic`; 10 casos negativos sobre copias |
 | F4 | no iniciada | version, CHANGELOG, README, gates, tag y release |
 
 ## Lo que cerro F1.3, con su evidencia
@@ -411,3 +411,71 @@ texto queda para presentar y el dato para el objeto, que es lo que el encargo pe
 con `items` (mixto, estado desconocido, id no pedido, tres hechos), sin `items` (marcadores del lote en los dos
 idiomas, aprobacion suelta en ingles y en espanol, lineas de la puerta que no cuentan). Suite **748 -> 758**
 (`client-artifact` actualiza su aserto de la firma, como manda la regla, y no borra ninguno).
+## F3 · puertas obligatorias: cerrado
+
+### Que cambio
+
+- `tools/gates-obligatorios.mjs`: ejecuta `tools/i18n-gate.mjs` y `tools/ascii-gate.mjs` en serie con
+  `--root` y devuelve distinto de cero si alguna falla, diciendo **cual**. Antes las dos puertas eran comandos
+  que habia que recordar; una puerta que depende de la memoria no es una puerta.
+- `package.json`: `pretest` -> `node tools/gates-obligatorios.mjs`, asi que **`npm test` no llega a correr una
+  prueba con una puerta en rojo**; mas `gate`, `gate:i18n` y `gate:ascii` para correrlas sueltas.
+- `tests/check-hermetic.mjs` (la ruta de release, la que cita `docs/DESARROLLO.md`): corre las puertas **antes**
+  de la suite y aborta con `exit` distinto de cero si alguna esta en rojo. No despues: antes.
+- `docs/DESARROLLO.md` y `docs/OPERACION.md`: la ruta de validacion descrita es la real, con los recuentos
+  medidos.
+
+### Pruebas negativas (sembradas en una COPIA del paquete, nunca en el arbol)
+
+`tests/gates-obligatorios.test.mjs` (10 casos):
+
+| Defecto sembrado | Puerta | Lo que se exige |
+|---|---|---|
+| `code.activated` renombrado en `es.mjs` | i18n | `FALLO paridad · es:code.activated`, exit 1 |
+| codigo inventado en `CODES` sin texto | i18n | `FALLO codigo-sin-texto` en los dos idiomas |
+| placeholder `{nuevo}` -> `{nombre}` en `es` | i18n | `FALLO placeholders · es:cmd.alias.deprecated` |
+| un no-ASCII anadido a `lib/scope.mjs` | ascii | `FALLO ascii-nuevo · lib/scope.mjs`, exit 1 |
+| `skill-ver` -> destino inexistente | i18n | `FALLO alias-destino · lib/commands.mjs:skill-ver` |
+| `id` de `skill_propose` deja de ser obligatorio | schema | `tests/definitions-schema.test.mjs` en rojo |
+| la expectativa congelada con un parametro de mas | schema | en rojo (no se regenera sola) |
+| una puerta en rojo | runner | exit 1 y `GATES: la puerta ascii esta en rojo` |
+
+Y dos asertos de cableado: `pretest` es el runner, y en `check-hermetic.mjs` la llamada a las puertas aparece
+**antes** de la de la suite.
+
+### Mediciones
+
+- Suite **758 -> 768**; `npm test` ahora ejecuta las puertas antes (pretest) y sigue en verde.
+- `node tools/gates-obligatorios.mjs` -> `GATES: i18n y ascii en verde` (566 claves por idioma · 7580 no ASCII).
+- `npm run test:hermetic` -> puertas, suite y huella del almacen identica.
+
+## Estado al cerrar este acto (2026-10-23)
+
+Medido sobre el arbol, en este orden, antes de cerrar:
+
+```
+npm test                                    -> 768/768 (190 suites), con pretest de puertas
+npm run test:hermetic                       -> puertas + suite + huella identica (HERMETICO)
+node tools/gates-obligatorios.mjs           -> GATES: i18n y ascii en verde
+node tools/i18n-gate.mjs                    -> 566 claves por idioma · 566 · 15 alias
+node tools/ascii-gate.mjs                   -> 7580 heredados, tope 7580, ninguno nuevo
+node --test tests/definitions-schema.test.mjs -> 18/18
+doctor (4 arenas)                           -> 0, 0, 1, 1
+```
+
+- Fases cerradas en este acto: **F1.1, F1.4, F2 y F3**.
+- Version declarada: **3.9.3**. Sin tag `v4.0.0`, sin entrada de release en el CHANGELOG y sin release: eso es
+  F4 y lo cierra el operador despues de verificar.
+- **Sin poder verificar**: las filas visibles del menu `/` (no hay navegador ni sesion interactiva aqui) y el
+  transporte real de `items`/`code` al panel (medido que el anfitrion los recorta; no se puede observar una
+  compilacion que no existe).
+- Deudas de idioma que siguen: `regla`/`observado`/`umbral` de la auto-actualizacion y los `motivo` de bloqueo
+  de `repair`. Aviso preexistente de `audit`/`security`: el de `static-serving-hardening` no es de este acto.
+
+## Proximo paso exacto (sustituye a la lista de arriba)
+
+1. **F4 · release**: `package.json` a 4.0.0, entrada del `CHANGELOG` (>500 caracteres), `README` con la version
+   y el recuento real de la suite leidos del binario, barrido de afirmaciones de `docs/`, tag `v4.0.0` y
+   `gh release create` verificando `isDraft`/`isPrerelease`.
+2. Antes de retirar la prosa del panel en 4.2.0: comprobar si el anfitrion ya transporta `items`/`code`
+   (`normalizeResult`). Si sigue recortando, el panel tiene que decir «no medible», no contar cero.

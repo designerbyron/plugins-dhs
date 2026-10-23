@@ -380,3 +380,37 @@ juicio, y vive en `validateInput` + `auditarCarpeta` (así proponer, aprobar y a
 - **Queda pendiente**: la prosa de `observado`/`umbral` de las medidas y los `motivo` de los bloqueos de
   `repair` siguen siendo reporte en español (viajan como dato); `redaccion` del diario intacta por contrato.
   El prefijo de alias se retira en 5.0.0, no antes.
+## Acto 2026-10-23 (tarde) — F1.1, F1.4, F2 y F3 cerradas; el anfitrion recorta los resultados
+
+- **El menu `/` no puede filtrar los alias, y no es un defecto nuestro.** Medido en el build instalado:
+  `normalizeDefinition` (`@deepseek-ai/dsh-commands`) publica un descriptor de **lista cerrada**
+  `{definitionId?, name, description, input?}`; `normalizeResult` reconstruye el resultado a `{kind, text?}`; y
+  `dsh-client-ui-commands` compone cada fila con `name` + `description` + `input.hint`, ocultando solo las filas
+  con `hint` cuando el cursor no esta al inicio. Consecuencia doble: `aliasOf`/`deprecatedIn` (0 apariciones en
+  todo el `app.asar`) **no llegan al menu** —se anuncian las 31 filas y la descripcion del alias es lo unico que
+  lo distingue—, y `code`/`params`/`items` **no llegan al panel**, asi que su lectura por codigo es hoy codigo
+  defensivo y decide la reserva de prosa. **Antes de retirar la prosa en 4.2.0 hay que mirar esto**: si el
+  anfitrion sigue recortando el resultado, el panel no puede medir por id y debe decir «no medible», no contar
+  cero.
+- Lo que si se implemento: `aliasProblems()` y `aliasSummary()` (destino invalido, retirada que no es version,
+  handler ausente, alias fuera de la tabla, nombre duplicado y alias de si mismo) y la linea de `doctor` que
+  cuenta las 31 filas. `tests/alias-menu.test.mjs` (9 casos).
+- **F1.4 · cobertura**: base `en` sin `DSH_LANG` (motor y binario), los 31 comandos con el MISMO `kind`, `code`
+  y `params` en los dos idiomas, avisos, lote parcial con sus marcadores de maquina, preguntas neutras,
+  `unsafe-id`, cero claves crudas ni placeholders sin sustituir, catalogos completos.
+  `tests/i18n-cobertura.test.mjs` (9 casos).
+- **F2 · contrato por elemento**: `aprobarLote` devuelve `items: [{id, kind, code, state, params, text}]` sin
+  quitar nada de lo actual y sin emitir un `code` global (un `batch-partial` global haria que el panel marcara un
+  solo id). El panel lo prefiere: ignora ids no pedidos y trata un `state` desconocido como fallo visible. Sin
+  `items` queda la prosa, que **aprendio ingles**: las frases del veredicto singular estaban solo en espanol y con
+  el texto ingles —ya el idioma base— una aprobacion correcta se contaba como fallo.
+  `tests/resultados-por-elemento.test.mjs` (10 casos).
+- **F3 · puertas obligatorias**: `tools/gates-obligatorios.mjs` corre i18n y ASCII; `pretest` lo cuelga de
+  `npm test` y `test:hermetic` aborta **antes** de la suite. `tests/gates-obligatorios.test.mjs` (10 casos)
+  siembra cada defecto en una COPIA del paquete y exige el rojo: clave que falta, codigo sin texto, placeholders
+  inconsistentes, no-ASCII nuevo, alias invalido y contrato de herramientas alterado (esquema y expectativa).
+- Suite **730 -> 768**, catalogos **562 -> 566** claves por idioma, ASCII **7580 sin crecer**,
+  `definitions-schema` 18/18 y los fixtures del contrato intactos.
+- **Sigue pendiente**: la version 4.0.0, su entrada del CHANGELOG, el README con el recuento real y la
+  etiqueta/release (F4); la prosa de `observado`/`umbral` y los `motivo` de bloqueo de `repair`; y la
+  verificacion visual del menu, que este entorno no puede ver.
