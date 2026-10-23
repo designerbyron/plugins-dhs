@@ -479,7 +479,7 @@ describe('el menú: una fila que dice a qué lote pertenece', () => {
     const deLote = filas.filter((f) => f.group === grupo.id);
     assert.equal(new Set(deLote.map((f) => f.id)).size, 2, 'las dos propuestas del lote tienen sus filas');
     for (const fila of deLote) {
-      assert.match(fila.description, /va en el lote «renovacion-de-certificados»/, 'la fila dice a qué lote pertenece');
+      assert.match(fila.description, /va en el lote "renovacion-de-certificados"/, 'la fila dice a qué lote pertenece');
       assert.match(fila.description, /2 propuesta\(s\) juntas/, 'y con cuántas más va');
     }
     // Y una propuesta suelta no lleva lote: la fila no puede inventarse uno.

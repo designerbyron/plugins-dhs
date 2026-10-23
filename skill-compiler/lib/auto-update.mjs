@@ -67,8 +67,24 @@ export function medirAutoActualizacion(id, key, {
   root = defaultRoot(), curated = null, cwd = null, limites = {},
 } = {}) {
   const medidas = [];
-  const anota = (regla, pasa, observado, umbral, detalle = '') => {
-    medidas.push({ regla, pasa: pasa === true, observado, umbral, detalle });
+  /**
+   * Anota una medida: el **valor medido** (`observado`, `umbral`, `detalle`) se guarda tal cual -es el dato, y
+   * las pruebas lo afirman- y al lado viaja su **representacion** (`observadoCode`/`observadoParams`, etc.),
+   * que es lo unico que se traduce al pintarlo. Una medida sin codigo se pinta con su texto: un dato raro no se
+   * convierte en una frase inventada.
+   */
+  const anota = (regla, pasa, observado, umbral, detalle = '', codigos = {}) => {
+    medidas.push({
+      regla,
+      pasa: pasa === true,
+      observado,
+      umbral,
+      detalle,
+      ...codigos.obs === undefined ? {} : { observadoCode: codigos.obs[0], observadoParams: codigos.obs[1] ?? {} },
+      ...codigos.th === undefined ? {} : { umbralCode: Array.isArray(codigos.th) ? codigos.th[0] : codigos.th },
+      ...codigos.th === undefined || !Array.isArray(codigos.th) ? {} : { umbralParams: codigos.th[1] ?? {} },
+      ...codigos.det === undefined ? {} : { detalleCode: codigos.det },
+    });
   };
   const opts = { root, ...(curated ? { curated } : {}) };
 
@@ -77,7 +93,12 @@ export function medirAutoActualizacion(id, key, {
   anota('es-actualizacion', vigente !== null,
     vigente === null ? 'no hay versión vigente con ese id' : `${vigente.state} · ${vigente.hash.slice(0, 12)}`,
     'una versión vigente (aprobada, apagada o publicada)',
-    'una skill nueva no se activa sola: la confirmación de conocimiento nuevo es humana');
+    'una skill nueva no se activa sola: la confirmacion de conocimiento nuevo es humana',
+    {
+      obs: vigente === null ? ['auto.obs.no-current'] : ['auto.obs.current', { state: vigente.state, hash: vigente.hash.slice(0, 12) }],
+      th: 'auto.th.current',
+      det: 'auto.det.new-skill',
+    });
 
   // 2 · El nivel declarado por el arreglo. Sin `repair` no hay nivel: lo más delicado.
   let meta = null;
@@ -86,7 +107,12 @@ export function medirAutoActualizacion(id, key, {
   anota('nivel', nivel <= NIVEL_MAXIMO_AUTOMATICO,
     meta?.repair?.nivel === undefined ? `sin nivel declarado → ${NIVEL_QUE_EXIGE_HUMANO}` : `nivel ${nivel}`,
     `≤ ${NIVEL_MAXIMO_AUTOMATICO}`,
-    'el nivel 3 —seguridad, permisos, secretos, aislamiento, facturación— exige humano, y un parche sin nivel se trata como 3');
+    'el nivel 3 -seguridad, permisos, secretos, aislamiento, facturacion- exige humano, y un parche sin nivel se trata como 3',
+    {
+      obs: meta?.repair?.nivel === undefined ? ['auto.obs.no-level', { nivel: NIVEL_QUE_EXIGE_HUMANO }] : ['auto.obs.level', { nivel }],
+      th: ['auto.th.level', { max: NIVEL_MAXIMO_AUTOMATICO }],
+      det: 'auto.det.level',
+    });
 
   // 3 · La evidencia de la corrección tiene que poder comprobarse. Una afirmación del modelo no vale.
   const evidencia = String(meta?.revision?.evidence ?? '').trim();
@@ -95,7 +121,14 @@ export function medirAutoActualizacion(id, key, {
   anota('evidencia-observada', evidenciaExiste,
     evidencia === '' ? 'la corrección no cita evidencia' : `${evidencia}${evidenciaEsRuta ? (evidenciaExiste ? ' (existe)' : ' (no existe)') : ' (es una afirmación, no una ruta)'}`,
     'una ruta que exista en el proyecto',
-    'sin evidencia comprobable, lo que cambia no está demostrado: lo juzga una persona');
+    'sin evidencia comprobable, lo que cambia no esta demostrado: lo juzga una persona',
+    {
+      obs: evidencia === ''
+        ? ['auto.obs.no-evidence']
+        : [evidenciaEsRuta ? (evidenciaExiste ? 'auto.obs.evidence-exists' : 'auto.obs.evidence-missing') : 'auto.obs.evidence-claim', { ruta: evidencia }],
+      th: 'auto.th.evidence',
+      det: 'auto.det.evidence',
+    });
 
   // 4 · El disparador no cambia. `description`, `whenToUse` y `tags` deciden a quién sirve la skill.
   if (vigente !== null) {
@@ -106,9 +139,15 @@ export function medirAutoActualizacion(id, key, {
     anota('disparador', !cambiado,
       cambiado ? 'cambia description/whenToUse/tags' : 'description, whenToUse y tags se conservan',
       'sin cambios',
-      'un cambio de disparador cambia a quién sirve la skill y no es una corrección de forma');
+      'un cambio de disparador cambia a quién sirve la skill y no es una corrección de forma',
+      {
+        obs: [cambiado ? 'auto.obs.trigger-changed' : 'auto.obs.trigger-kept'],
+        th: 'auto.th.trigger',
+        det: 'auto.det.trigger',
+      });
   } else {
-    anota('disparador', false, 'no medible sin versión vigente', 'sin cambios', '');
+    anota('disparador', false, 'no medible sin versión vigente', 'sin cambios', '',
+      { obs: ['auto.obs.unmeasurable'], th: 'auto.th.trigger' });
   }
 
   // 5 · La capa de seguridad: cero bloqueos **y cero avisos**. Un aviso es una decisión, y aquí no hay humano.
@@ -123,7 +162,12 @@ export function medirAutoActualizacion(id, key, {
   anota('seguridad', hallazgos === 0,
     `${seguridad.bloqueos.length} bloqueo(s) · ${seguridad.avisos.length} aviso(s)`,
     '0 y 0',
-    'la promoción automática no toca nada que la capa de seguridad marque, ni para avisar');
+    'la promocion automatica no toca nada que la capa de seguridad marque, ni para avisar',
+    {
+      obs: ['auto.obs.security', { bloqueos: seguridad.bloqueos.length, avisos: seguridad.avisos.length }],
+      th: 'auto.th.security',
+      det: 'auto.det.security',
+    });
 
   // 5b · El diff tiene que existir. Si `meta.diff` falta, la puerta de tamaño mide cero y **parece** que
   // pasa: esa es la diferencia entre «no hay cambio» y «no se pudo medir», y aquí no se confunden. Medido:
@@ -132,17 +176,33 @@ export function medirAutoActualizacion(id, key, {
   anota('diff-medido', hayDiff,
     hayDiff ? 'la propuesta trae su diff contra la base' : 'la propuesta no trae diff: el tamaño no es medible',
     'diff presente y legible',
-    'sin diff no se puede acotar el cambio, y una promoción automática es acotada o no es automática');
+    'sin diff no se puede acotar el cambio, y una promocion automatica es acotada o no es automatica',
+    {
+      obs: [hayDiff ? 'auto.obs.diff-present' : 'auto.obs.diff-missing'],
+      th: 'auto.th.diff',
+      det: 'auto.det.diff',
+    });
 
   // 6 · Las nueve pruebas de la promoción, con sus números. No se reimplementan: es la misma vara.
   let regresion = { ok: false, pruebas: [] };
   try {
     regresion = pruebasDeRegresion(id, key, meta, { root, ...(curated ? { curated } : {}), ...limites });
   } catch (error) {
-    anota('regresion', false, `no se pudo medir: ${error.message}`, 'las nueve en verde', '');
+    anota('regresion', false, `no se pudo medir: ${error.message}`, 'las nueve en verde', '',
+      { obs: ['auto.obs.unmeasured', { message: error.message }], th: 'auto.th.regression' });
   }
   for (const p of regresion.pruebas) {
-    medidas.push({ regla: p.nombre, pasa: p.ok === true, observado: p.detalle, umbral: 'se cumple', detalle: '' });
+    // La novena vara es la misma que usa `promover`, y su detalle ya trae su representacion: se hereda tal
+    // cual para no tener dos redacciones de lo mismo.
+    medidas.push({
+      regla: p.nombre,
+      pasa: p.ok === true,
+      observado: p.detalle,
+      umbral: 'se cumple',
+      detalle: '',
+      ...p.detalleCode === undefined ? {} : { observadoCode: p.detalleCode, observadoParams: p.detalleParams ?? {} },
+      umbralCode: 'auto.th.met',
+    });
   }
 
   const fallan = medidas.filter((m) => !m.pasa);
@@ -150,21 +210,45 @@ export function medirAutoActualizacion(id, key, {
   const resumen = apto
     ? `auto-actualizable: ${medidas.length} medidas en verde (nivel ${nivel}, ${seguridad.bloqueos.length + seguridad.avisos.length} avisos de seguridad)`
     : `requiere humano: ${fallan.map((m) => `${m.regla} (${m.observado})`).slice(0, 4).join(' · ')}`;
-  return { apto, medidas, fallan: fallan.map((m) => m.regla), resumen, nivel, avisosSeguridad: seguridad.bloqueos.length + seguridad.avisos.length };
+  // El resumen es presentacion: lleva su codigo al lado para poder decirlo en el idioma de quien lee, y el texto
+  // se conserva porque es lo que afirman las pruebas y lo que viaja en el objeto.
+  const resumenCode = apto ? 'cli.auto.summary-ready' : 'cli.auto.summary-human';
+  const resumenParams = apto
+    ? { medidas: medidas.length, nivel, avisos: seguridad.bloqueos.length + seguridad.avisos.length }
+    : { fallos: fallan.map((m) => m.regla).join(', ') };
+  return {
+    apto,
+    medidas,
+    fallan: fallan.map((m) => m.regla),
+    resumen,
+    resumenCode,
+    resumenParams,
+    nivel,
+    avisosSeguridad: seguridad.bloqueos.length + seguridad.avisos.length,
+  };
 }
 
-/** El texto de las medidas, para la CLI y para el listado: una sola redacción, tres superficies. */
+/**
+ * El texto de las medidas, para la CLI y para el listado: una sola redaccion, tres superficies.
+ *
+ * El **marco** y la **frase de la medida** son presentacion y viven en el catalogo: si la medida trae su codigo
+ * (`observadoCode` / `umbralCode`) se dice en el idioma de quien lee; si no lo trae, se pinta el valor medido tal
+ * cual. `regla` es un **codigo interno** -la clave con la que el motor y el diario nombran la vara- y se imprime
+ * como tal: traducirlo romperia la correspondencia con `fallan` y con el historial.
+ */
 export function textoDeMedidas(veredicto) {
   if (!veredicto) return '';
-  // El marco es presentacion y vive en el catalogo; `regla`, `observado` y `umbral` son las MEDIDAS del motor y
-  // se imprimen tal cual: traducir un valor medido seria inventarlo.
   const resumen = veredicto.apto
     ? t('cli.auto.summary-ready', { medidas: veredicto.medidas.length, nivel: veredicto.nivel, avisos: veredicto.avisosSeguridad })
     : t('cli.auto.summary-human', { fallos: veredicto.fallan.join(', ') });
   const lineas = [t(veredicto.apto ? 'cli.auto.verdict-ready' : 'cli.auto.verdict-human'), resumen, ''];
+  const frase = (codigo, params, crudo) => (typeof codigo === 'string' ? t(codigo, params ?? {}) : crudo);
   for (const m of veredicto.medidas) {
-    lineas.push(t(m.pasa ? 'cli.auto.measure-pass' : 'cli.auto.measure-fail',
-      { regla: m.regla, observado: m.observado, umbral: m.umbral }));
+    lineas.push(t(m.pasa ? 'cli.auto.measure-pass' : 'cli.auto.measure-fail', {
+      regla: m.regla,
+      observado: frase(m.observadoCode, m.observadoParams, m.observado),
+      umbral: frase(m.umbralCode, m.umbralParams, m.umbral),
+    }));
   }
   return lineas.join('\n');
 }

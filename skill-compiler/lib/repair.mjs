@@ -379,6 +379,15 @@ export const REPARACIONES = {
   'absolute-path': { nivel: 3, automatica: false, describe: 'Parametrizar la ruta absoluta', como: 'Cambia cómo se ejecuta la skill' },
 };
 
+/**
+ * El codigo de catalogo de lo que hace una reparacion y de por que exige a una persona.
+ *
+ * No es un mapa nuevo: la regla **ya** es la clave (`REPARACIONES` es una lista cerrada), asi que su
+ * representacion sale de su nombre. Una regla sin texto en el catalogo se pinta con su frase de siempre, y hay
+ * una prueba que exige que TODAS tengan las dos claves: un codigo sin texto no puede llegar a una persona.
+ */
+export const codigoDeReparacion = (rule, cual) => `repair.rule.${rule}.${cual}`;
+
 /** ¿Qué hallazgos de esta skill tienen reparación, y de qué nivel? */
 export function planDeReparacion(hallazgos) {
   const reparables = [];
@@ -387,14 +396,34 @@ export function planDeReparacion(hallazgos) {
     if (hallazgo.severity === 'info') continue; // lo informativo no se repara
     const entrada = REPARACIONES[hallazgo.rule];
     if (!entrada) {
-      sinReparacion.push({ ...hallazgo, motivo: 'esta regla no tiene reparación en el catálogo del motor: decídelo tú, con la propuesta delante' });
+      sinReparacion.push({
+        ...hallazgo,
+        motivo: 'esta regla no tiene reparacion en el catalogo del motor: decidelo tu, con la propuesta delante',
+        motivoCode: 'repair.why.no-catalogue',
+        motivoParams: {},
+      });
       continue;
     }
     if (entrada.reparable === false) {
-      sinReparacion.push({ ...hallazgo, motivo: `no se repara sola — ${entrada.como}` });
+      sinReparacion.push({
+        ...hallazgo,
+        motivo: `no se repara sola — ${entrada.como}`,
+        motivoCode: 'repair.why.not-on-its-own',
+        // El porque va anidado: el marco lo dice el catalogo y la frase de la regla se resuelve por su clave.
+        motivoParams: { why: entrada.como, whyCode: codigoDeReparacion(hallazgo.rule, 'why') },
+      });
       continue;
     }
-    reparables.push({ regla: hallazgo.rule, nivel: entrada.nivel, automatica: entrada.automatica, describe: entrada.describe, como: entrada.como, hallazgo });
+    reparables.push({
+      regla: hallazgo.rule,
+      nivel: entrada.nivel,
+      automatica: entrada.automatica,
+      describe: entrada.describe,
+      describeCode: codigoDeReparacion(hallazgo.rule, 'what'),
+      como: entrada.como,
+      comoCode: codigoDeReparacion(hallazgo.rule, 'why'),
+      hallazgo,
+    });
   }
   // Un **aviso** no puede convertir en humana una corrección que sólo arregla un error: si pudiera, el motor
   // dejaría de poder activar por sí mismo lo que sí sabe arreglar —un aviso de nivel 3 al lado de un error de
@@ -411,6 +440,8 @@ export function planDeReparacion(hallazgos) {
       sinReparacion.push({
         ...candidata.hallazgo,
         motivo: `es un aviso y su arreglo es de nivel ${candidata.nivel}: no se mete en una corrección automática de un error de nivel ${nivelDeErrores} — decídelo tú, con la propuesta delante`,
+        motivoCode: 'repair.why.warning-level',
+        motivoParams: { nivel: candidata.nivel, errores: nivelDeErrores },
       });
       continue;
     }
@@ -470,7 +501,8 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
   if (quiereNormalizar && !plan.some((p) => p.regla === 'un-normalizado')) {
     plan.unshift({
       regla: 'un-normalizado', nivel: 1, automatica: true,
-      describe: REPARACIONES['un-normalizado'].describe, como: REPARACIONES['un-normalizado'].como,
+      describe: REPARACIONES['un-normalizado'].describe, describeCode: codigoDeReparacion('un-normalizado', 'what'),
+      como: REPARACIONES['un-normalizado'].como, comoCode: codigoDeReparacion('un-normalizado', 'why'),
       hallazgo: { severity: 'warn', rule: 'un-normalizado', observed: mecanica.aplicadas.join(', '), threshold: null, message: `la forma del texto no es la canónica: ${mecanica.aplicadas.join(', ')}`, fix: 'Normalizar' },
     });
   }
@@ -487,7 +519,15 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
     return {
       status: 'blocked', id, nivel: nivelFinal, base: { state: vigente.state, hash: vigente.hash },
       reparaciones: plan.filter((p) => p.nivel <= 2), sinReparacion,
-      bloqueos: bloquean.map((f) => ({ rule: f.rule, observed: f.observed, fix: f.fix, motivo: REPARACIONES[f.rule]?.como ?? 'esta regla no tiene reparación automática' })),
+      bloqueos: bloquean.map((f) => ({
+        rule: f.rule,
+        observed: f.observed,
+        fix: f.fix,
+        motivo: REPARACIONES[f.rule]?.como ?? 'esta regla no tiene reparacion automatica',
+        // Solo el motivo; `fix` es la sugerencia de la auditoria y no se pinta en este comando.
+        motivoCode: REPARACIONES[f.rule] === undefined ? 'repair.why.no-auto-repair' : codigoDeReparacion(f.rule, 'why'),
+        motivoParams: {},
+      })),
       reason: `la skill incumple ${bloquean.map((f) => f.rule).join(', ')}: es criterio humano (nivel 3), y sin eso la puerta no admitiría ninguna corrección. Repara eso primero, o propón tú la corrección con su revisión.`,
       reasonCode: 'blocked-human', reasonParams: { reglas: bloquean.map((f) => f.rule).join(', ') },
     };
@@ -523,7 +563,14 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
       return {
         status: 'blocked', id, nivel: nivelFinal, base: { state: vigente.state, hash: vigente.hash },
         reparaciones: plan, sinReparacion,
-        bloqueos: [{ rule: 'unreadable', observed: ruta, fix: 'Revisa los permisos', motivo: `no se pudo leer «${ruta}» (${error.code ?? error.message}): sin poder leerlo todo, la propuesta podría perder material` }],
+        bloqueos: [{
+          rule: 'unreadable',
+          observed: ruta,
+          fix: 'Revisa los permisos',
+          motivo: `no se pudo leer «${ruta}» (${error.code ?? error.message}): sin poder leerlo todo, la propuesta podría perder material`,
+          motivoCode: 'repair.why.unreadable',
+          motivoParams: { ruta, codigo: error.code ?? error.message },
+        }],
         reason: `la carpeta de la skill tiene material que no se puede leer: ${ruta}`,
         reasonCode: 'unreadable', reasonParams: { ruta },
       };
@@ -564,6 +611,8 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
             observed: repetido.path,
             fix: 'Repórtalo: el motor debe desambiguar el nombre antes de proponer',
             motivo: `el material movido chocaría con «${repetido.path}», que ya existe con otro contenido`,
+          motivoCode: 'repair.why.duplicate-path',
+          motivoParams: { ruta: repetido.path },
           }],
           reason: `la corrección reutilizaría «${repetido.path}» con otro contenido: se para antes de perder material`,
           reasonCode: 'duplicate-path', reasonParams: { ruta: repetido.path },
@@ -585,6 +634,8 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
         message: 'el cuerpo pasa del umbral y no cabe en una corrección automática: el corte dejaría el cuerpo sin procedimiento, o la sección que habría que sacar ya supera el tope',
         fix: 'Divide el cuerpo a mano en secciones y vuelve a intentarlo, o mueve tú el material de consulta',
         motivo: 'el motor no parte secciones ni deja el cuerpo sin procedimiento: decidir ese corte es criterio',
+            motivoCode: 'repair.why.section-criterion',
+            motivoParams: {},
       });
       plan.splice(plan.indexOf(entrada), 1);
     }
@@ -602,6 +653,8 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
           observed: `cuerpo de ${Buffer.byteLength(cuerpoBase)} bytes · sección mayor de ${paso} bytes`,
           fix: 'Divide el cuerpo a mano —o parte la sección mayor— y vuelve a intentarlo: el corte no cabe en una corrección automática',
           motivo: 'el corte automático dejaría el cuerpo por encima del umbral, así que no hay corrección automática que resuelva el hallazgo',
+          motivoCode: 'repair.why.over-budget',
+          motivoParams: {},
         }],
         reason: `el cuerpo pasa del umbral (${Buffer.byteLength(cuerpoBase)} > ${umbral}) y no cabe en una corrección automática: ${sinReparacion.at(-1)?.motivo ?? 'decidir ese corte es criterio'}`,
         reasonCode: 'over-budget', reasonParams: { bytes: Buffer.byteLength(cuerpoBase), umbral, motivo: sinReparacion.at(-1)?.motivo ?? 'decidir ese corte es criterio' },
@@ -692,7 +745,7 @@ export function reparar(id, key, { root = defaultRoot(), curated = null, cwd = n
       return {
         status: 'failed', id, nivel: nivelFinal, base,
         reparaciones: plan, sinReparacion, movidas,
-        bloqueos: [{ rule: 'material-perdido', observed: `faltan ${faltan.join(', ') || '—'} · sobran ${sobran.join(', ') || '—'}`, fix: 'Repórtalo: el motor no debe proponer una skill que pierde material', motivo: 'la propuesta no conserva el material de la skill' }],
+        bloqueos: [{ rule: 'material-perdido', observed: `faltan ${faltan.join(', ') || '-'} - sobran ${sobran.join(', ') || '-'}`, fix: 'Reportalo: el motor no debe proponer una skill que pierde material', motivo: 'la propuesta no conserva el material de la skill', motivoCode: 'repair.why.lost-material', motivoParams: {} }],
         reason: `la propuesta perdía material (faltan: ${faltan.join(', ') || 'nada'}; sobran: ${sobran.join(', ') || 'nada'}): se ha retirado entera y no se ha tocado la skill`,
         reasonCode: 'lost-material', reasonParams: { faltan: faltan.join(', ') || 'nada', sobran: sobran.join(', ') || 'nada' },
       };

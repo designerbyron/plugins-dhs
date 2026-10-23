@@ -100,6 +100,23 @@ const motivoDeReparacion = (r) => {
   const texto = tr(clave, r.reasonParams ?? {});
   return texto === clave ? r.reason : texto;
 };
+/**
+ * La frase de una reparacion o de un bloqueo, en el idioma de la sesion.
+ *
+ * El DATO (`describe`, `como`, `motivo`) se conserva tal cual; lo que se compone aqui es su representacion. Si
+ * la clave no estuviera, se dice el dato antes que ensenar una clave cruda. `whyCode` es el unico caso anidado:
+ * el marco (`repair.why.not-on-its-own`) lleva dentro la frase de la regla.
+ */
+const fraseDeReparacion = (crudo, codigo, params = {}) => {
+  if (typeof codigo !== 'string') return crudo;
+  let resuelto = params;
+  if (typeof params.whyCode === 'string') {
+    const anidado = tr(params.whyCode);
+    resuelto = { ...params, why: anidado === params.whyCode ? params.why : anidado };
+  }
+  const texto = tr(codigo, resuelto);
+  return texto === codigo ? crudo : texto;
+};
 
 /**
  * La ayuda, en una tabla: la **sintaxis** es un dato (nombres de comando y opciones, nunca se traduce) y la
@@ -952,12 +969,23 @@ switch (command) {
     lineas.push(`${tr('cli.repair.level', { nivel: r.nivel })}${r.nivel === 1 ? tr('cli.repair.level-1') : r.nivel === 2 ? tr('cli.repair.level-2') : ''}`);
     if (r.reparaciones?.length) {
       lineas.push(tr('cli.repair.repairs'));
-      for (const rep of r.reparaciones) lineas.push(tr('cli.repair.repair-row', { level: rep.nivel, rule: rep.regla, describe: rep.describe }));
+      for (const rep of r.reparaciones) {
+        lineas.push(tr('cli.repair.repair-row', {
+          level: rep.nivel,
+          rule: rep.regla,
+          describe: fraseDeReparacion(rep.describe, rep.describeCode),
+        }));
+      }
     }
     if (r.movidas?.length) lineas.push(tr('cli.repair.moved', { list: r.movidas.map((m) => `${m.titulo} -> ${m.ruta}`).join(', ') }));
     if (r.status === 'blocked') {
       lineas.push(tr('cli.repair.blocked'));
-      for (const b of r.bloqueos) lineas.push(tr('cli.repair.block-row', { rule: b.rule, motivo: b.motivo }));
+      for (const b of r.bloqueos) {
+        lineas.push(tr('cli.repair.block-row', {
+          rule: b.rule,
+          motivo: fraseDeReparacion(b.motivo, b.motivoCode, b.motivoParams ?? {}),
+        }));
+      }
       lineas.push(`    ${motivoDeReparacion(r)}`);
     } else if (r.status !== 'proposed') {
       lineas.push(tr('cli.repair.no-proposal', { status: r.status }));
@@ -988,7 +1016,12 @@ switch (command) {
     }
     if (r.sinReparacion?.length) {
       lineas.push('', tr('cli.repair.not-fixable'));
-      for (const s of r.sinReparacion) lineas.push(tr('cli.repair.block-row', { rule: s.rule, motivo: s.motivo ?? tr('cli.repair.no-catalogue') }));
+      for (const s of r.sinReparacion) {
+        lineas.push(tr('cli.repair.block-row', {
+          rule: s.rule,
+          motivo: s.motivo === undefined ? tr('cli.repair.no-catalogue') : fraseDeReparacion(s.motivo, s.motivoCode, s.motivoParams ?? {}),
+        }));
+      }
     }
     process.stdout.write(`${lineas.join('\n')}\n`);
     break;

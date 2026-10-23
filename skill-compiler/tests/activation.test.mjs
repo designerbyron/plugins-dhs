@@ -202,17 +202,17 @@ describe('activación', () => {
     await provider.list({ cwd: CWD, agent: agentFor(CWD) });
     await provider.list({ cwd: OTRO, agent: agentFor(OTRO) });
 
-    const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-approve-'));
-    assert.deepEqual(filasDe(CWD), ['skill-approve-measured-decision-check'], 'la sesión ve lo suyo');
-    assert.deepEqual(filasDe(OTRO), ['skill-approve-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
+    const filasDe = (cwd) => [...perAgent.get(cwd).map.keys()].filter((n) => n.startsWith('skill-aprobar-'));
+    assert.deepEqual(filasDe(CWD), ['skill-aprobar-measured-decision-check'], 'la sesión ve lo suyo');
+    assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'y la otra, lo suyo');
     assert.equal(global.map.size, 17, 'las filas no se registran en el global: ahí se ofrecerían a todos');
 
     // Decidir en una sesión no toca las filas de la otra.
-    const fila = perAgent.get(CWD).map.get('skill-approve-measured-decision-check');
+    const fila = perAgent.get(CWD).map.get('skill-aprobar-measured-decision-check');
     assert.equal(fila.input, undefined, 'la fila se ejecuta al elegirla: no reclama argumentos');
     assert.equal(fila.handler({ agent: { session: { header: { cwd: CWD } } } }).kind, 'success');
     assert.deepEqual(filasDe(CWD), [], 'las suyas se retiran al decidir');
-    assert.deepEqual(filasDe(OTRO), ['skill-approve-pendiente-del-otro-proyecto'], 'las del otro proyecto siguen intactas');
+    assert.deepEqual(filasDe(OTRO), ['skill-aprobar-pendiente-del-otro-proyecto'], 'las del otro proyecto siguen intactas');
 
     disposeAll();
     assert.equal(global.map.size, 0, 'descargar el plugin no deja comandos colgando');
@@ -239,13 +239,13 @@ describe('activación', () => {
     // El ámbito entra por el provider, que recibe la sesión con su agente: quien decide qué filas hay
     // es la sesión que pide el catálogo, no el proceso entero.
     await seen.providers[0]().list({ cwd: CWD, agent: { session: { header: { cwd: CWD } }, ctx: agentCtx } });
-    assert.equal(registry.has('skill-approve-measured-decision-check'), true, 'el agente ve su pendiente');
+    assert.equal(registry.has('skill-aprobar-measured-decision-check'), true, 'el agente ve su pendiente');
 
     const afterArming = registrations;
     // Un cambio del almacén sin efecto sobre las pendientes (aquí: la misma lista) no vuelve a registrar.
     signal.notify();
     assert.equal(registrations, afterArming, 'no se re-registra una fila idéntica');
-    assert.equal(registry.has('skill-approve-measured-decision-check'), true);
+    assert.equal(registry.has('skill-aprobar-measured-decision-check'), true);
     disposeAll();
     assert.equal(registry.size, 0, 'ni al descargar el plugin quedan filas colgando');
   });
@@ -293,7 +293,7 @@ describe('activación', () => {
 
     const r = propuestas.handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
-    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-del-comando']);
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-del-comando']);
     assert.equal(r.text.includes('Aviso: este anfitrion no anuncia filas'), false, 'montadas: no hay nada que avisar');
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
@@ -330,7 +330,7 @@ describe('activación', () => {
     const sano = propuestas.handler({ agent, rawInput: '' });
     assert.equal(sano.kind, 'success');
     assert.equal(sano.text.includes('Aviso: este anfitrion no anuncia filas'), false, 'ya no hay nada que avisar');
-    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-con-montaje-roto']);
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-con-montaje-roto']);
 
     // Con la lista vacía el aviso sobra: no hay nada que anunciar. Se aparta la pendiente y se vuelve a mirar.
     assert.equal(porId(global, 'reject').handler({ agent, rawInput: 'pendiente-con-montaje-roto' }).kind, 'success');
@@ -362,7 +362,7 @@ describe('activación', () => {
     const r = porId(global, 'proposals').handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
     assert.equal(r.text.includes('Aviso: este anfitrion no anuncia filas'), false, 'montadas por la vía directa: no hay aviso');
-    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-sin-inject']);
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-sin-inject']);
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
   });
@@ -395,7 +395,7 @@ describe('activación', () => {
     const r = porId(global, 'proposals').handler({ agent, rawInput: '' });
     assert.equal(r.kind, 'success');
     assert.equal(r.text.includes('Aviso: este anfitrion no anuncia filas'), false, 'montadas por el hijo: no hay aviso');
-    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-approve-')), ['skill-approve-pendiente-del-hijo']);
+    assert.deepEqual([...deLaSesion.map.keys()].filter((n) => n.startsWith('skill-aprobar-')), ['skill-aprobar-pendiente-del-hijo']);
     disposeAll();
     assert.equal(deLaSesion.map.size, 0, 'al descargar el plugin no quedan filas colgando');
     assert.equal(montado, null, 'el hijo también se desmonta');

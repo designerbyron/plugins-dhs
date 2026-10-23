@@ -482,7 +482,10 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           '',
           t('cmd.pending.header', { n: waiting.length }),
           waiting.length ? bullet(waiting) : t('cmd.bullet.none'),
-          ...rows.map((row) => `      /${row.name}`),
+          // Las filas del menú se nombran SIN barra: no son comandos de barra, son entradas que se eligen.
+          // Escribirlas como `/skill-show-<id>` ofrecía una orden que el registro no tiene (la barra invoca
+          // `/skill-show`), y encima en un nombre que cambia con el idioma.
+          ...rows.map((row) => t('cmd.list.row-line', { row: row.name })),
           // La orden exacta, siempre: con filas o sin ellas. Depender del menú para decidir era depender de
           // un servicio que este anfitrión no compone en el contexto del agente (tres caminos medidos). Una
           // línea pegable decide todas y no pide recordar nada.
@@ -902,17 +905,28 @@ export function targetCommands({ root = defaultRoot(), catalog, rows = [] } = {}
       const { cwd, key } = scopeOfAgent(agent);
       if (key === null) return bad(noScope());
       if (key !== row.key) {
-        return bad([
-          `«${row.id}» está pendiente en ${row.project}, no en esta sesión.`,
-          `Esta sesión trabaja en ${cwd}.`,
-          'Ábrela desde el proyecto que le corresponde: el ámbito no se elige a mano.',
-        ].join('\n'));
+        // El texto es presentacion y vive en el catalogo: una fila de otro proyecto se lee igual en los dos
+        // idiomas, y nombra el ambito con el que hay que abrirla sin inventarselo.
+        return bad(t('row.wrong-project', { id: row.id, project: row.project ?? row.key, cwd }));
       }
       if (row.verb === 'show') return viewProposal({ root, cwd, key, id: row.id });
       if (row.verb === 'approve') return approveProposal({ root, key, id: row.id, force: false, catalog });
       if (row.verb === 'publish') return approveProposal({ root, key, id: row.id, force: false, scope: 'global', catalog });
       if (row.verb === 'reject') return rejectProposal({ root, key, id: row.id, catalog });
-      return bad(`Fila desconocida: ${row.verb}`);
+      // Las filas de lo APAGADO se ofrecian en el menu y no tenian despacho: el registro las ponia y elegirlas
+      // contestaba «Fila desconocida». Son dos verbos del mismo ciclo de vida que los comandos con argumentos.
+      if (row.verb === 'enable') {
+        const vuelta = enable(row.id, key, { root });
+        if (!vuelta?.ok) return bad(t('cmd.enable.failed', { reason: vuelta?.reason ?? 'sin motivo' }));
+        catalog?.notify?.();
+        return ok(t('cmd.enable.done', { id: row.id, key }), { code: 'enabled', params: { id: row.id } });
+      }
+      if (row.verb === 'retire') {
+        // Retirar es el unico gesto irreversible del plugin y el comando exige `--yes`: la fila no es una
+        // excepcion, asi que dice la orden exacta en vez de escribir. Una fila no puede llevar banderas.
+        return ok([t('cmd.retire.confirm', { id: row.id, key }), t('cmd.retire.confirm-hint'), t('cmd.retire.confirm-do', { id: row.id })].join('\n'));
+      }
+      return bad(t('row.unknown-verb', { verb: String(row.verb) }));
     }),
   }));
 }

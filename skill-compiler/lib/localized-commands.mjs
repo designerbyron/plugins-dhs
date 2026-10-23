@@ -29,6 +29,7 @@
  * su descripcion. `omitNames` no repite nombres, por eso el conjunto se omite entero del registro base.
  */
 import { BASE, LANGS, normalizeTag, resolveLang, setLang, t } from './i18n/index.mjs';
+import { LOCALIZED_OPERATIONS, nombreLang, rowPrefixOf, slashNameOf } from './operations.mjs';
 
 /** Gramatica del nombre de comando en el anfitrion (`COMMAND_NAME` de `@deepseek-ai/dsh-commands`). */
 const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
@@ -37,141 +38,11 @@ const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
 export const LANGUAGE_COMMAND = 'skill-compiler-language';
 
 /**
- * El mapa declarativo. Una entrada por operacion; `source` es la definicion de `lib/commands.mjs` de la que se
- * hereda el handler, y `descriptionKey` la clave del catalogo que da el texto en cada idioma.
- *
- * `hint` es la pista del menu: una cadena cuando vale en los dos idiomas, o `{ en, es }` cuando las palabras
- * del argumento son idioma (`skill-auto` acepta `on|off` y `activar|desactivar`, y lo que se anuncia tiene que
- * ser lo que el handler entiende). La pista del mapa es la que se sirve; la de la definicion base se compara
- * con ella en las pruebas, para que las dos no puedan separarse en silencio.
- *
- * Anadir una operacion aqui es todo lo que hace falta para que su nombre siga al idioma: no hay una segunda
- * lista de nombres en ningun otro sitio.
+ * El mapa vive en `lib/operations.mjs`, y se re-exporta aqui porque este modulo es el que lo pone en el
+ * registro: quien lo lea desde el registro no tiene que saber que el catalogo tambien lo necesita.
  */
-export const LOCALIZED_OPERATIONS = Object.freeze([
-  Object.freeze({
-    id: 'proposals',
-    definitionId: 'skill-compiler.proposals',
-    source: 'skill-proposals',
-    descriptionKey: 'cmd.proposals.description',
-    names: Object.freeze({ en: 'skill-proposals', es: 'skill-propuestas' }),
-  }),
-  Object.freeze({
-    id: 'pending',
-    definitionId: 'skill-compiler.pending',
-    source: 'skill-pending',
-    descriptionKey: 'cmd.pending.description',
-    names: Object.freeze({ en: 'skill-pending', es: 'skill-pendientes' }),
-  }),
-  Object.freeze({
-    id: 'show',
-    definitionId: 'skill-compiler.show',
-    source: 'skill-show',
-    descriptionKey: 'cmd.show.description',
-    names: Object.freeze({ en: 'skill-show', es: 'skill-ver' }),
-    hint: '<id>',
-  }),
-  Object.freeze({
-    id: 'approve',
-    definitionId: 'skill-compiler.approve',
-    source: 'skill-approve',
-    descriptionKey: 'cmd.approve.description',
-    names: Object.freeze({ en: 'skill-approve', es: 'skill-aprobar' }),
-    hint: '<id> [--global|--local] [--force]',
-  }),
-  Object.freeze({
-    id: 'publish',
-    definitionId: 'skill-compiler.publish',
-    source: 'skill-publish',
-    descriptionKey: 'cmd.publish.description',
-    names: Object.freeze({ en: 'skill-publish', es: 'skill-globalizar' }),
-    hint: '<id>',
-  }),
-  Object.freeze({
-    id: 'scope',
-    definitionId: 'skill-compiler.scope',
-    source: 'skill-scope',
-    descriptionKey: 'cmd.scope.description',
-    names: Object.freeze({ en: 'skill-scope', es: 'skill-ambito' }),
-    hint: '<id> --global | --local',
-  }),
-  Object.freeze({
-    id: 'auto',
-    definitionId: 'skill-compiler.auto',
-    source: 'skill-auto',
-    descriptionKey: 'cmd.auto.description',
-    names: Object.freeze({ en: 'skill-auto', es: 'skill-auto' }),
-    hint: Object.freeze({ en: 'on | off', es: 'activar | desactivar' }),
-  }),
-  Object.freeze({
-    id: 'disable',
-    definitionId: 'skill-compiler.disable',
-    source: 'skill-disable',
-    descriptionKey: 'cmd.disable.description',
-    names: Object.freeze({ en: 'skill-disable', es: 'skill-deshabilitar' }),
-    hint: '<id>',
-  }),
-  Object.freeze({
-    id: 'enable',
-    definitionId: 'skill-compiler.enable',
-    source: 'skill-enable',
-    descriptionKey: 'cmd.enable.description',
-    names: Object.freeze({ en: 'skill-enable', es: 'skill-habilitar' }),
-    hint: '<id>',
-  }),
-  Object.freeze({
-    id: 'retire',
-    definitionId: 'skill-compiler.retire',
-    source: 'skill-retire',
-    descriptionKey: 'cmd.retire.description',
-    names: Object.freeze({ en: 'skill-retire', es: 'skill-eliminar' }),
-    hint: '<id> [--yes]',
-  }),
-  Object.freeze({
-    id: 'retired',
-    definitionId: 'skill-compiler.retired',
-    source: 'skill-retired',
-    descriptionKey: 'cmd.retired.description',
-    names: Object.freeze({ en: 'skill-retired', es: 'skill-retiradas' }),
-  }),
-  Object.freeze({
-    id: 'ownership',
-    definitionId: 'skill-compiler.ownership',
-    source: 'skill-ownership',
-    descriptionKey: 'cmd.ownership.description',
-    names: Object.freeze({ en: 'skill-ownership', es: 'skill-propiedad' }),
-    hint: 'dsh-only|machine',
-  }),
-  Object.freeze({
-    id: 'ownership-dsh-only',
-    definitionId: 'skill-compiler.ownership-dsh-only',
-    source: 'skill-ownership-dsh-only',
-    descriptionKey: 'cmd.ownership.dsh-only.description',
-    names: Object.freeze({ en: 'skill-ownership-dsh-only', es: 'skill-propiedad-dsh-only' }),
-  }),
-  Object.freeze({
-    id: 'ownership-machine',
-    definitionId: 'skill-compiler.ownership-machine',
-    source: 'skill-ownership-machine',
-    descriptionKey: 'cmd.ownership.machine.description',
-    names: Object.freeze({ en: 'skill-ownership-machine', es: 'skill-propiedad-machine' }),
-  }),
-  Object.freeze({
-    id: 'systems',
-    definitionId: 'skill-compiler.systems',
-    source: 'skill-systems',
-    descriptionKey: 'cmd.systems.description',
-    names: Object.freeze({ en: 'skill-systems', es: 'skill-sistemas' }),
-  }),
-  Object.freeze({
-    id: 'reject',
-    definitionId: 'skill-compiler.reject',
-    source: 'skill-reject',
-    descriptionKey: 'cmd.reject.description',
-    names: Object.freeze({ en: 'skill-reject', es: 'skill-rechazar' }),
-    hint: '<id>',
-  }),
-]);
+export { LOCALIZED_OPERATIONS } from './operations.mjs';
+
 
 const ok = (text, extra = {}) => ({ kind: 'success', text, ...extra });
 const bad = (text, extra = {}) => ({ kind: 'error', text, ...extra });
@@ -465,14 +336,19 @@ export function setLanguage({ registry, state, set, taken = new Set(), value, ro
  * La definicion del comando estable, registrada **fuera** del conjunto intercambiable para que este disponible
  * en todo momento: si viviera dentro se retiraria junto con lo que cambia.
  *
- * Su descripcion se compone en el idioma base y no cambia al cambiar de idioma: reescribirla exigiria retirar
- * y volver a registrar el comando, justo lo que no se puede hacer con el unico comando que debe existir
- * siempre. La limitacion esta declarada, no escondida.
+ * Su descripcion se compone en el idioma **activo** al construirla, y `createLanguageCommand` la vuelve a
+ * componer al cambiar de idioma. Lo que NO cambia nunca es el nombre ni el handler: el handler es una sola
+ * funcion, asi que la descripcion es lo unico que se reescribe.
+ *
+ * @param onChanged - se llama con `(lang, resultado)` despues de un cambio efectivo, antes de componer la
+ *   respuesta: ahi el plugin vuelve a componer sus filas y la descripcion de este mismo comando.
  */
-export function languageCommandDefinition({ registry, state, set, taken = new Set(), root, env = process.env.DSH_LANG }) {
+export function languageCommandDefinition({
+  registry, state, set, taken = new Set(), root, env = process.env.DSH_LANG, onChanged = null,
+}) {
   return {
     name: LANGUAGE_COMMAND,
-    description: t('cmd.language.description', {}, { lang: BASE }),
+    description: t('cmd.language.description', {}, { lang: state.lang ?? BASE }),
     input: { hint: '--en|--es' },
     handler: guarded(({ rawInput } = {}) => {
       const pedido = parseLanguageArg(rawInput);
@@ -486,11 +362,133 @@ export function languageCommandDefinition({ registry, state, set, taken = new Se
           : t(`code.${resultado.code}`, resultado.params, { lang: state.lang ?? BASE });
         return bad(texto, { code: resultado.code, params: resultado.params });
       }
+      // El cambio YA es efectivo (registro y config): lo que sigue es la presentacion, y ninguna de sus
+      // partes puede convertir un cambio hecho en uno que no ocurrio.
+      const aviso = resultado.changed ? (onChanged?.(resultado.lang, resultado) ?? null) : null;
       const lineas = [t(`code.${resultado.code}`, { ...resultado.params, names: slashNames(set, resultado.lang) }, { lang: resultado.lang })];
       if (resultado.changed) {
         lineas.push(t('cmd.language.names', { en: slashNames(set, 'en'), es: slashNames(set, 'es') }, { lang: resultado.lang }));
       }
+      if (aviso !== null && aviso.ok === false) {
+        lineas.push(t('cmd.language.description-stale', { lang: resultado.lang, reason: aviso.reason }, { lang: resultado.lang }));
+      }
       return ok(lineas.join('\n'), { code: resultado.code, params: resultado.params });
     }),
   };
+}
+
+/**
+ * El comando estable con su descripcion al dia, sin dejar al usuario sin el comando.
+ *
+ * -- Por que hace falta algo mas que `register()` ---------------------------------------------------
+ *
+ * El anfitrion **no tiene actualizacion de una definicion registrada** (medido en `dsh-commands`: indexa por
+ * nombre y `insert` lanza si el nombre ya esta; lo unico que devuelve `register()` es el disposer de ESA alta).
+ * La opcion soportada de reescribir la descripcion conservando definicion y handler no existe, asi que se usa
+ * la segunda: retirar y volver a registrar **en el mismo instante**, sin `await` de por medio, con el mismo
+ * handler y con vuelta atras. La tercera (una descripcion fija bilingue) queda como reserva: si la vuelta
+ * atras tambien fallara, el comando se queda con la descripcion que tenia y el resultado lo dice, en vez de
+ * fingir que se actualizo.
+ *
+ * Lo que se conserva, y es lo que importa: el nombre (`skill-compiler-language`), el handler (la MISMA funcion)
+ * y la disponibilidad. Lo que cambia: solo el texto de la descripcion.
+ */
+export function createLanguageCommand({
+  registry, state, set, taken = new Set(), root, env = process.env.DSH_LANG, onChanged = null,
+}) {
+  const vivo = { definition: null, dispose: null, lang: nombreLang(state.lang ?? BASE), restored: null };
+  const api = {
+    /** El handler es uno solo: se crea una vez y no se sustituye nunca. */
+    get handler() {
+      return vivo.definition?.handler;
+    },
+    definition() {
+      return vivo.definition;
+    },
+    /**
+     * Lo pone en el registro y se queda con SU disposer.
+     *
+     * Es la unica forma de que `relabel` pueda retirar lo que hay: el disposer de un alta que hizo otro no lo
+     * tenemos, y sin el, la reescritura de la descripcion choca con "ya esta registrado".
+     */
+    install() {
+      if (vivo.dispose !== null) return { ok: true, already: true };
+      try {
+        const dispose = registry.register(vivo.definition);
+        if (typeof dispose !== 'function') throw new Error('el registro no devolvio un disposer');
+        vivo.dispose = dispose;
+        return { ok: true };
+      } catch (error) {
+        vivo.dispose = null;
+        return { ok: false, reason: error.message };
+      }
+    },
+    lang() {
+      return vivo.lang;
+    },
+    /**
+     * Compone la descripcion del idioma pedido, retirando y volviendo a registrar el comando.
+     *
+     * Devuelve `{ok, unchanged}` o `{ok:false, reason, restored}`. No escribe nada en el almacen: la
+     * preferencia la persiste `setLanguage`, que es quien sabe si el cambio fue efectivo.
+     */
+    relabel(lang) {
+      const idioma = nombreLang(lang);
+      if (vivo.definition !== null && idioma === vivo.lang) return { ok: true, unchanged: true };
+      const nuevo = { ...(vivo.definition ?? {}), description: t('cmd.language.description', {}, { lang: idioma }) };
+      const problemas = problemsOfSet([nuevo]);
+      if (problemas.length > 0) return { ok: false, reason: problemas[0], restored: true };
+      const anterior = vivo.definition;
+      // Retirar y poner, sin nada en medio: el anfitrion no admite dos definiciones con el mismo nombre, y
+      // esta es la unica ventana en la que el comando de idioma no esta. Es sincrona, no hay `await` que
+      // pueda dejar entrar un gesto del usuario en ella.
+      try {
+        vivo.dispose?.();
+      } catch {
+        /* ya retirada: el alta siguiente es la que manda */
+      }
+      vivo.dispose = null;
+      try {
+        vivo.dispose = registry.register(nuevo);
+        if (typeof vivo.dispose !== 'function') throw new Error('el registro no devolvio un disposer');
+        vivo.definition = nuevo;
+        vivo.lang = idioma;
+        vivo.restored = null;
+        return { ok: true, description: nuevo.description };
+      } catch (error) {
+        if (anterior === null) {
+          vivo.definition = null;
+          return { ok: false, reason: error.message, restored: false };
+        }
+        // Vuelta atras: el comando de idioma tiene que seguir ahi aunque sea con la descripcion de antes.
+        try {
+          vivo.dispose = registry.register(anterior);
+          vivo.definition = anterior;
+          vivo.restored = 'previous';
+          return { ok: false, reason: error.message, restored: true };
+        } catch (errorAnterior) {
+          vivo.definition = null;
+          vivo.dispose = null;
+          return { ok: false, reason: `${error.message}; ${errorAnterior.message}`, restored: false };
+        }
+      }
+    },
+    /** La baja, para el efecto del plugin. */
+    dispose() {
+      try {
+        vivo.dispose?.();
+      } catch {
+        /* ya retirada */
+      }
+      vivo.dispose = null;
+    },
+  };
+  const puente = (lang) => {
+    const puesto = api.relabel(lang);
+    const aviso = onChanged?.(lang, puesto) ?? null;
+    return aviso ?? (puesto.ok ? null : puesto);
+  };
+  vivo.definition = languageCommandDefinition({ registry, state, set, taken, root, env, onChanged: puente });
+  vivo.lang = nombreLang(state.lang ?? BASE);
+  return api;
 }

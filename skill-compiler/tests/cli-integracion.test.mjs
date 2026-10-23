@@ -189,7 +189,11 @@ describe('CLI real (subproceso, arena) · una propuesta con avisos', () => {
     // se comprueba la salida real, que es lo que lee una persona.
     const ayuda = cli(arena);
     assert.equal(ayuda.code, 2, 'sin comando, la ayuda sale con 2 (uso)');
-    assert.match(ayuda.salida, /skill-pending/);
+    // Este fichero fija el idioma a `es`, y el nombre que anuncia la ayuda es el del registro ACTIVO: en
+    // espanol el comando se llama `/skill-pendientes`. Antes decia `/skill-pending` en los dos idiomas, que
+    // es una orden que en espanol no existe.
+    assert.match(ayuda.salida, /skill-pendientes/);
+    assert.doesNotMatch(ayuda.salida, /\/skill-pending\b/);
   });
 });
 

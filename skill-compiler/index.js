@@ -25,7 +25,7 @@ import { createCatalogSignal } from './lib/catalog-signal.mjs';
 import { skillCommands, targetCommands } from './lib/commands.mjs';
 import { curatedLibraryRoot, defaultRoot } from './lib/compiler.mjs';
 import { resolveLang } from './lib/i18n/index.mjs';
-import { createLanguageState, createLocalizedSet, languageCommandDefinition, swapSet } from './lib/localized-commands.mjs';
+import { createLanguageCommand, createLanguageState, createLocalizedSet, swapSet } from './lib/localized-commands.mjs';
 import { pendingRowsFor, retiredRowsFor } from './lib/pending-rows.mjs';
 import { PROTOCOL, scopeOf, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
 
@@ -147,14 +147,28 @@ export function apply(ctx, config = {}) {
       const languageState = createLanguageState();
       /** agente → cómo recomponer sus filas, y cómo retirarlas si el plugin se descarga. */
       const perAgent = new Map();
+      /**
+       * El comando de idioma, cuando se pudo montar. Su baja **vigente** no es el disposer del alta inicial:
+       * cambiar de idioma lo retira y lo vuelve a registrar, asi que el de `base` apunta a una definicion que
+       * ya no esta.
+       */
+      let comandoIdioma = null;
+
+      /**
+       * El idioma con el que se componen los NOMBRES de fila. Sale del conjunto vivo (que es el que se ve), y
+       * si aun no esta puesto, de la resolucion normal del plugin. Una fila es un comando registrado de
+       * verdad: en espanol no puede ofrecerse `skill-approve-<id>` si el registro tiene `skill-aprobar`.
+       */
+      const idiomaDeFilas = () => languageState.lang ?? resolveLang({ root }).lang;
 
       const composeFor = (cwd) => {
         try {
           // Las dos colecciones con las que se decide en el menú: lo que espera aprobación y lo apagado
           // (que es donde se elige volver a encenderlo o retirarlo del todo). Comparten gramática y camino,
           // y los nombres no pueden chocar entre ellas: la segunda recibe los ya tomados.
-          const pendientes = pendingRowsFor({ root, cwd });
-          const apagadas = retiredRowsFor({ root, cwd, taken: new Set(pendientes.map((row) => row.name)) });
+          const lang = idiomaDeFilas();
+          const pendientes = pendingRowsFor({ root, cwd, lang });
+          const apagadas = retiredRowsFor({ root, cwd, taken: new Set(pendientes.map((row) => row.name)), lang });
           return targetCommands({ root, catalog, rows: [...pendientes, ...apagadas] });
         } catch {
           return null; // el almacén ilegible no puede tumbar los comandos que ya están
@@ -354,10 +368,26 @@ export function apply(ctx, config = {}) {
             languageState.lang = null;
           }
           // El comando de ajustes NO entra en el conjunto: si estuviera dentro se retiraria justo cuando se
-          // usa. Es el unico que tiene que existir siempre, en los dos idiomas.
-          base.push(registry.register(languageCommandDefinition({
-            registry, state: languageState, set: conjunto, taken: tomados, root,
-          })));
+          // usa. Es el unico que tiene que existir siempre, en los dos idiomas, con el mismo nombre.
+          //
+          // Su descripcion sigue al idioma: el anfitrion no permite actualizar una definicion registrada, asi
+          // que se retira y se vuelve a registrar con el MISMO handler y con vuelta atras (`relabel`). Y el
+          // cambio de idioma recompone las filas de cada sesion: sus nombres tambien son idioma.
+          comandoIdioma = createLanguageCommand({
+            registry,
+            state: languageState,
+            set: conjunto,
+            taken: tomados,
+            root,
+            onChanged: () => {
+              refreshPendingRows();
+              return null;
+            },
+          });
+          // Lo instala el propio comando: la reescritura de su descripcion necesita SU disposer, y el de un
+          // alta hecha desde fuera no lo tiene.
+          const instalado = comandoIdioma.install();
+          if (!instalado.ok) comandoIdioma = null;
         }
       } catch {
         // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.
@@ -397,6 +427,9 @@ export function apply(ctx, config = {}) {
         // El conjunto localizado se retira por sus propios disposers: no esta en `base` (ese arreglo solo
         // guarda lo que se registra una vez), y dejarlo vivo al descargar el plugin dejaria el nombre de un
         // idioma apuntando a un registro que ya no esta.
+        // El comando de idioma se retira con SU disposer vivo: cambiar de idioma lo vuelve a registrar, asi
+        // que el disposer del alta inicial ya no apunta a la definicion que esta puesta.
+        comandoIdioma?.dispose();
         for (const dispose of languageState.live.values()) {
           try {
             dispose?.();

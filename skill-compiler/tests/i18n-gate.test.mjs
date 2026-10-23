@@ -73,12 +73,12 @@ describe('i18n gate · detecta violaciones reales', () => {
 
   it('dos operaciones con el MISMO nombre en un idioma se denuncian', () => {
     const dir = copia();
-    const mapa = join(dir, 'lib', 'localized-commands.mjs');
+    const mapa = join(dir, 'lib', 'operations.mjs');
     writeFileSync(mapa, readFileSync(mapa, 'utf8')
       .replace("names: Object.freeze({ en: 'skill-reject', es: 'skill-rechazar' })", "names: Object.freeze({ en: 'skill-reject', es: 'skill-aprobar' })"), 'utf8');
     const r = corre(dir);
     assert.equal(r.status, 1);
-    assert.match(r.stdout, /FALLO nombre-duplicado · lib\/localized-commands\.mjs:reject/);
+    assert.match(r.stdout, /FALLO nombre-duplicado · lib\/operations\.mjs:reject/);
   });
 
   it('una definicion base sin operacion (o al reves) se denuncia: su nombre no seguiria al idioma', () => {
@@ -88,12 +88,12 @@ describe('i18n gate · detecta violaciones reales', () => {
     const r = corre(dir);
     assert.equal(r.status, 1);
     assert.match(r.stdout, /FALLO operacion-huerfana · lib\/commands\.mjs:skill-rechazar/);
-    assert.match(r.stdout, /FALLO operacion-sin-base · lib\/localized-commands\.mjs:skill-reject/);
+    assert.match(r.stdout, /FALLO operacion-sin-base · lib\/operations\.mjs:skill-reject/);
   });
 
   it('quitar una operacion del mapa se denuncia por recuento', () => {
     const dir = copia();
-    const mapa = join(dir, 'lib', 'localized-commands.mjs');
+    const mapa = join(dir, 'lib', 'operations.mjs');
     const texto = readFileSync(mapa, 'utf8');
     const inicio = texto.indexOf("  Object.freeze({\n    id: 'reject',");
     const fin = texto.indexOf('  }),', inicio);
@@ -101,7 +101,7 @@ describe('i18n gate · detecta violaciones reales', () => {
     writeFileSync(mapa, texto.slice(0, inicio) + texto.slice(fin + 6), 'utf8');
     const r = corre(dir);
     assert.equal(r.status, 1);
-    assert.match(r.stdout, /FALLO operaciones-cuenta · lib\/localized-commands\.mjs/);
+    assert.match(r.stdout, /FALLO operaciones-cuenta · lib\/operations\.mjs/);
   });
 
   it('el modelo de alias retirado no puede reaparecer en el codigo', () => {

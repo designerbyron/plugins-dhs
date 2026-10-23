@@ -79,12 +79,20 @@ export { conCerrojo, rutaDelCerrojo };
  */
 export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curated = null, maxLineas = 200, maxFicheros = 5, alcance = null, ciclosMaximos = 3 } = {}) {
   const pruebas = [];
-  const anota = (nombre, ok, detalle) => pruebas.push({ nombre, ok, detalle });
+  // Cada prueba lleva su frase (que es lo que se afirma) y, al lado, la **representacion** de esa frase
+  // (`detalleCode` + `detalleParams`) para poder decirla en el idioma de quien lee sin tocar el dato. El texto
+  // en espanol se conserva tal cual: es lo que afirman las pruebas y lo que viaja al diario.
+  const anota = (nombre, ok, detalle, detalleCode = null, detalleParams = null) => pruebas.push({
+    nombre, ok, detalle, ...detalleCode === null ? {} : { detalleCode, detalleParams: detalleParams ?? {} },
+  });
   const opts = { root, ...(curated ? { curated } : {}) };
 
   // 1. La puerta: exactamente la misma que decide una aprobación.
   const puerta = checkProposal(id, key, opts);
-  anota('puerta', puerta.ok, puerta.ok ? 'la propuesta pasa la puerta de calidad' : `no pasa: ${puerta.errors.slice(0, 3).join(' | ')}`);
+  anota('puerta', puerta.ok,
+    puerta.ok ? 'la propuesta pasa la puerta de calidad' : `no pasa: ${puerta.errors.slice(0, 3).join(' | ')}`,
+    puerta.ok ? 'test.puerta.ok' : 'test.puerta.fail',
+    puerta.ok ? {} : { errors: puerta.errors.slice(0, 3).join(' | ') });
 
   // 2. La base: ¿sigue siendo la versión sobre la que se preparó?
   const vigente = vigenteDe(id, key, opts);
@@ -94,10 +102,14 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
     ? 'la propuesta no declara sobre qué versión se preparó'
     : vigente === null
       ? `la versión vigente (${base.state}, ${base.hash.slice(0, 12)}) ya no está`
-      : `base ${base.hash.slice(0, 12)} vs vigente ${vigente.hash.slice(0, 12)}`);
+      : `base ${base.hash.slice(0, 12)} vs vigente ${vigente.hash.slice(0, 12)}`,
+  base === null ? 'test.base.none' : vigente === null ? 'test.base.gone' : 'test.base.compare',
+  base === null ? {} : vigente === null
+    ? { state: base.state, hash: base.hash.slice(0, 12) }
+    : { base: base.hash.slice(0, 12), current: vigente.hash.slice(0, 12) });
 
   // 3. El conocimiento: nada desaparece del inventario sin que se declare.
-  let conservacion = { ok: false, detalle: 'no se pudo leer la versión vigente' };
+  let conservacion = { ok: false, detalle: 'no se pudo leer la versión vigente', detalleCode: 'test.conservacion.unreadable', detalleParams: {} };
   let contenidoBase = '';
   if (vigente !== null) {
     const { body } = parseFrontmatter(readFileSync(join(vigente.dir, 'SKILL.md'), 'utf8'));
@@ -123,10 +135,16 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
       detalle: claves.length === 0
         ? 'el inventario del conocimiento se conserva entero'
         : `desaparece ${claves.map((c) => `${c}: ${perdido[c].slice(0, 3).join(', ')}`).join(' · ')} — justificación: ${justificado ? 'presente' : 'AUSENTE'}`,
+      detalleCode: claves.length === 0
+        ? 'test.conservacion.ok'
+        : justificado.length > 0 ? 'test.conservacion.lost' : 'test.conservacion.lost-absent',
+      detalleParams: claves.length === 0
+        ? {}
+        : { list: claves.map((c) => `${c}: ${perdido[c].slice(0, 3).join(', ')}`).join(' - ') },
       perdido,
     };
   }
-  anota('conservacion', conservacion.ok, conservacion.detalle);
+  anota('conservacion', conservacion.ok, conservacion.detalle, conservacion.detalleCode, conservacion.detalleParams);
 
   // 4. El alcance: lo que la propuesta escribe tiene que ser de la skill y nada más. Las rutas se comparan
   //    **relativas a la carpeta de la propuesta**: comparar absolutas contra una lista relativa marcaría
@@ -143,7 +161,11 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
   const fuera = escritos.filter((r) => !permitido.includes(r) && !r.startsWith('references/'));
   anota('alcance', fuera.length === 0, fuera.length === 0
     ? `todo lo escrito vive en la skill (${escritos.length} fichero(s): ${escritos.slice(0, 4).join(', ')}${escritos.length > 4 ? '…' : ''})`
-    : `fuera del alcance autorizado: ${fuera.join(', ')}`);
+    : `fuera del alcance autorizado: ${fuera.join(', ')}`,
+  fuera.length === 0 ? 'test.alcance.ok' : 'test.alcance.out',
+  fuera.length === 0
+    ? { n: escritos.length, files: `${escritos.slice(0, 4).join(', ')}${escritos.length > 4 ? '...' : ''}` }
+    : { list: fuera.join(', ') });
 
   // 5. El tamaño del diff: una promoción automática es acotada o no es automática. Se miden dos cosas
   //    distintas, porque no son el mismo riesgo: **sacar** material del propio cuerpo (el conocimiento
@@ -160,13 +182,17 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
   const bytesMovidos = Number(meta?.repair?.bytesMovidos ?? movidas.reduce((suma, m) => suma + (Number(m?.bytes) || 0), 0));
   const nuevas = Math.max(0, (meta?.diff?.references?.anadidas?.length ?? 0) - movidas.length) + (meta?.diff?.references?.modificadas?.length ?? 0);
   anota('tamano', lineas <= maxLineas && nuevas <= maxFicheros && bytesMovidos <= topeBytes,
-    `diff de ${lineas} línea(s) (máximo ${maxLineas}) · ${nuevas} pieza(s) de material nuevo (máximo ${maxFicheros}) · ${bytesMovidos} byte(s) fuera del cuerpo (máximo ${topeBytes})`);
+    `diff de ${lineas} línea(s) (máximo ${maxLineas}) · ${nuevas} pieza(s) de material nuevo (máximo ${maxFicheros}) · ${bytesMovidos} byte(s) fuera del cuerpo (máximo ${topeBytes})`,
+    'test.tamano.summary',
+    { lineas, maxLineas, nuevas, maxFicheros, bytes: bytesMovidos, tope: topeBytes });
 
   // 6. La reversibilidad: la versión anterior tiene que poder volver con su huella.
   const reversibles = vigente !== null ? folderHash(vigente.dir) === vigente.hash : false;
   anota('reversible', reversibles, reversibles
     ? `la versión vigente (${vigente.hash.slice(0, 12)}) está entera y se puede reponer`
-    : 'la versión vigente no se puede leer entera: sin ella no hay vuelta atrás');
+    : 'la versión vigente no se puede leer entera: sin ella no hay vuelta atrás',
+  reversibles ? 'test.reversible.ok' : 'test.reversible.fail',
+  reversibles ? { hash: vigente.hash.slice(0, 12) } : {});
 
   // 7. Los ciclos: la misma corrección repetida **sin progreso** no se promociona sola otra vez. El progreso
   //    se mide, no se supone: cada ronda del mismo arreglo tiene que partir de un cuerpo estrictamente menor.
@@ -181,7 +207,13 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
   const enCiclo = ultimas.length >= ciclosMaximos && !progresa;
   anota('sin-ciclos', !enCiclo, enCiclo
     ? `la misma corrección (${reglas}) se ha promocionado ${ultimas.length} veces seguidas sin que el cuerpo baje: puede ser un ciclo sin progreso, y eso lo mira una persona`
-    : `${ultimas.length} promoción(es) previas de ${reglas || '(sin reglas)'}${ultimas.length > 0 && progresa ? ', con el cuerpo bajando en cada ronda' : ''}`);
+    : `${ultimas.length} promocion(es) previas de ${reglas || '(sin reglas)'}${ultimas.length > 0 && progresa ? ', con el cuerpo bajando en cada ronda' : ''}`,
+  enCiclo
+    ? 'test.ciclos.cycle'
+    : ultimas.length > 0 && progresa
+      ? 'test.ciclos.ok-progress'
+      : reglas === '' ? 'test.ciclos.ok-none' : 'test.ciclos.ok',
+  enCiclo ? { rules: reglas, n: ultimas.length } : { n: ultimas.length, rules: reglas });
 
   // 8. El material: la propuesta no puede perder ni un fichero de la skill viva. Es la comprobación más
   //    importante de todas, porque una pérdida aquí es conocimiento que se va sin que nadie lo note.
@@ -195,7 +227,9 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
     const deVerdad = perdidos.filter((f) => !enCarpeta.includes(f));
     anota('sin-perdida-de-ficheros', deVerdad.length === 0, deVerdad.length === 0
       ? `la propuesta conserva los ${deLaViva.length} fichero(s) de la versión viva`
-      : `la propuesta NO lleva: ${deVerdad.join(', ')} — una promoción no puede perder material de la skill`);
+      : `la propuesta NO lleva: ${deVerdad.join(', ')} - una promocion no puede perder material de la skill`,
+    deVerdad.length === 0 ? 'test.material.ok' : 'test.material.fail',
+    deVerdad.length === 0 ? { n: deLaViva.length } : { list: deVerdad.join(', ') });
   }
 
   // 9. Material eliminado: si se quita algo, tiene que seguir conservado.
@@ -207,7 +241,9 @@ export function pruebasDeRegresion(id, key, meta, { root = defaultRoot(), curate
     });
     anota('material-preservado', preservado.ok, preservado.ok
       ? `el material retirado (${eliminadas.join(', ')}) sigue en la skill`
-      : `se retira ${eliminadas.join(', ')} y no aparece en ninguna parte: eso pierde conocimiento`);
+      : `se retira ${eliminadas.join(', ')} y no aparece en ninguna parte: eso pierde conocimiento`,
+    preservado.ok ? 'test.preservado.ok' : 'test.preservado.fail',
+    { list: eliminadas.join(', ') });
   }
 
   return { ok: pruebas.every((p) => p.ok), pruebas };

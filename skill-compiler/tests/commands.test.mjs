@@ -220,7 +220,7 @@ describe('comandos · /skill-approve', () => {
     assert.match(result.text, /Dime donde quieres que viva/);
     assert.match(result.text, /--local/, 'tiene que ofrecer el proyecto');
     assert.match(result.text, /--global/, 'y tiene que ofrecer la biblioteca de usuario');
-    assert.match(result.text, /skill-publish/, 'y el nombre de su fila, para el ratón');
+    assert.match(result.text, /skill-globalizar-<id>/, 'y el nombre de su fila, para el ratón');
 
     // Y no se movió nada, ni en este proyecto ni en la biblioteca.
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false);
@@ -337,7 +337,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     const rows = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const aprobar = rows.find((row) => row.name === 'skill-approve-measured-decision-check');
+    const aprobar = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check');
     const result = aprobar.handler({ agent });
     assert.equal(result.kind, 'success', JSON.stringify(result));
     assert.equal(catalog.count(), 1, 'la fila avisa al catálogo igual que el comando con argumentos');
@@ -357,7 +357,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     const rows = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /no pasa la puerta/);
     assert.equal(catalog.count(), 0, 'nada se movió, así que nada cambió');
@@ -369,7 +369,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(WARNS), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /--force/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false);
@@ -381,9 +381,9 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: otro });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: otro }) });
 
-    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
-    assert.match(result.text, /no en esta sesión/);
+    assert.match(result.text, /no en esta sesion/);
     assert.equal(existsSync(join(s.root, 'projects', projectKey(otro), 'approved', 'measured-decision-check')), false);
   });
 
@@ -392,7 +392,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(WARNS), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-show-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-ver-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'success');
     assert.match(result.text, /Puerta de validacion: pasa\./);
     assert.match(result.text, /aviso/);
@@ -407,7 +407,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     // La fila se captura UNA vez: es la misma acción, y aprobar la retira del conjunto de pendientes.
     const fila = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) })
-      .find((row) => row.name === 'skill-approve-measured-decision-check');
+      .find((row) => row.name === 'skill-aprobar-measured-decision-check');
 
     const primera = fila.handler({ agent });
     assert.equal(primera.kind, 'success');
@@ -461,7 +461,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-reject-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-rechazar-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'success');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'measured-decision-check', 'SKILL.md')), true);
   });
@@ -549,7 +549,7 @@ describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
 
     const filas = pendingRowsFor({ root: s.root, cwd: CWD });
     const aprobar = filas.find((f) => f.verb === 'approve' && f.id === 'measured-decision-check');
-    assert.match(aprobar.description, /Actualiza una skill que ya está activa/);
+    assert.match(aprobar.description, /Actualiza una skill que ya esta activa/);
     assert.match(aprobar.description, /la anterior queda apartada/);
   });
 

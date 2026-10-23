@@ -121,20 +121,20 @@ describe('F3 · cada defecto pone en rojo su puerta', () => {
     // La regla que sustituye a la del alias: el mapa tiene que dar UN nombre por idioma. Sin el espanol, esa
     // operacion desaparece del menu en espanol y nadie se enteraria hasta echarla de menos.
     const base = copia();
-    sembrar(base, 'lib/localized-commands.mjs', "names: Object.freeze({ en: 'skill-show', es: 'skill-ver' })", "names: Object.freeze({ en: 'skill-show' })");
+    sembrar(base, 'lib/operations.mjs', "names: Object.freeze({ en: 'skill-show', es: 'skill-ver' })", "names: Object.freeze({ en: 'skill-show' })");
     const r = i18n(base);
     assert.equal(r.code, 1, r.salida);
-    assert.match(r.salida, /FALLO nombre-gramatica · lib\/localized-commands\.mjs:show/);
+    assert.match(r.salida, /FALLO nombre-gramatica · lib\/operations\.mjs:show/);
   });
 
   it('un nombre que se registra en los dos idiomas a la vez (la fila duplicada)', () => {
     // Era el defecto de los 15 alias: la misma operacion dos veces en el menu. Ahora solo puede pasar por un
     // mapa mal escrito, y la puerta lo tiene que ver antes de que el registro rechace el conjunto entero.
     const base = copia();
-    sembrar(base, 'lib/localized-commands.mjs', "names: Object.freeze({ en: 'skill-systems', es: 'skill-sistemas' })", "names: Object.freeze({ en: 'skill-systems', es: 'skill-approve' })");
+    sembrar(base, 'lib/operations.mjs', "names: Object.freeze({ en: 'skill-systems', es: 'skill-sistemas' })", "names: Object.freeze({ en: 'skill-systems', es: 'skill-approve' })");
     const r = i18n(base);
     assert.equal(r.code, 1, r.salida);
-    assert.match(r.salida, /FALLO nombre-duplicado · lib\/localized-commands\.mjs:systems/);
+    assert.match(r.salida, /FALLO nombre-duplicado · lib\/operations\.mjs:systems/);
   });
 
   it('el contrato de herramientas alterado: la prueba congelada se pone roja', () => {
