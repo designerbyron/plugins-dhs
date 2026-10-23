@@ -327,25 +327,28 @@ export function approveProposal({ root = defaultRoot(), key, id, force = false, 
 export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) {
   if (key === null) return bad(noScope());
   const wanted = String(id ?? '').trim();
-  if (wanted === '') return bad('Falta el id. Uso: /skill-reject <id>');
+  if (wanted === '') return bad(t('cmd.reject.missing-id'));
   const noEsId = idNoUtilizable(wanted);
   if (noEsId !== null) return noEsId;
 
   const where = locate(wanted, key, { root });
   if (where === 'rejected') {
-    return ok([`Ya estaba apartada: ${wanted} [${key}]`, 'No se ha cambiado nada.', ...remaining(root, key)].join('\n'),
-      { code: 'already-set-aside', params: { id: wanted } });
+    return ok([
+      t('cmd.reject.already-set-aside', { id: wanted, key }),
+      t('cmd.approve.no-change'),
+      ...remaining(root, key),
+    ].join('\n'), { code: 'already-set-aside', params: { id: wanted } });
   }
   if (where === 'approved') {
     return bad([
-      `«${wanted}» ya está activa en ${key}: rechazar sólo se aplica a las propuestas pendientes.`,
-      'Lo aprendido y aprobado se aparta a mano, y a propósito: no hay un comando que lo deshaga sin querer.',
+      t('cmd.reject.is-active', { id: wanted, key }),
+      t('cmd.reject.is-active-hint'),
     ].join('\n'));
   }
   if (where === null) return noEstáElId(wanted, key, root);
 
   const moved = reject(wanted, key, { root });
-  if (!moved.ok) return bad(`No se pudo apartar ${wanted}: ${moved.reason}`);
+  if (!moved.ok) return bad(t('cmd.reject.move-failed', { id: wanted, reason: moved.reason }));
 
   catalog?.notify();
 
@@ -355,10 +358,10 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
   });
 
   return ok([
-    `Apartada: ${wanted} [${key}]`,
-    `  ${moved.path.replace(/[\\/]SKILL\.md$/, '')}`,
+    t('cmd.reject.done', { id: wanted, key }),
+    t('cmd.approve.path', { path: moved.path.replace(/[\\/]SKILL\.md$/, '') }),
     '',
-    'No se ha borrado nada: sigue en el almacén por si quieres recuperarla.',
+    t('cmd.reject.no-delete'),
     ...remaining(root, key),
   ].join('\n'), { code: 'set-aside', params: { id: wanted } });
 }
@@ -688,43 +691,46 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
     // línea, no pueden borrar el trabajo de nadie.
     {
       name: 'skill-disable',
-      description: 'Apaga una skill activa de este proyecto: deja de servirse al modelo y se conserva entera. Reversible.',
+      description: t('cmd.disable.description'),
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
         if (key === null) return bad(noScope());
         const id = String(rawInput ?? '').trim();
-        if (id === '') return bad('Dime cuál: /skill-disable <id>. Las activas están en /skill-proposals.');
+        if (id === '') return bad(t('cmd.disable.missing-id'));
         if (!existsSync(join(root, 'projects', key, 'approved', id))) {
           const donde = locate(id, key, { root });
           return bad(donde === null
-            ? `No hay ninguna skill activa con el id ${id} en ${key}.`
-            : `«${id}» no está activa en ${key}: está en ${donde}.`);
+            ? t('cmd.disable.not-found', { id, key })
+            : t('cmd.disable.elsewhere', { id, key, donde }));
         }
         const moved = disableSkill(id, key, { root });
-        if (!moved.ok) return bad(`No se pudo apagar: ${moved.reason}`);
-        return ok(`${id} apagada en ${key}.\n  deja de servir al modelo, y se conserva entera: /skill-enable ${id} la devuelve.`, { code: 'disabled', params: { id } });
+        if (!moved.ok) return bad(t('cmd.disable.failed', { reason: moved.reason }));
+        return ok([
+          t('cmd.disable.done', { id, key }),
+          t('cmd.disable.done-hint', { id }),
+        ].join('\n'), { code: 'disabled', params: { id } });
       }),
     },
 
     {
       name: 'skill-enable',
-      description: 'Vuelve a encender una skill que estaba apagada en este proyecto.',
+      description: t('cmd.enable.description'),
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
         if (key === null) return bad(noScope());
         const id = String(rawInput ?? '').trim();
-        if (id === '') return bad('Dime cuál: /skill-enable <id>. Lo apagado está en /skill-retired.');
+        if (id === '') return bad(t('cmd.enable.missing-id'));
         const moved = enableSkill(id, key, { root });
-        if (!moved.ok) return bad(`No se pudo encender: ${moved.reason}`);
-        return ok(`${id} vuelve a estar activa en ${key}: se sirve al modelo sólo en este proyecto.`, { code: 'enabled', params: { id } });
+        if (!moved.ok) return bad(t('cmd.enable.failed', { reason: moved.reason }));
+        return ok(t('cmd.enable.done', { id, key }), { code: 'enabled', params: { id } });
       }),
     },
 
     {
       name: 'skill-retire',
-      description: 'Retira una skill de este proyecto: se mueve a un respaldo fechado, nunca se borra. Exige --yes.',
+      description: t('cmd.retire.description'),
       input: { hint: '<id> [--yes]' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
@@ -732,30 +738,45 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
         const input = String(rawInput ?? '').trim();
         const yes = /(?:^|\s)--yes$/.test(input);
         const id = input.replace(/(?:\s+--yes)?$/, '').trim();
-        if (id === '') return bad('Dime cuál: /skill-retire <id> [--yes].');
+        if (id === '') return bad(t('cmd.retire.missing-id'));
         if (!yes) {
-          return ok(`Se va a RETIRAR «${id}» del proyecto ${key}.\n  Nada se borra: la carpeta se mueve a un respaldo con fecha, y vuelve con \`restore\` desde el terminal.\n  Repite así para hacerlo: /skill-retire ${id} --yes`);
+          return ok([
+            t('cmd.retire.confirm', { id, key }),
+            t('cmd.retire.confirm-hint'),
+            t('cmd.retire.confirm-do', { id }),
+          ].join('\n'));
         }
         const moved = retireSkill(id, key, { root });
-        if (!moved.ok) return bad(`No se pudo retirar: ${moved.reason}`);
-        return ok(`Retirada «${id}» de ${key}.\n  respaldo: ${moved.backup}\n  huella:   ${moved.hash}\n  vuelve con: restore ${id} (CLI)\n`, { code: 'retired', params: { id } });
+        if (!moved.ok) return bad(t('cmd.retire.failed', { reason: moved.reason }));
+        return ok([
+          t('cmd.retire.done', { id, key }),
+          t('cmd.retire.backup', { path: moved.backup }),
+          t('cmd.retire.hash', { hash: moved.hash }),
+          t('cmd.retire.restore', { id }),
+          '',
+        ].join('\n'), { code: 'retired', params: { id } });
       }),
     },
 
     {
       name: 'skill-retired',
-      description: 'Qué está apagado en este proyecto y qué se retiró ya, con su fecha.',
+      description: t('cmd.retired.description'),
       handler: guarded(({ agent }) => {
         const { cwd, key } = scopeOfAgent(agent);
         if (key === null) return bad(noScope());
         const lista = retired(key, { root });
-        if (lista.length === 0) return ok(`Nada apagado ni retirado en ${cwd} [${key}].`);
+        if (lista.length === 0) return ok(t('cmd.retired.empty', { cwd, key }));
         return ok([
-          `Fuera de servicio en ${cwd} [${key}]:`,
+          t('cmd.retired.title', { cwd, key }),
           '',
-          ...lista.map((skill) => `  · ${skill.id} — ${skill.state === 'disabled' ? 'apagada (reversible)' : `retirada el ${skill.retiredAt} (en el respaldo)`}`),
+          ...lista.map((skill) => t('cmd.retired.row', {
+            id: skill.id,
+            estado: skill.state === 'disabled'
+              ? t('cmd.retired.state-disabled')
+              : t('cmd.retired.state-retired', { fecha: skill.retiredAt }),
+          })),
           '',
-          'Con un id a mano: /skill-enable <id> lo devuelve · /skill-retire <id> --yes lo retira del todo.',
+          t('cmd.retired.hint'),
         ].join('\n'));
       }),
     },
@@ -790,7 +811,7 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
 
     {
       name: 'skill-reject',
-      description: 'Aparta una skill propuesta de este proyecto sin borrarla: queda guardada en rejected/.',
+      description: t('cmd.reject.description'),
       input: { hint: '<id>' },
       handler: guarded(({ agent, rawInput }) => {
         const { key } = scopeOfAgent(agent);
