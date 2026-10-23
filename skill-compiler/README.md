@@ -166,11 +166,14 @@ El modelo propone; tú decides.
 
 ### Desde el harness, sin salir de la sesión
 
-Los nombres **canónicos** son los ingleses (`/skill-proposals`, `/skill-approve`, `/skill-pending`, …). Los
-ejemplos de abajo usan los nombres **españoles** a propósito: siguen funcionando como **alias** del canónico
-—mismo handler, mismos argumentos, misma puerta y mismos efectos— hasta la `5.0.0` (`RETIRADA_DE_ALIAS`). El
-alias se declara por metadatos (`aliasOf`, `deprecatedIn`), `doctor` cuenta las filas del menú que produce el
-registro (`15 de 31 filas del menu (16 canonicos)`) y la tabla se comprueba con `aliasProblems()`.
+Los comandos de sesión tienen **un nombre por idioma**: `/skill-approve` en inglés, `/skill-aprobar` en
+español. No son dos comandos ni un alias: es la **misma operación**, con el mismo handler, la misma puerta y
+los mismos efectos, y el registro tiene **una fila por operación** —la del idioma activo—. El idioma se fija
+con `/skill-compiler-language --es|--en` (o `skill-compiler lang --es|--en` en el terminal) y el menú `/` cambia
+**sin reiniciar**; `DSH_LANG` manda sobre la preferencia guardada, y el idioma base es `en`. `doctor` dice qué
+idioma está activo y cuántas filas sirve (`16 operaciones y 16 filas en <idioma>`).
+
+Los ejemplos de abajo usan los nombres **españoles**, que son los que están activos con el idioma en `es`.
 
 ```
 /skill-propuestas                   qué espera tu decisión y qué está activo, en este proyecto
@@ -192,10 +195,11 @@ registro (`15 de 31 filas del menu (16 canonicos)`) y la tabla se comprueba con 
 ```
 
 Y cada pendiente aparece además en el menú `/` como **tres filas elegibles** —leer, activar, apartar—, sin
-argumentos que escribir: `skill-show-<id>`, `skill-approve-<id>`, `skill-reject-<id>` (los nombres de fila son
-siempre los canónicos, en inglés; el alias sólo existe para lo que se teclea). **Elegir la fila es
-la decisión completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila
-desaparece del menú: una pendiente que ya no lo está no se sigue ofreciendo.
+argumentos que escribir: `skill-show-<id>`, `skill-approve-<id>`, `skill-reject-<id>`. Los nombres de fila son
+**siempre los ingleses**, en los dos idiomas: son el marcador de máquina con el que el panel reconoce una fila
+(`skill-approve-<id>`), y el id que llevan detrás las hace inequívocas. **Elegir la fila es la decisión
+completa**; teclear el comando entero hace exactamente lo mismo. Después de aprobar, la fila desaparece del
+menú: una pendiente que ya no lo está no se sigue ofreciendo.
 
 Aprobar algo que ya está aprobado no es un fallo: responde «Ya estaba activa» y no mueve nada. Y cada
 decisión termina con la lista de pendientes al día, así que no hace falta volver a pedirla. Si un bloque de
@@ -312,11 +316,11 @@ y vendorizas una versión limpia, o no se vendoriza.
 
 ```sh
 cd "<donde-clonaste-el-repo>/skill-compiler"   # donde lo hayas clonado
-npm test              # las 805 pruebas (con las puertas i18n y ASCII antes)
-npm run test:hermetic # las 805 pruebas + huella del store real antes y después
+npm test              # las 804 pruebas (con las puertas i18n y ASCII antes)
+npm run test:hermetic # las 804 pruebas + huella del store real antes y después
 ```
 
-805 pruebas en 196 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
+804 pruebas en 199 suites, todas contra raíces **temporales**: no leen ni escriben la biblioteca real de la
 máquina. `pretest` corre las puertas de idioma y ASCII: con una en rojo, no se ejecuta ni una prueba.
 
 - `tests/compiler.test.mjs` — validación, composición del `SKILL.md`, solapamiento, idempotencia,
@@ -327,11 +331,10 @@ máquina. `pretest` corre las puertas de idioma y ASCII: con una en rojo, no se 
 - `tests/vendor.test.mjs` — vendorizado con un `fetch` **falso inyectado**: formas de enlace, descarga,
   referencias, 404 y límite de peticiones, techo de tamaño, bloqueo por secreto/inyección/texto
   invisible, adaptación, procedencia, snapshot verbatim, y que un bloqueo no deja rastro en disco.
-- `tests/propose-real.e2e.test.mjs` y `tests/vendor-real.e2e.test.mjs` — la cadena entera, **en la suite**:
-  proponer el cuerpo real que se escribió ese día (guardado en `tests/fixtures/propose-real-body.md`) y
-  aprobarlo, y vendorizar con un `fetch` inyectado que responde con la forma de GitHub —descarga, adaptación,
-  procedencia, snapshot verbatim, aprobación, servicio y comprobación del origen—. Antes eran guiones sin una
-  sola aserción que `node --test` no recogía; cada uno se demuestra ahora con una mutación controlada.
+- `tests/propose-real.e2e.mjs` y `tests/vendor-real.e2e.mjs` — no son pruebas automáticas: son los
+  guiones que se usaron **contra la red real** (una URL pública) para comprobar la cadena entera:
+  resolver, descargar, adaptar, proponer, aprobar, servir, y que el origen no se movió. El segundo mide
+  además la huella del store real antes y después.
 - `tests/repair.test.mjs` — el índice del material: se reemplaza solo su bloque delimitado, una sección del
   autor con el mismo título sobrevive, la migración del formato anterior exige procedencia inequívoca y el
   presupuesto se mide sobre el cuerpo final.

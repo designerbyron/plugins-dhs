@@ -44,15 +44,19 @@ describe('ASCII · el repositorio pasa', () => {
     const r = corre(RAIZ);
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /^ASCII: en orden/);
-    assert.match(r.stdout, /ASCII: cobertura 24\/24 ficheros de primera parte/);
+    const n = primeraParte(RAIZ).length;
+    assert.ok(r.stdout.includes(`ASCII: cobertura ${n}/${n} ficheros de primera parte`), r.stdout);
   });
 
-  it('vigila los 24 ficheros de primera parte, tambien los tres que se entregaron fuera', () => {
+  it('vigila TODOS los ficheros de primera parte, tambien los tres que se entregaron fuera', () => {
+    // El numero sale de la lista que lo gobierna, no escrito a mano: al entrar dos modulos nuevos en la
+    // cobertura, un literal 24 habria puesto la prueba en rojo por un dato que la puerta ya mide sola.
     const r = corre(RAIZ, ['--json']);
     const informe = JSON.parse(r.stdout);
+    const n = primeraParte(RAIZ).length;
     assert.equal(informe.ok, true, r.stdout);
-    assert.equal(informe.cobertura.primeraParte, 24);
-    assert.equal(informe.cobertura.vigilados, 24);
+    assert.equal(informe.cobertura.primeraParte, n);
+    assert.equal(informe.cobertura.vigilados, n);
     assert.equal(informe.cobertura.excluidos, 0);
     for (const rel of ['lib/vendor.mjs', 'lib/catalog-signal.mjs', 'lib/review.mjs']) {
       assert.ok(FICHEROS.includes(rel), `${rel} tiene que estar vigilado`);

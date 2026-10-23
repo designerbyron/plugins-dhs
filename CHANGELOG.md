@@ -4,6 +4,53 @@ El formato sigue la idea de [Keep a Changelog](https://keepachangelog.com/es-ES/
 es semántico: `mayor` cuando cambia un contrato (herramientas o formato del almacén), `menor` cuando se
 añade capacidad, `parche` cuando se corrige un defecto.
 
+## [No publicado] — rama `proto/i18n-live-commands` · contrato
+
+**Las 16 operaciones de sesión pasan a tener un nombre por idioma, y el modelo de alias se retira.** No sube
+`package.json`: la versión publicada sigue siendo la 4.0.1 y este bloque describe lo que **aún no ha salido**.
+Por la política del repositorio, cuando se autorice la publicación entrará como **5.0.0** —es cambio de contrato:
+los nombres de comando son superficie—, y entonces el número se moverá en los tres sitios que lo llevan
+(`package.json`, esta entrada y la política).
+
+### Cambiado — un nombre por operación, en el idioma activo
+
+- **`lib/localized-commands.mjs`** declara las **16** operaciones (antes sólo `approve`, como prototipo): id
+  interno estable, `definitionId`, nombre `en`, nombre `es`, clave de descripción y `input.hint`. El **handler se
+  hereda** de la definición base, así que los dos nombres son la misma función y no pueden divergir. `skill-auto`
+  mantiene el mismo nombre en los dos idiomas: una sola definición, con la descripción del idioma activo.
+- **El registro sirve 16 filas, no 31.** El conjunto activo tiene un nombre por operación; el del otro idioma no
+  se registra y **no es invocable**. Medido en la `0.2.1-rc.2`: `/skill-compiler-language --es` cambia el menú
+  `/` de `/skill-approve` a `/skill-aprobar` **sin reiniciar** (altas antes que bajas sobre `commands/change`).
+
+### Retirado — el modelo de alias
+
+- Fuera `ALIAS_ESPERADOS`, `RETIRADA_DE_ALIAS`, `aliasProblems()`, `aliasSummary()`, los metadatos
+  `aliasOf`/`deprecatedIn` y la clave `cmd.alias.deprecated`. Un nombre español ya no es «alias obsoleto» del
+  inglés: es el nombre de la misma operación en español.
+- **`tools/i18n-gate.mjs`**: la regla de los 15 alias pasa a la del mapa (16 operaciones × 2 nombres, un nombre
+  válido y único por idioma, ninguna definición base huérfana, el único nombre sin traducir es `skill-auto`, y el
+  modelo retirado no puede reaparecer en el código). Cinco pruebas negativas nuevas siembran cada defecto.
+- **`doctor`** deja de decir «15 de 31 filas del menú (16 canónicos)» y dice lo que hay: `16 operaciones y 16
+  filas en <idioma>`, construido desde el mapa.
+- **`lib/presentation.mjs`**: `DECISION_OPERATIONS` se declara por id de operación y `decisionKindOf` resuelve el
+  nombre en el mapa, así que reconoce `skill-aprobar` y `skill-approve` sin saberse ningún nombre de memoria.
+- **`client.js`**: las listas de nombres y la composición de las órdenes del panel llevan los dos idiomas, y el
+  nombre del comando sale del idioma del bloque que se decide. Antes componía siempre el nombre español, que sólo
+  funcionaba por los alias: bajo `en` el botón de aprobar habría dejado de existir.
+- **Los catálogos** ya no citan un comando que no existe en su idioma: la prosa española dice `/skill-aprobar`,
+  `/skill-propuestas`, `/skill-propiedad`… (43 líneas).
+
+### Medido en este acto
+
+- `npm test`: **804 pruebas, 804 pasan** (antes 796/795: la única roja era una prueba que leía el `config.json`
+  del almacén **real**, y el `--es` del operador la puso en rojo; ahora resuelve el idioma en su arena).
+- `npm run test:hermetic`: 804/804 y la huella del almacén real **idéntica** antes y después.
+- `node tools/i18n-gate.mjs`: en orden, 578 claves por idioma, 16 operaciones × 2 nombres.
+- `node tools/ascii-gate.mjs`: 7565 caracteres heredados (bajó de 7579 al mudar tres descripciones al catálogo en
+  ASCII), tope igual al medido, 22 ficheros.
+- `node --test tests/definitions-schema.test.mjs`: 18/18, con el manifiesto congelado actualizado de `alias` a
+  `nombres` (una operación, un nombre por idioma).
+
 ## [4.0.1] — 2026-10-23 · parche
 
 **Dos rojos silenciosos del diagnóstico, y los dos son de la misma familia: una cifra escrita a mano y un

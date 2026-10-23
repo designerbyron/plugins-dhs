@@ -4,7 +4,9 @@
     "commit": "eb9bbb4",
     "nota": "Manifiesto independiente. La parte estructural se fijo sobre el arbol ANTERIOR a la traduccion de las descripciones y no se regenera despues: el texto visible queda fuera a proposito, para que traducirlo no obligue a tocar la expectativa y un cambio de esquema no pueda esconderse tras un texto. El bloque `contrato` esta escrito a mano desde la especificacion (docs/ y el diseno); no se deriva del codigo.",
     "idioma_texto_visible": "en",
-    "alfabeto_texto_visible": "ascii"
+    "alfabeto_texto_visible": "ascii",
+    "modelo": "nombres localizados: una operacion, un nombre por idioma, y solo el del idioma activo se registra",
+    "motivo_nombres": "el modelo de alias (15 nombres espanoles declarados como obsoletos del ingles) se retiro en 4.1.0: el nombre espanol es el de la misma operacion en espanol, no un alias, y el menu tiene una fila por operacion. La lista `comandos` conserva los nombres del idioma base, que son los de las definiciones."
   },
   "superficie": {
     "herramientas": [
@@ -31,23 +33,6 @@
       "skill-show",
       "skill-systems"
     ],
-    "alias": {
-      "skill-ambito": "skill-scope",
-      "skill-aprobar": "skill-approve",
-      "skill-deshabilitar": "skill-disable",
-      "skill-eliminar": "skill-retire",
-      "skill-globalizar": "skill-publish",
-      "skill-habilitar": "skill-enable",
-      "skill-pendientes": "skill-pending",
-      "skill-propiedad": "skill-ownership",
-      "skill-propiedad-dsh-only": "skill-ownership-dsh-only",
-      "skill-propiedad-machine": "skill-ownership-machine",
-      "skill-propuestas": "skill-proposals",
-      "skill-rechazar": "skill-reject",
-      "skill-retiradas": "skill-retired",
-      "skill-sistemas": "skill-systems",
-      "skill-ver": "skill-show"
-    },
     "proveedor": {
       "name": "skill-compiler",
       "rank": 150
@@ -57,6 +42,72 @@
       "orden": 9000,
       "tope_caracteres": 1200,
       "presupuesto_trabajo": 950
+    },
+    "nombres": {
+      "approve": {
+        "en": "skill-approve",
+        "es": "skill-aprobar"
+      },
+      "auto": {
+        "en": "skill-auto",
+        "es": "skill-auto"
+      },
+      "disable": {
+        "en": "skill-disable",
+        "es": "skill-deshabilitar"
+      },
+      "enable": {
+        "en": "skill-enable",
+        "es": "skill-habilitar"
+      },
+      "ownership": {
+        "en": "skill-ownership",
+        "es": "skill-propiedad"
+      },
+      "ownership-dsh-only": {
+        "en": "skill-ownership-dsh-only",
+        "es": "skill-propiedad-dsh-only"
+      },
+      "ownership-machine": {
+        "en": "skill-ownership-machine",
+        "es": "skill-propiedad-machine"
+      },
+      "pending": {
+        "en": "skill-pending",
+        "es": "skill-pendientes"
+      },
+      "proposals": {
+        "en": "skill-proposals",
+        "es": "skill-propuestas"
+      },
+      "publish": {
+        "en": "skill-publish",
+        "es": "skill-globalizar"
+      },
+      "reject": {
+        "en": "skill-reject",
+        "es": "skill-rechazar"
+      },
+      "retire": {
+        "en": "skill-retire",
+        "es": "skill-eliminar"
+      },
+      "retired": {
+        "en": "skill-retired",
+        "es": "skill-retiradas"
+      },
+      "scope": {
+        "en": "skill-scope",
+        "es": "skill-ambito"
+      },
+      "show": {
+        "en": "skill-show",
+        "es": "skill-ver"
+      },
+      "systems": {
+        "en": "skill-systems",
+        "es": "skill-sistemas"
+      }
     }
   },
   "tools": {

@@ -146,7 +146,8 @@ describe('F1.2 · grupo 4 en los dos idiomas', () => {
 
     assert.match(es.text, /Sistemas de skills del puesto/);
     assert.match(es.text, /Propiedad: AUSENTE/);
-    assert.match(es.text, /Respuesta: \/skill-ownership dsh-only/);
+    // El nombre del comando sigue al idioma: en espanol se responde con `/skill-propiedad`.
+    assert.match(es.text, /Respuesta: \/skill-propiedad dsh-only/);
     assert.doesNotMatch(es.text, /Skill systems|Ownership:|Answer:/);
   });
 

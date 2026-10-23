@@ -65,11 +65,22 @@ for (let i = 1; i < argv.length; i++) {
   // Un lote: la misma decision sobre todas las propuestas que van juntas. No es un atajo -cada una pasa su
   // puerta- es poder mirarlas y decidirlas como lo que son.
   if (arg === '--grupo') { flags.grupo = argv[++i]; continue; }
+  // El idioma, tambien por bandera: `lang --es` es la forma del comando del harness, y dos puertas con la
+  // misma verdad no deben discrepar en la ortografia. Fuera de `lang` se rechaza mas abajo.
+  if (arg === '--en') { flags.lang = 'en'; continue; }
+  if (arg === '--es') { flags.lang = 'es'; continue; }
   if (arg === '--dry') { flags.dry = true; continue; }
   if (arg.startsWith('--')) { process.stderr.write(`${tr('cli.unknown-option', { option: arg })}\n`); process.exit(2); }
   positional.push(arg);
 }
 const root = defaultRoot();
+
+// Una bandera de idioma fuera de `lang` no se ignora: se rechaza, igual que una opcion desconocida. Un
+// `--es` tragado en silencio haria creer que el idioma se fijo cuando no se toco nada.
+if (flags.lang !== undefined && command !== 'lang') {
+  process.stderr.write(`${tr('cli.unknown-option', { option: `--${flags.lang}` })}\n`);
+  process.exit(2);
+}
 
 /**
  * La etiqueta de un estado y el motivo de `repair`, que el motor devuelve como DATO.
@@ -89,6 +100,23 @@ const motivoDeReparacion = (r) => {
   const texto = tr(clave, r.reasonParams ?? {});
   return texto === clave ? r.reason : texto;
 };
+/**
+ * La frase de una reparacion o de un bloqueo, en el idioma de la sesion.
+ *
+ * El DATO (`describe`, `como`, `motivo`) se conserva tal cual; lo que se compone aqui es su representacion. Si
+ * la clave no estuviera, se dice el dato antes que ensenar una clave cruda. `whyCode` es el unico caso anidado:
+ * el marco (`repair.why.not-on-its-own`) lleva dentro la frase de la regla.
+ */
+const fraseDeReparacion = (crudo, codigo, params = {}) => {
+  if (typeof codigo !== 'string') return crudo;
+  let resuelto = params;
+  if (typeof params.whyCode === 'string') {
+    const anidado = tr(params.whyCode);
+    resuelto = { ...params, why: anidado === params.whyCode ? params.why : anidado };
+  }
+  const texto = tr(codigo, resuelto);
+  return texto === codigo ? crudo : texto;
+};
 
 /**
  * La ayuda, en una tabla: la **sintaxis** es un dato (nombres de comando y opciones, nunca se traduce) y la
@@ -96,7 +124,7 @@ const motivoDeReparacion = (r) => {
  * lista, y `tests/coherencia.test.mjs` compara esta tabla con los `case` implementados.
  */
 const AYUDA = [
-  ['lang [en|es]', 'cli.help.lang'],
+  ['lang [en|es] [--en|--es]', 'cli.help.lang'],
   ['where', 'cli.help.where'],
   ['list', 'cli.help.list'],
   ['show <id>', 'cli.help.show'],
@@ -565,7 +593,7 @@ switch (command) {
   // Una sola resolucion para las dos superficies. Sin argumento informa el idioma efectivo **y su fuente**:
   // sin la fuente, "idioma: es" no dice si fue una decision de la persona o una variable de la sesion.
   case 'lang': {
-    const pedido = positional[0];
+    const pedido = positional[0] ?? flags.lang;
     if (pedido === undefined) {
       const info = resolveLang({ fresh: true });
       const lineas = [tr('lang.status', { lang: info.lang, source: info.source }, { lang: info.lang })];
@@ -747,24 +775,24 @@ switch (command) {
       line(false, tr('cli.doctor.commands-failed', { message: error.message }), tr('cli.doctor.commands-failed-remedy'));
     }
 
-    // -- Los alias: 15 nombres espanoles que siguen funcionando, y lo que el menu va a ensenar ------
+    // -- Los nombres del menu: uno por operacion, en el idioma resuelto -------------------------------
     //
-    // Medido en el build instalado: `@deepseek-ai/dsh-commands` recorta el descriptor a
-    // {definitionId, name, description, input} antes de servirlo, y `dsh-client-ui-commands` compone cada
-    // fila del menu con name + description + input.hint. Ni `aliasOf` ni `deprecatedIn` llegan a la
-    // interfaz (0 apariciones en todo el app.asar), asi que el menu anuncia las filas canonicas MAS los
-    // alias. No registrarlos para ocultarlos les quitaria la invocabilidad, que es justo lo que el humano
-    // usa hasta la retirada: por eso se cuentan en voz alta y se comprueban sus metadatos.
+    // Antes habia 15 alias y el menu anunciaba 31 filas (16 canonicos + 15 alias), porque el harness no
+    // filtra por metadatos. Ya no hay alias: el conjunto activo tiene **una fila por operacion**, con el
+    // nombre del idioma resuelto, y el nombre del otro idioma no se registra (no es invocable). Lo que se
+    // cuenta aqui es lo que el registro va a servir, construido desde el mapa, no un numero escrito a mano.
     try {
-      const { skillCommands, aliasProblems, aliasSummary } = await import(pathToFileURL(join(packageRoot, 'lib', 'commands.mjs')).href);
-      const declaradas = skillCommands({ root });
-      const problemas = aliasProblems(declaradas);
-      const resumen = aliasSummary(declaradas);
-      line(problemas.length === 0,
-        tr('cli.doctor.alias-ok', { alias: resumen.alias, filas: resumen.filas, canonicos: resumen.canonicos }),
-        problemas.map((p) => `${p.regla} ${p.alias}: ${p.detalle}`).join('; ') || tr('cli.doctor.alias-remedy'));
+      const { skillCommands } = await import(pathToFileURL(join(packageRoot, 'lib', 'commands.mjs')).href);
+      const { createLocalizedSet, LOCALIZED_OPERATIONS } = await import(pathToFileURL(join(packageRoot, 'lib', 'localized-commands.mjs')).href);
+      const idioma = resolveLang({ root, fresh: true }).lang;
+      const conjunto = createLocalizedSet({ definitions: skillCommands({ root }) });
+      const filas = conjunto.namesFor(idioma);
+      const unNombrePorIdioma = conjunto.operations.every((op) => typeof op.byLang.en.name === 'string' && typeof op.byLang.es.name === 'string');
+      line(unNombrePorIdioma && filas.length === LOCALIZED_OPERATIONS.length,
+        tr('cli.doctor.names-ok', { n: LOCALIZED_OPERATIONS.length, filas: filas.length, lang: idioma, names: filas.join(', ') }, { lang: idioma }),
+        tr('cli.doctor.names-remedy', {}, { lang: idioma }));
     } catch (error) {
-      line(false, tr('cli.doctor.alias-failed', { message: error.message }), tr('cli.doctor.alias-failed-remedy'));
+      line(false, tr('cli.doctor.names-failed', { message: error.message }), tr('cli.doctor.names-failed-remedy'));
     }
 
     // -- Las filas de pendientes: la superficie que convierte aprobar en elegir --------------------
@@ -941,12 +969,23 @@ switch (command) {
     lineas.push(`${tr('cli.repair.level', { nivel: r.nivel })}${r.nivel === 1 ? tr('cli.repair.level-1') : r.nivel === 2 ? tr('cli.repair.level-2') : ''}`);
     if (r.reparaciones?.length) {
       lineas.push(tr('cli.repair.repairs'));
-      for (const rep of r.reparaciones) lineas.push(tr('cli.repair.repair-row', { level: rep.nivel, rule: rep.regla, describe: rep.describe }));
+      for (const rep of r.reparaciones) {
+        lineas.push(tr('cli.repair.repair-row', {
+          level: rep.nivel,
+          rule: rep.regla,
+          describe: fraseDeReparacion(rep.describe, rep.describeCode),
+        }));
+      }
     }
     if (r.movidas?.length) lineas.push(tr('cli.repair.moved', { list: r.movidas.map((m) => `${m.titulo} -> ${m.ruta}`).join(', ') }));
     if (r.status === 'blocked') {
       lineas.push(tr('cli.repair.blocked'));
-      for (const b of r.bloqueos) lineas.push(tr('cli.repair.block-row', { rule: b.rule, motivo: b.motivo }));
+      for (const b of r.bloqueos) {
+        lineas.push(tr('cli.repair.block-row', {
+          rule: b.rule,
+          motivo: fraseDeReparacion(b.motivo, b.motivoCode, b.motivoParams ?? {}),
+        }));
+      }
       lineas.push(`    ${motivoDeReparacion(r)}`);
     } else if (r.status !== 'proposed') {
       lineas.push(tr('cli.repair.no-proposal', { status: r.status }));
@@ -977,7 +1016,12 @@ switch (command) {
     }
     if (r.sinReparacion?.length) {
       lineas.push('', tr('cli.repair.not-fixable'));
-      for (const s of r.sinReparacion) lineas.push(tr('cli.repair.block-row', { rule: s.rule, motivo: s.motivo ?? tr('cli.repair.no-catalogue') }));
+      for (const s of r.sinReparacion) {
+        lineas.push(tr('cli.repair.block-row', {
+          rule: s.rule,
+          motivo: s.motivo === undefined ? tr('cli.repair.no-catalogue') : fraseDeReparacion(s.motivo, s.motivoCode, s.motivoParams ?? {}),
+        }));
+      }
     }
     process.stdout.write(`${lineas.join('\n')}\n`);
     break;

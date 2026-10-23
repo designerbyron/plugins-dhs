@@ -409,117 +409,12 @@ export function rejectProposal({ root = defaultRoot(), key, id, catalog } = {}) 
 }
 
 /**
- * Los alias funcionales de los nombres antiguos, y su retirada declarada.
+ * Crea las definiciones base del plugin: **una por operacion, con el nombre ingles**.
  *
- * Renombrar un comando **es cambiar el contrato**: los comandos de sesion pasaron a nombre ingles y el
- * nombre espanol sigue funcionando hasta `RETIRADA_DE_ALIAS` como alias del canonico, mismo handler,
- * mismos argumentos, misma puerta y mismos efectos.
- *
- * El alias se declara con **metadatos** (`aliasOf`, `deprecatedIn`) y no por el texto, para que una
- * superficie pueda ocultarlo por dato. Medido en el harness instalado (`@deepseek-ai/dsh-commands`): el
- * registro recorta el descriptor a `{definitionId, name, description, input}` antes de servirlo, y el menu
- * `/` (`dsh-client-ui-commands`) compone sus filas con `name` + `description` + `input.hint`; no hay campo
- * de ocultacion ni conoce `aliasOf`. Por eso hoy el menu ensena los 31 (16 canonicos + 15 alias): retirar
- * el registro para ocultarlos les quitaria la invocabilidad. Lo que si se puede hacer -y se hace- es que la
- * descripcion diga el canonico y la retirada, y que `aliasProblems()` deje el dato comprobable en `doctor`.
- */
-export const ALIAS_ESPERADOS = Object.freeze({
-  'skill-propuestas': 'skill-proposals',
-  'skill-pendientes': 'skill-pending',
-  'skill-ver': 'skill-show',
-  'skill-aprobar': 'skill-approve',
-  'skill-globalizar': 'skill-publish',
-  'skill-ambito': 'skill-scope',
-  'skill-deshabilitar': 'skill-disable',
-  'skill-habilitar': 'skill-enable',
-  'skill-eliminar': 'skill-retire',
-  'skill-retiradas': 'skill-retired',
-  'skill-propiedad': 'skill-ownership',
-  'skill-propiedad-dsh-only': 'skill-ownership-dsh-only',
-  'skill-propiedad-machine': 'skill-ownership-machine',
-  'skill-sistemas': 'skill-systems',
-  'skill-rechazar': 'skill-reject',
-});
-
-/** La version en la que los alias dejan de existir. Es un dato: viaja a la descripcion y a `doctor`. */
-export const RETIRADA_DE_ALIAS = '5.0.0';
-
-/**
- * Los problemas de los alias, medidos sobre las definiciones que se van a registrar.
- *
- * Existe porque el defecto silencioso de una tabla de alias es el `continue`: un destino mal escrito deja el
- * alias sin registrar y no lo dice nadie. Devuelve una lista vacia cuando todo esta en su sitio; cada
- * problema nombra la regla, el alias y que se esperaba.
- *
- * @param definiciones - lo que devuelve `skillCommands(...)`, ya construido.
- * @param esperados - la tabla esperada (se puede sustituir en una prueba para medir el rechazo).
- */
-export function aliasProblems(definiciones = [], esperados = ALIAS_ESPERADOS) {
-  const lista = Array.isArray(definiciones) ? definiciones : [];
-  const problemas = [];
-  const porNombre = new Map();
-  for (const c of lista) {
-    if (porNombre.has(c?.name)) {
-      problemas.push({ regla: 'alias-duplicado', alias: String(c?.name), detalle: 'el nombre se registra dos veces' });
-    }
-    porNombre.set(c?.name, c);
-  }
-  const nombresCanonicos = new Set(lista.filter((c) => c?.aliasOf === undefined).map((c) => c.name));
-  for (const [viejo, nuevo] of Object.entries(esperados)) {
-    if (!nombresCanonicos.has(nuevo)) {
-      problemas.push({ regla: 'alias-destino', alias: viejo, detalle: `su canonico "${nuevo}" no esta registrado` });
-      continue;
-    }
-    const alias = porNombre.get(viejo);
-    if (alias === undefined) {
-      problemas.push({ regla: 'alias-ausente', alias: viejo, detalle: `no se registro como alias de "${nuevo}"` });
-      continue;
-    }
-    if (alias.aliasOf !== nuevo) {
-      problemas.push({ regla: 'alias-destino', alias: viejo, detalle: `declara aliasOf "${alias.aliasOf}" y se esperaba "${nuevo}"` });
-    }
-    if (!/^\d+\.\d+\.\d+$/.test(String(alias.deprecatedIn ?? ''))) {
-      problemas.push({ regla: 'alias-retirada', alias: viejo, detalle: `deprecatedIn "${alias.deprecatedIn}" no es una version` });
-    }
-    if (typeof alias.handler !== 'function') {
-      problemas.push({ regla: 'alias-handler', alias: viejo, detalle: 'el alias no tiene handler: no se puede invocar' });
-    }
-    if (typeof alias.description !== 'string' || alias.description.trim() === '') {
-      problemas.push({ regla: 'alias-descripcion', alias: viejo, detalle: 'sin descripcion: el menu no puede explicar que hace' });
-    }
-  }
-  for (const c of lista) {
-    if (c?.aliasOf === undefined) continue;
-    if (esperados[c.name] === undefined) {
-      problemas.push({ regla: 'alias-sobrante', alias: c.name, detalle: 'se registra como alias y no esta en la tabla' });
-    }
-    if (c.aliasOf === c.name) {
-      problemas.push({ regla: 'alias-ciclo', alias: c.name, detalle: 'se declara alias de si mismo' });
-    }
-  }
-  return problemas;
-}
-
-/**
- * Lo que el menu va a ensenar, contado sobre las definiciones reales.
- *
- * El numero importa porque el harness no filtra los alias: si un dia el menu ensena 31 filas, es esto, y el
- * humano lo lee en `doctor` en vez de descubrirlo buscando su comando entre los obsoletos.
- */
-export function aliasSummary(definiciones = [], esperados = ALIAS_ESPERADOS) {
-  const lista = Array.isArray(definiciones) ? definiciones : [];
-  const alias = lista.filter((c) => c?.aliasOf !== undefined);
-  return {
-    canonicos: lista.length - alias.length,
-    alias: alias.length,
-    filas: lista.length,
-    esperados: Object.keys(esperados).length,
-    aliasNames: alias.map((c) => c.name).sort(),
-  };
-}
-
-/**
- * Crea los comandos del plugin.
+ * El nombre que se registra lo decide el idioma (`lib/localized-commands.mjs`), no este modulo: aqui viven el
+ * handler, la pista de sus argumentos y la definicion de la que el mapa localizado hereda. El nombre espanol
+ * ya no es un alias de esta tabla: es el nombre de la misma operacion en el otro idioma, y se registra **en
+ * lugar** del ingles, no ademas.
  *
  * @param root - raíz del almacén.
  * @param catalog - señal de catálogo; recibe el aviso tras cada mutación.
@@ -587,7 +482,10 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
           '',
           t('cmd.pending.header', { n: waiting.length }),
           waiting.length ? bullet(waiting) : t('cmd.bullet.none'),
-          ...rows.map((row) => `      /${row.name}`),
+          // Las filas del menú se nombran SIN barra: no son comandos de barra, son entradas que se eligen.
+          // Escribirlas como `/skill-show-<id>` ofrecía una orden que el registro no tiene (la barra invoca
+          // `/skill-show`), y encima en un nombre que cambia con el idioma.
+          ...rows.map((row) => t('cmd.list.row-line', { row: row.name })),
           // La orden exacta, siempre: con filas o sin ellas. Depender del menú para decidir era depender de
           // un servicio que este anfitrión no compone en el contexto del agente (tres caminos medidos). Una
           // línea pegable decide todas y no pide recordar nada.
@@ -973,23 +871,9 @@ export function skillCommands({ root = defaultRoot(), catalog, onListed, onMount
   // Si el provider no llegó a montar las filas de esta sesión, ejecutar un comando es la ocasión de
   // intentarlo otra vez —y de saber si no se pudo—: sin esto, la sesión se quedaba sin superficie de
   // decisión y el único aviso era «no hay filas que decidir en el catálogo de esta sesión».
-  // Los nombres españoles siguen funcionando **hasta 5.0.0** como alias del canónico: mismo handler, mismos
-  // argumentos, misma puerta y mismos efectos. El alias se declara con metadatos (`aliasOf`, `deprecatedIn`),
-  // no por el texto: así el menú puede ocultarlo por dato y `doctor` puede contarlos.
-  // La retirada de los alias es una fecha declarada, no una frase suelta en la descripcion.
-  const porNombre = new Map(definiciones.map((c) => [c.name, c]));
-  for (const [viejo, nuevo] of Object.entries(ALIAS_ESPERADOS)) {
-    const canonico = porNombre.get(nuevo);
-    if (canonico === undefined) continue;
-    definiciones.push({
-      ...canonico,
-      name: viejo,
-      aliasOf: nuevo,
-      deprecatedIn: RETIRADA_DE_ALIAS,
-      description: `${t('cmd.alias.deprecated', { nuevo, retirada: RETIRADA_DE_ALIAS })} ${canonico.description}`,
-    });
-  }
-
+  //
+  // Aquí no hay tabla de alias: los nombres espanoles viven en el mapa localizado como el nombre de su
+  // operacion en el otro idioma, y el registro activo tiene uno solo por operacion.
   const montar = (invocation) => {
     try {
       return onMount?.(invocation?.agent) ?? { ok: true };
@@ -1021,17 +905,28 @@ export function targetCommands({ root = defaultRoot(), catalog, rows = [] } = {}
       const { cwd, key } = scopeOfAgent(agent);
       if (key === null) return bad(noScope());
       if (key !== row.key) {
-        return bad([
-          t('cmd.row.other-project', { id: row.id, project: row.project }),
-          t('cmd.row.this-session', { cwd }),
-          t('cmd.row.open-there'),
-        ].join('\n'));
+        // El texto es presentacion y vive en el catalogo: una fila de otro proyecto se lee igual en los dos
+        // idiomas, y nombra el ambito con el que hay que abrirla sin inventarselo.
+        return bad(t('row.wrong-project', { id: row.id, project: row.project ?? row.key, cwd }));
       }
       if (row.verb === 'show') return viewProposal({ root, cwd, key, id: row.id });
       if (row.verb === 'approve') return approveProposal({ root, key, id: row.id, force: false, catalog });
       if (row.verb === 'publish') return approveProposal({ root, key, id: row.id, force: false, scope: 'global', catalog });
       if (row.verb === 'reject') return rejectProposal({ root, key, id: row.id, catalog });
-      return bad(`Fila desconocida: ${row.verb}`);
+      // Las filas de lo APAGADO se ofrecian en el menu y no tenian despacho: el registro las ponia y elegirlas
+      // contestaba «Fila desconocida». Son dos verbos del mismo ciclo de vida que los comandos con argumentos.
+      if (row.verb === 'enable') {
+        const vuelta = enable(row.id, key, { root });
+        if (!vuelta?.ok) return bad(t('cmd.enable.failed', { reason: vuelta?.reason ?? 'sin motivo' }));
+        catalog?.notify?.();
+        return ok(t('cmd.enable.done', { id: row.id, key }), { code: 'enabled', params: { id: row.id } });
+      }
+      if (row.verb === 'retire') {
+        // Retirar es el unico gesto irreversible del plugin y el comando exige `--yes`: la fila no es una
+        // excepcion, asi que dice la orden exacta en vez de escribir. Una fila no puede llevar banderas.
+        return ok([t('cmd.retire.confirm', { id: row.id, key }), t('cmd.retire.confirm-hint'), t('cmd.retire.confirm-do', { id: row.id })].join('\n'));
+      }
+      return bad(t('row.unknown-verb', { verb: String(row.verb) }));
     }),
   }));
 }

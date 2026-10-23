@@ -34,7 +34,8 @@ import { pathToFileURL } from 'node:url';
  */
 export const FICHEROS = [
   'lib/audit.mjs', 'lib/auto-approve.mjs', 'lib/auto-update.mjs', 'lib/catalog-signal.mjs', 'lib/commands.mjs',
-  'lib/compiler.mjs', 'lib/definitions.mjs', 'lib/lock.mjs', 'lib/pending-rows.mjs', 'lib/presentation.mjs',
+  'lib/compiler.mjs', 'lib/definitions.mjs', 'lib/lock.mjs', 'lib/localized-commands.mjs', 'lib/operations.mjs',
+  'lib/pending-rows.mjs', 'lib/presentation.mjs',
   'lib/projection.mjs', 'lib/promote.mjs', 'lib/repair.mjs', 'lib/review.mjs', 'lib/scope.mjs', 'lib/security.mjs',
   'lib/vendor.mjs',
   'lib/i18n/codes.mjs', 'lib/i18n/en.mjs', 'lib/i18n/es.mjs', 'lib/i18n/index.mjs',

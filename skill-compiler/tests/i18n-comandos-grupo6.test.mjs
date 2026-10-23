@@ -6,8 +6,8 @@
  * y se miden por lo que el humano ve, no por la clave:
  *
  *   · `skill-proposals`, `skill-pending` y `skill-show` entregan su descripcion en `en` (base) y en `es`;
- *   · la fila de otro proyecto devuelve las MISMAS tres lineas, con el id y el proyecto de origen, en el
- *     idioma que toque;
+ *   · la fila de otro proyecto devuelve UNA frase del catalogo (`row.wrong-project`) que nombra el id, el
+ *     proyecto de origen, la sesion actual y que el ambito no se elige a mano, en el idioma que toque;
  *   · identificadores, argumentos y resultado no cambian: mismo `kind`, mismo estado en disco, mismos ids;
  *   · el texto español es ASCII puro (la deuda del catalogo es cero en los dos idiomas).
  */
@@ -19,7 +19,7 @@ import { after, describe, it } from 'node:test';
 import { skillCommands, targetCommands } from '../lib/commands.mjs';
 import { pendingRowsFor } from '../lib/pending-rows.mjs';
 import { pending, projectKey, propose } from '../lib/compiler.mjs';
-import { resetLangCache } from '../lib/i18n/index.mjs';
+import { resetLangCache, t } from '../lib/i18n/index.mjs';
 import { cleanupSandboxes, fakeExec, goodInput, sandbox } from './helpers.mjs';
 
 after(cleanupSandboxes);
@@ -47,15 +47,10 @@ const comandos = (root) => new Map(skillCommands({ root }).map((c) => [c.name, c
 const invocar = (root, nombre, extra = {}) => comandos(root).get(nombre).handler({ ...fakeExec(CWD), ...extra });
 const sinNoAscii = (texto) => (texto.match(/[^\x00-\x7F]/g) ?? []).length === 0;
 
-const DESCRIPCIONES_EN = {
-  'skill-proposals': 'Which learned skills are waiting for your approval in this project, and which ones are already active.',
-  'skill-pending': 'The ids waiting for a decision, on one line: what the card asks before deciding.',
-  'skill-show': 'Read a learned skill of this project: the pending proposal or the one already active.',
-};
-const DESCRIPCIONES_ES = {
-  'skill-proposals': 'Que skills aprendidas esperan tu aprobacion en este proyecto y cuales estan activas.',
-  'skill-pending': 'Los ids que esperan decision, en una linea: lo que la tarjeta consulta antes de decidir.',
-  'skill-show': 'Lee una skill aprendida de este proyecto: la propuesta pendiente o la ya activa.',
+const DESCRIPCIONES = {
+  'skill-proposals': 'cmd.proposals.description',
+  'skill-pending': 'cmd.pending.description',
+  'skill-show': 'cmd.show.description',
 };
 
 function sembrarEn(cwd) {
@@ -70,8 +65,10 @@ describe('F1.2 grupo 6 · las descripciones del menu se leen del catalogo', () =
     const s = sembrarEn(CWD);
     con(null, () => {
       const porNombre = comandos(s.root);
-      for (const [nombre, texto] of Object.entries(DESCRIPCIONES_EN)) {
-        assert.equal(porNombre.get(nombre).description, texto, `${nombre}: la descripcion real no es la del catalogo base`);
+      for (const [nombre, clave] of Object.entries(DESCRIPCIONES)) {
+        // El texto esperado se lee del CATALOGO y no se escribe aqui: si el codigo vuelve a clavar la prosa,
+        // la definicion y el catalogo dejan de coincidir y esto se pone rojo.
+        assert.equal(porNombre.get(nombre).description, t(clave, {}, { lang: 'en' }), `${nombre}: la descripcion real no es la del catalogo base`);
       }
     });
   });
@@ -80,7 +77,8 @@ describe('F1.2 grupo 6 · las descripciones del menu se leen del catalogo', () =
     const s = sembrarEn(CWD);
     con('es', () => {
       const porNombre = comandos(s.root);
-      for (const [nombre, texto] of Object.entries(DESCRIPCIONES_ES)) {
+      for (const [nombre, clave] of Object.entries(DESCRIPCIONES)) {
+        const texto = t(clave, {}, { lang: 'es' });
         assert.equal(porNombre.get(nombre).description, texto, `${nombre}: la descripcion real no es la española`);
         assert.equal(sinNoAscii(texto), true, `${nombre}: el texto español lleva algo fuera de ASCII`);
       }
@@ -94,7 +92,7 @@ describe('F1.2 grupo 6 · las descripciones del menu se leen del catalogo', () =
     assert.deepEqual([...en.keys()], [...es.keys()], 'el conjunto de comandos cambio con el idioma');
     assert.equal(es.get('skill-show').input.hint, en.get('skill-show').input.hint);
     assert.equal(es.get('skill-show').input.hint, '<id>');
-    for (const nombre of Object.keys(DESCRIPCIONES_EN)) {
+    for (const nombre of Object.keys(DESCRIPCIONES)) {
       assert.notEqual(en.get(nombre).description, es.get(nombre).description, `${nombre}: los dos idiomas dicen lo mismo`);
     }
   });
@@ -113,29 +111,29 @@ describe('F1.2 grupo 6 · las descripciones del menu se leen del catalogo', () =
 });
 
 describe('F1.2 grupo 6 · la fila de otro proyecto, en los dos idiomas', () => {
+  // La fila se busca por su id y su forma, no por el nombre ingles: el prefijo depende del idioma activo
+  // (skill-approve en `en`, skill-aprobar en `es`) y aqui se prueban los DOS.
   const filaDeOtro = (root) => targetCommands({ root, rows: pendingRowsFor({ root, cwd: OTRO }) })
-    .find((row) => row.name === `skill-approve-${ID}`);
+    .find((row) => row.name.endsWith(`-${ID}`));
 
-  it('en ingles: tres lineas que nombran el id, el proyecto de origen y la sesion', () => {
+  it('en ingles: una linea que nombra el id, el proyecto de origen y la sesion', () => {
     const s = sembrarEn(OTRO);
     const resultado = con(null, () => filaDeOtro(s.root).handler(fakeExec(CWD)));
     assert.equal(resultado.kind, 'error');
-    assert.equal(resultado.text, [
-      `"${ID}" is pending in otro-proyecto, not in this session.`,
-      `This session works in ${CWD}.`,
-      'Open it from the project it belongs to: scope is not chosen by hand.',
-    ].join('\n'));
+    // La frase es UNA y vive en el catalogo: se compara contra el catalogo, no contra una copia de la prosa.
+    assert.equal(resultado.text, t('row.wrong-project', { id: ID, project: 'otro-proyecto', cwd: CWD }, { lang: 'en' }));
+    assert.match(resultado.text, /not in this session/);
+    assert.ok(resultado.text.includes(CWD), 'la frase no nombra la sesion actual');
+    assert.equal(resultado.text.includes('\n'), false, 'la fila de otro proyecto ya no es de tres lineas');
   });
 
   it('en español: el mismo contrato, ASCII puro y las mismas menciones', () => {
     const s = sembrarEn(OTRO);
     const resultado = con('es', () => filaDeOtro(s.root).handler(fakeExec(CWD)));
     assert.equal(resultado.kind, 'error');
-    assert.equal(resultado.text, [
-      `"${ID}" esta pendiente en otro-proyecto, no en esta sesion.`,
-      `Esta sesion trabaja en ${CWD}.`,
-      'Abrela desde el proyecto que le corresponde: el ambito no se elige a mano.',
-    ].join('\n'));
+    assert.equal(resultado.text, t('row.wrong-project', { id: ID, project: 'otro-proyecto', cwd: CWD }, { lang: 'es' }));
+    assert.match(resultado.text, /no en esta sesion/);
+    assert.ok(resultado.text.includes(CWD), 'la frase no nombra la sesion actual');
     assert.equal(sinNoAscii(resultado.text), true, 'el mensaje español lleva algo fuera de ASCII');
   });
 

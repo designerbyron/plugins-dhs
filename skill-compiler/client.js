@@ -61,9 +61,14 @@ window.__ModuleLoader__.load({
      * línea y usan la tarjeta del host, que para eso basta.
      */
     const COMMAND_NAMES = [
+      // Los dos idiomas: el host registra UN nombre por operacion (el del idioma activo) y el bloque que se
+      // esta mirando trae el suyo, asi que las dos formas tienen que tener su entrada.
       'skill-proposals', 'skill-pending', 'skill-show', 'skill-approve', 'skill-publish', 'skill-scope',
       'skill-auto', 'skill-reject', 'skill-disable', 'skill-enable', 'skill-retire', 'skill-retired',
       'skill-ownership', 'skill-systems',
+      'skill-propuestas', 'skill-pendientes', 'skill-ver', 'skill-aprobar', 'skill-globalizar', 'skill-ambito',
+      'skill-rechazar', 'skill-deshabilitar', 'skill-habilitar', 'skill-eliminar', 'skill-retiradas',
+      'skill-propiedad', 'skill-sistemas',
     ];
     /** Todos los comandos del plugin empiezan así: es lo que distingue los suyos en el catálogo del host. */
     const COMMAND_PREFIX = 'skill-';
@@ -76,7 +81,28 @@ window.__ModuleLoader__.load({
     // Los comandos cuyos resultados traen una lista que decidir. Los dos nuevos entran aquí porque su
     // resultado deja pendientes que decidir igual: publicar y cambiar de ámbito son decisiones, y tras una
     // decisión lo que queda se ofrece en el propio bloque, sin volver a pedir la lista.
-    const LIST_COMMANDS = ['skill-proposals', 'skill-show', 'skill-retired', 'skill-publish', 'skill-scope'];
+    const LIST_COMMANDS = [
+      'skill-proposals', 'skill-show', 'skill-retired', 'skill-publish', 'skill-scope',
+      'skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito',
+    ];
+    /**
+     * El nombre de cada verbo en cada idioma. El panel no teclea: compone una ORDEN (`/skill-aprobar <id>
+     * --local`) y el host solo conoce el nombre que el idioma activo tiene registrado. El idioma viaja con el
+     * bloque que se esta decidiendo (la lista llega como `skill-propuestas` en espanol y `skill-proposals` en
+     * ingles), asi que no hay que preguntarselo a nadie ni duplicar el estado del servidor aqui.
+     */
+    const VERB_COMMANDS = {
+      aprobar: { en: 'skill-approve', es: 'skill-aprobar' },
+      globalizar: { en: 'skill-publish', es: 'skill-globalizar' },
+      rechazar: { en: 'skill-reject', es: 'skill-rechazar' },
+      habilitar: { en: 'skill-enable', es: 'skill-habilitar' },
+      eliminar: { en: 'skill-retire', es: 'skill-eliminar' },
+    };
+    /** Las listas cuyo nombre espanol se reconoce: es lo que dice en que idioma habla el bloque. */
+    const LIST_NAMES_ES = ['skill-propuestas', 'skill-ver', 'skill-retiradas', 'skill-globalizar', 'skill-ambito'];
+    const idiomaDe = (nodeName) => (LIST_NAMES_ES.includes(String(nodeName ?? '')) ? 'es' : 'en');
+    /** El nombre del comando de un verbo, en el idioma del bloque que se decide. */
+    const comandoDe = (verb, nodeName) => (VERB_COMMANDS[verb] ?? {})[idiomaDe(nodeName)] ?? `skill-${verb}`;
     /**
      * Con qué empieza la respuesta de `skill-approve` cuando **no** ha aprobado: pregunta el ámbito. Es texto
      * del comando (el de su idioma, hoy ASCII), no de la interfaz, y se comprueba aquí porque contar esa
@@ -666,9 +692,11 @@ window.__ModuleLoader__.load({
       // Orden = orden de los botones; el primero es además el verbo por defecto. Aprobar (este proyecto),
       // publicar (todos) y apartar: las tres decisiones que existen, sin sintaxis que recordar. Lo apagado
       // no publica —ya estuvo activo— así que allí sólo se reenciende o se retira.
-      return String(nodeName ?? '') === 'skill-retired' ? ['habilitar', 'eliminar'] : ['aprobar', 'globalizar', 'rechazar'];
+      return ['skill-retired', 'skill-retiradas'].includes(String(nodeName ?? '')) ? ['habilitar', 'eliminar'] : ['aprobar', 'globalizar', 'rechazar'];
     }
-    const listVerbFor = (nodeName) => (String(nodeName ?? '') === 'skill-retired' ? 'retire' : 'approve');
+    // El VERBO de la fila es siempre el ingles: las filas del menu se llaman `skill-approve-<id>` en los dos
+    // idiomas (son marcador de maquina, como los `ok`/`FALLO` del lote).
+    const listVerbFor = (nodeName) => (['skill-retired', 'skill-retiradas'].includes(String(nodeName ?? '')) ? 'retire' : 'approve');
 
     /**
      * El panel de decisiones de una lista de pendientes —y de una propuesta leída con `/skill-show`—.
@@ -692,7 +720,9 @@ window.__ModuleLoader__.load({
         const tipos = Object.fromEntries(Object.keys(props).sort().map((k) => [k, typeof props[k]]));
         return `host · ${Object.entries(tipos).map(([k, v]) => `${k}=${v}`).join(' · ')}`;
       }, [props]);
-      const bulk = node?.name === 'skill-proposals';
+      // El bloque es una lista de pendientes en cualquiera de los dos idiomas; con el nombre fijo, en
+      // espanol el panel trataba la lista como una propuesta suelta y no ofrecia las casillas.
+      const bulk = ['skill-proposals', 'skill-propuestas'].includes(String(node?.name ?? ''));
       const reading = typeof node?.args === 'string' ? node.args.trim() : '';
 
       const [ids, setIds] = React.useState(null);
@@ -737,8 +767,9 @@ window.__ModuleLoader__.load({
 
       const rows = ids ?? [];
       const toggle = (id) => setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
-      // El verbo decide el comando, y sólo retirar pide confirmación explícita al host.
-      const target = `skill-${verb}`;
+      // El verbo decide el comando, y solo retirar pide confirmacion explicita al host. El nombre es el del
+      // idioma del bloque: el otro no esta registrado y el host lo rechazaria como comando desconocido.
+      const target = comandoDe(verb, node?.name);
       const texts = VERB_TEXTS[verb] ?? VERB_TEXTS.aprobar;
       // El ámbito va **explícito**: sin `--local` el comando pregunta dónde vive la skill (que es lo correcto
       // para un humano que lo teclea), y esa pregunta no aprueba nada. Medido: once «aprobaciones» de este
@@ -891,7 +922,7 @@ window.__ModuleLoader__.load({
 
       /** La orden del LOTE: un comando, N ids. Es la forma plural que el servidor entiende. */
       const ejecutarLote = (ids, conocida, forzar = false) => {
-        const comando = verb === 'globalizar' ? 'skill-approve' : target;
+        const comando = verb === 'globalizar' ? comandoDe('aprobar', node?.name) : target;
         const ambito = verb === 'aprobar' ? ' --local' : verb === 'globalizar' ? ' --global' : '';
         const argumentos = `${ids.join(',')}${ambito}`;
         return ejecutarOrden(`/${comando} ${argumentos}`, comando, argumentos, ids, conocida, forzar);

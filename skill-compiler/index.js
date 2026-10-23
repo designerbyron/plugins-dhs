@@ -24,6 +24,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createCatalogSignal } from './lib/catalog-signal.mjs';
 import { skillCommands, targetCommands } from './lib/commands.mjs';
 import { curatedLibraryRoot, defaultRoot } from './lib/compiler.mjs';
+import { resolveLang } from './lib/i18n/index.mjs';
+import { createLanguageCommand, createLanguageState, createLocalizedSet, swapSet } from './lib/localized-commands.mjs';
 import { pendingRowsFor, retiredRowsFor } from './lib/pending-rows.mjs';
 import { PROTOCOL, scopeOf, skillPropose, skillProvider, skillReview, skillUpstreamCheck, skillVendor } from './lib/definitions.mjs';
 
@@ -141,16 +143,32 @@ export function apply(ctx, config = {}) {
     if (registry === undefined || typeof registry.register !== 'function') return;
     ctx.effect(() => {
       const base = [];
+      /** El conjunto de nombres que sigue al idioma: que esta puesto y con que disposer se retira. */
+      const languageState = createLanguageState();
       /** agente → cómo recomponer sus filas, y cómo retirarlas si el plugin se descarga. */
       const perAgent = new Map();
+      /**
+       * El comando de idioma, cuando se pudo montar. Su baja **vigente** no es el disposer del alta inicial:
+       * cambiar de idioma lo retira y lo vuelve a registrar, asi que el de `base` apunta a una definicion que
+       * ya no esta.
+       */
+      let comandoIdioma = null;
+
+      /**
+       * El idioma con el que se componen los NOMBRES de fila. Sale del conjunto vivo (que es el que se ve), y
+       * si aun no esta puesto, de la resolucion normal del plugin. Una fila es un comando registrado de
+       * verdad: en espanol no puede ofrecerse `skill-approve-<id>` si el registro tiene `skill-aprobar`.
+       */
+      const idiomaDeFilas = () => languageState.lang ?? resolveLang({ root }).lang;
 
       const composeFor = (cwd) => {
         try {
           // Las dos colecciones con las que se decide en el menú: lo que espera aprobación y lo apagado
           // (que es donde se elige volver a encenderlo o retirarlo del todo). Comparten gramática y camino,
           // y los nombres no pueden chocar entre ellas: la segunda recibe los ya tomados.
-          const pendientes = pendingRowsFor({ root, cwd });
-          const apagadas = retiredRowsFor({ root, cwd, taken: new Set(pendientes.map((row) => row.name)) });
+          const lang = idiomaDeFilas();
+          const pendientes = pendingRowsFor({ root, cwd, lang });
+          const apagadas = retiredRowsFor({ root, cwd, taken: new Set(pendientes.map((row) => row.name)), lang });
           return targetCommands({ root, catalog, rows: [...pendientes, ...apagadas] });
         } catch {
           return null; // el almacén ilegible no puede tumbar los comandos que ya están
@@ -319,7 +337,58 @@ export function apply(ctx, config = {}) {
       try {
         // `onMount` entra aquí porque el humano es el otro camino que conoce al agente: si el provider no
         // llegó a montar sus filas, ejecutar `/skill-proposals` las monta antes de listar.
-        for (const command of skillCommands({ root, catalog, onListed: refreshPendingRows, onMount: (agent) => mountSession(agent) })) base.push(registry.register(command));
+        //
+        // El idioma decide QUE nombres se registran, y el conjunto queda intercambiable en vivo: se construye
+        // una sola vez (con las dos lenguas dentro y un solo handler por operacion) y se omite del registro
+        // base lo que ese conjunto va a poseer. Sin omision, el alta localizada chocaria con la base: los 31
+        // nombres (16 en un idioma y 16 en el otro, con `skill-auto` compartido) son todos del conjunto.
+        const todas = skillCommands({ root, catalog, onListed: refreshPendingRows, onMount: (agent) => mountSession(agent) });
+        let conjunto = null;
+        try {
+          conjunto = createLocalizedSet({ definitions: todas });
+        } catch {
+          conjunto = null; // un mapa roto no puede quitar los 16 comandos que ya funcionan
+        }
+        const omitidos = new Set(conjunto === null ? [] : conjunto.omitNames);
+        const tomados = new Set();
+        for (const command of todas) {
+          if (omitidos.has(command.name)) continue;
+          tomados.add(command.name);
+          base.push(registry.register(command));
+        }
+        if (conjunto !== null) {
+          const inicial = resolveLang({ root }).lang;
+          const puesto = swapSet({ registry, state: languageState, set: conjunto, lang: inicial, taken: tomados });
+          if (!puesto.ok) {
+            // El conjunto localizado no se pudo poner: los nombres omitidos vuelven al registro, para que el
+            // idioma no sea la causa de que desaparezca un comando.
+            for (const command of todas) {
+              if (omitidos.has(command.name)) base.push(registry.register(command));
+            }
+            languageState.lang = null;
+          }
+          // El comando de ajustes NO entra en el conjunto: si estuviera dentro se retiraria justo cuando se
+          // usa. Es el unico que tiene que existir siempre, en los dos idiomas, con el mismo nombre.
+          //
+          // Su descripcion sigue al idioma: el anfitrion no permite actualizar una definicion registrada, asi
+          // que se retira y se vuelve a registrar con el MISMO handler y con vuelta atras (`relabel`). Y el
+          // cambio de idioma recompone las filas de cada sesion: sus nombres tambien son idioma.
+          comandoIdioma = createLanguageCommand({
+            registry,
+            state: languageState,
+            set: conjunto,
+            taken: tomados,
+            root,
+            onChanged: () => {
+              refreshPendingRows();
+              return null;
+            },
+          });
+          // Lo instala el propio comando: la reescritura de su descripcion necesita SU disposer, y el de un
+          // alta hecha desde fuera no lo tiene.
+          const instalado = comandoIdioma.install();
+          if (!instalado.ok) comandoIdioma = null;
+        }
       } catch {
         // Sin comandos no hay atajo humano, pero las herramientas y los skills siguen intactos.
       }
@@ -355,6 +424,21 @@ export function apply(ctx, config = {}) {
           }
         }
         perAgent.clear();
+        // El conjunto localizado se retira por sus propios disposers: no esta en `base` (ese arreglo solo
+        // guarda lo que se registra una vez), y dejarlo vivo al descargar el plugin dejaria el nombre de un
+        // idioma apuntando a un registro que ya no esta.
+        // El comando de idioma se retira con SU disposer vivo: cambiar de idioma lo vuelve a registrar, asi
+        // que el disposer del alta inicial ya no apunta a la definicion que esta puesta.
+        comandoIdioma?.dispose();
+        for (const dispose of languageState.live.values()) {
+          try {
+            dispose?.();
+          } catch {
+            /* ya retirado */
+          }
+        }
+        languageState.live.clear();
+        languageState.lang = null;
         for (const dispose of base) {
           try {
             if (typeof dispose === 'function') dispose();

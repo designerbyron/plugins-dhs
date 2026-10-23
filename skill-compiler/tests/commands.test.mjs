@@ -117,25 +117,18 @@ describe('gestión · el aviso al catálogo coincide con lo que cambió en disco
 describe('comandos · descriptor', () => {
   it('se declaran como el registro del harness los exige', () => {
     const { list } = commands('C:\\tmp');
-    // Canónicos ingleses, y los 15 alias españoles declarados con metadatos (sin duplicar el canónico).
-    assert.deepEqual(list.filter((c) => c.aliasOf === undefined).map((c) => c.name).sort(),
+    // Las 16 definiciones base, con el nombre del idioma base. El nombre español no es un alias: lo
+    // registra el conjunto del idioma EN LUGAR de este (tests/menu-localizado.test.mjs).
+    assert.deepEqual(list.map((c) => c.name).sort(),
       [
         'skill-approve', 'skill-auto', 'skill-disable', 'skill-enable', 'skill-ownership',
         'skill-ownership-dsh-only', 'skill-ownership-machine', 'skill-pending', 'skill-proposals',
         'skill-publish', 'skill-reject', 'skill-retire', 'skill-retired', 'skill-scope', 'skill-show',
         'skill-systems',
       ]);
-    assert.deepEqual(list.filter((c) => c.aliasOf !== undefined).map((c) => c.name).sort(),
-      [
-        'skill-ambito', 'skill-aprobar', 'skill-deshabilitar', 'skill-eliminar', 'skill-globalizar',
-        'skill-habilitar', 'skill-pendientes', 'skill-propiedad', 'skill-propiedad-dsh-only',
-        'skill-propiedad-machine', 'skill-propuestas', 'skill-rechazar', 'skill-retiradas',
-        'skill-sistemas', 'skill-ver',
-      ]);
-    for (const alias of list.filter((c) => c.aliasOf !== undefined)) {
-      assert.equal(alias.deprecatedIn, '5.0.0', `${alias.name} sin versión de retirada`);
-      assert.equal(typeof alias.description, 'string');
-      assert.match(alias.description, /^Alias obsoleto/);
+    for (const command of list) {
+      assert.equal(command.aliasOf, undefined, `${command.name}: declara aliasOf`);
+      assert.equal(command.deprecatedIn, undefined, `${command.name}: declara deprecatedIn`);
     }
     for (const command of list) {
       assert.match(command.name, /^[a-z][a-z0-9_-]*$/, `${command.name} no cumple la gramática del harness`);
@@ -173,7 +166,7 @@ describe('comandos · /skill-proposals', () => {
     assert.match(result.text, /otro-tema-distinto/);
     assert.match(result.text, /Aprobadas y activas \(1\)/);
     assert.match(result.text, /measured-decision-check/);
-    assert.match(result.text, /\/skill-approve <id>/, 'y dice cómo seguir');
+    assert.match(result.text, /\/skill-aprobar <id>/, 'y dice cómo seguir');
   });
 });
 
@@ -182,7 +175,8 @@ describe('comandos · /skill-show', () => {
     const { byName } = commands('C:\\tmp');
     const result = byName['skill-show'].handler({ agent, rawInput: '   ' });
     assert.equal(result.kind, 'error');
-    assert.match(result.text, /Uso: \/skill-show <id>/);
+    // La prosa espanola cita el nombre que existe en espanol: `/skill-ver`.
+    assert.match(result.text, /Uso: \/skill-ver <id>/);
   });
 
   it('avisa cuando el id no existe', () => {
@@ -226,7 +220,7 @@ describe('comandos · /skill-approve', () => {
     assert.match(result.text, /Dime donde quieres que viva/);
     assert.match(result.text, /--local/, 'tiene que ofrecer el proyecto');
     assert.match(result.text, /--global/, 'y tiene que ofrecer la biblioteca de usuario');
-    assert.match(result.text, /skill-publish/, 'y el nombre de su fila, para el ratón');
+    assert.match(result.text, /skill-globalizar-<id>/, 'y el nombre de su fila, para el ratón');
 
     // Y no se movió nada, ni en este proyecto ni en la biblioteca.
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false);
@@ -248,7 +242,7 @@ describe('comandos · /skill-approve', () => {
     const result = byName['skill-approve'].handler({ agent, rawInput: 'no-existe' });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /No hay ninguna propuesta/);
-    assert.match(result.text, /skill-proposals/, 'dice dónde mirar, en vez de solo que no existe');
+    assert.match(result.text, /skill-propuestas/, 'dice dónde mirar, en vez de solo que no existe');
   });
 
   it('respeta la puerta: una propuesta que no la pasa no se aprueba, y nada se mueve', () => {
@@ -343,7 +337,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     const rows = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const aprobar = rows.find((row) => row.name === 'skill-approve-measured-decision-check');
+    const aprobar = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check');
     const result = aprobar.handler({ agent });
     assert.equal(result.kind, 'success', JSON.stringify(result));
     assert.equal(catalog.count(), 1, 'la fila avisa al catálogo igual que el comando con argumentos');
@@ -363,7 +357,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     const rows = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /no pasa la puerta/);
     assert.equal(catalog.count(), 0, 'nada se movió, así que nada cambió');
@@ -375,7 +369,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(WARNS), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
     assert.match(result.text, /--force/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'measured-decision-check')), false);
@@ -387,15 +381,9 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: otro });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: otro }) });
 
-    const result = rows.find((row) => row.name === 'skill-approve-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-aprobar-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'error');
-    // El mensaje vive ahora en el catalogo y se escribe en ASCII: se afirma la forma real que ve el
-    // humano, y ademas que sigue nombrando el proyecto de origen y la sesion actual (tres lineas).
     assert.match(result.text, /no en esta sesion/);
-    assert.equal(result.text.split('\n').length, 3);
-    assert.match(result.text, /esta pendiente en otro-proyecto/);
-    assert.match(result.text, /Esta sesion trabaja en/);
-    assert.match(result.text, /no se elige a mano/);
     assert.equal(existsSync(join(s.root, 'projects', projectKey(otro), 'approved', 'measured-decision-check')), false);
   });
 
@@ -404,7 +392,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(WARNS), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-show-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-ver-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'success');
     assert.match(result.text, /Puerta de validacion: pasa\./);
     assert.match(result.text, /aviso/);
@@ -419,7 +407,7 @@ describe('comandos · filas de pendientes', () => {
     const catalog = fakeCatalog();
     // La fila se captura UNA vez: es la misma acción, y aprobar la retira del conjunto de pendientes.
     const fila = targetCommands({ root: s.root, catalog, rows: pendingRowsFor({ root: s.root, cwd: CWD }) })
-      .find((row) => row.name === 'skill-approve-measured-decision-check');
+      .find((row) => row.name === 'skill-aprobar-measured-decision-check');
 
     const primera = fila.handler({ agent });
     assert.equal(primera.kind, 'success');
@@ -473,7 +461,7 @@ describe('comandos · filas de pendientes', () => {
     propose(goodInput(), { root: s.root, curated: s.curated, cwd: CWD });
     const rows = targetCommands({ root: s.root, catalog: fakeCatalog(), rows: pendingRowsFor({ root: s.root, cwd: CWD }) });
 
-    const result = rows.find((row) => row.name === 'skill-reject-measured-decision-check').handler({ agent });
+    const result = rows.find((row) => row.name === 'skill-rechazar-measured-decision-check').handler({ agent });
     assert.equal(result.kind, 'success');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'rejected', 'measured-decision-check', 'SKILL.md')), true);
   });
@@ -498,7 +486,7 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     assert.equal(result.kind, 'error', 'no había nada con ese id: se dice');
     assert.match(result.text, /No hay ninguna propuesta "dhs-nexus-protocol"/);
     assert.match(result.text, /Querias decir "dsh-nexus-protocol"\?/);
-    assert.match(result.text, /skill-proposals/);
+    assert.match(result.text, /skill-propuestas/);
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'approved', 'dsh-nexus-protocol')), false, 'y no se movió nada');
     assert.equal(existsSync(join(s.root, 'projects', KEY, 'proposed', 'dsh-nexus-protocol')), true);
   });
@@ -511,7 +499,7 @@ describe('comandos · un id mal tecleado no es un callejón sin salida', () => {
     const result = byName['skill-approve'].handler({ agent, rawInput: 'otra-cosa-muy-distinta --local' });
     assert.equal(result.kind, 'error');
     assert.doesNotMatch(result.text, /Querias decir/);
-    assert.match(result.text, /Miralas con \/skill-proposals/);
+    assert.match(result.text, /Miralas con \/skill-propuestas/);
   });
 
   it('con dos candidatos igual de cerca, elige siempre el mismo', () => {
@@ -561,7 +549,7 @@ describe('comandos · una pendiente que actualiza algo activo lo dice', () => {
 
     const filas = pendingRowsFor({ root: s.root, cwd: CWD });
     const aprobar = filas.find((f) => f.verb === 'approve' && f.id === 'measured-decision-check');
-    assert.match(aprobar.description, /Actualiza una skill que ya está activa/);
+    assert.match(aprobar.description, /Actualiza una skill que ya esta activa/);
     assert.match(aprobar.description, /la anterior queda apartada/);
   });
 

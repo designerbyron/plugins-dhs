@@ -189,7 +189,11 @@ describe('CLI real (subproceso, arena) · una propuesta con avisos', () => {
     // se comprueba la salida real, que es lo que lee una persona.
     const ayuda = cli(arena);
     assert.equal(ayuda.code, 2, 'sin comando, la ayuda sale con 2 (uso)');
-    assert.match(ayuda.salida, /skill-pending/);
+    // Este fichero fija el idioma a `es`, y el nombre que anuncia la ayuda es el del registro ACTIVO: en
+    // espanol el comando se llama `/skill-pendientes`. Antes decia `/skill-pending` en los dos idiomas, que
+    // es una orden que en espanol no existe.
+    assert.match(ayuda.salida, /skill-pendientes/);
+    assert.doesNotMatch(ayuda.salida, /\/skill-pending\b/);
   });
 });
 
@@ -210,6 +214,21 @@ describe('CLI real (subproceso, arena) · idioma del plugin', () => {
 
     const despues = cli(arena, 'lang');
     assert.match(despues.salida, /^idioma: es \(fuente: config\)$/m);
+    if (guardado === undefined) delete process.env.DSH_LANG;
+    else process.env.DSH_LANG = guardado;
+  });
+
+  it('la bandera del comando del harness tambien vale en el CLI, y fuera de lang se rechaza', () => {
+    const arena = sandbox();
+    const guardado = process.env.DSH_LANG;
+    delete process.env.DSH_LANG;
+    const conBandera = cli(arena, 'lang', '--es');
+    assert.equal(conBandera.code, 0, conBandera.salida);
+    assert.match(conBandera.salida, /idioma fijado en es/);
+    assert.equal(JSON.parse(readFileSync(join(arena.root, 'config.json'), 'utf8')).lang, 'es');
+    // Y no se traga en otro subcomando: un `--es` ignorado haria creer que el idioma se fijo.
+    const fuera = cli(arena, 'where', '--es');
+    assert.equal(fuera.code, 2, fuera.salida);
     if (guardado === undefined) delete process.env.DSH_LANG;
     else process.env.DSH_LANG = guardado;
   });

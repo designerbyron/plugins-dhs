@@ -8,11 +8,11 @@ se comporta en cada caso. Todo lo de la primera tabla está medido contra la com
 
 | Capacidad del anfitrión | Estado | Cómo se midió |
 |---|---|---|
-| Comandos humanos globales (`ctx.commands.register` desde el plugin raíz) | **sí** | los 15 comandos contestan (`/skill-propuestas`, `/skill-aprobar`, …) |
+| Comandos humanos globales (`ctx.commands.register` desde el plugin raíz) | **sí** | los 16 comandos contestan, con el nombre del idioma activo (`/skill-aprobar` en `es`, `/skill-approve` en `en`) |
 | Registro de comandos **por agente** (filas por propuesta en el menú «/») | **no** | tres caminos probados, tres motivos (abajo) |
 | Ejecutar una orden desde la interfaz (`runCommand` con texto) | **sí**, con **texto con barra** | el panel aprobó 10 propuestas reales: 3 + 7, 0 fallos |
 | Listar los comandos existentes (`listCommands`) | **sí** | el panel mide el efecto contra esa lista |
-| Alias del nombre viejo en el menú «/» | **sí, y no se pueden ocultar** | el descriptor que sirve el anfitrión no lleva `aliasOf` (abajo) |
+| Nombre del comando por idioma en el menú «/», con cambio en vivo | **sí** | el operador fijó `--es` en la 0.2.1-rc.2 y el menú pasó de `/skill-approve` a `/skill-aprobar` **sin reiniciar** (abajo) |
 | Eventos de sesión (`session.snapshotEvents()`) | **sí** | `/skill-auto` se pliega de los `command/run` |
 | Catálogo de skills por proyecto (`~/.dsh/skills`, `approved/`) | **sí** | 36 aprobadas, 4 publicadas y 1 apagada en la medición de la 4.0.0 (2026-10-23; 48 auditadas), servidas sin reiniciar |
 
@@ -30,7 +30,7 @@ que declara su propio `inject: ['commands']`»). El plugin la intenta y **el anf
 Conclusión: en esta compilación, el servicio de comandos **no está en el ámbito del contexto del agente**. No es
 un defecto del plugin y no hay variante de llamada que lo arregle.
 
-### El menú «/» no distingue un alias de un comando canónico
+### El menú «/» sirve lo que se registra, y por eso el nombre sigue al idioma
 
 Composición medida en la compilación instalada, leyendo sus dos paquetes:
 
@@ -41,13 +41,26 @@ Composición medida en la compilación instalada, leyendo sus dos paquetes:
 3. La única condición que oculta una fila es no declarar `hint` cuando el cursor no está al principio de la
    línea (`req.position === 'leading' || c.hint === undefined`). No hay campo de ocultación.
 
-Consecuencia para los alias: `aliasOf` y `deprecatedIn` **no llegan a la interfaz** (0 apariciones de esos dos
-nombres en todo el `app.asar`), así que el menú anuncia las 16 filas canónicas **más** los 15 alias, y la
-descripción del alias es lo único que dice cuál es su canónico y cuándo se retira. Retirar el registro para
-ocultarlos les quitaría la invocabilidad, que es justamente lo que el humano usa hasta `5.0.0`. Por eso `doctor`
-cuenta las 31 filas en voz alta (`15 de 31 filas del menu (16 canonicos)`) y la tabla de alias se comprueba con
-`aliasProblems()`, para que no pueda mentir en silencio. Qué la cerraría: un descriptor con marca de ocultación,
-o un `aliasOf` que el menú lea.
+Consecuencia, y es la que cambió el modelo: como el anfitrión **no** filtra por metadatos, la única forma de que
+el menú tenga **una fila por operación** es registrar **un solo nombre por operación**, y ese nombre es el del
+idioma activo. `register()` devuelve el **disposer** de esa definición y cada alta o baja emite
+`commands/change`, al que está suscrito el adaptador de UI (`dsh-client-ui-commands`), cuya invalidación es
+**suave**: por eso el cambio de idioma da las altas **antes** que las bajas.
+
+Eso se midió **en vivo** en la `0.2.1-rc.2`: ejecutado `/skill-compiler-language --es`, el comando contestó
+«Idioma fijado en es (antes en). El menu / ofrece /skill-aprobar» y, **sin reiniciar la app**, el menú `/` pasó
+de `/skill-approve` a `/skill-aprobar` con su descripción en español. `doctor` dice el idioma activo y las filas
+que sirve (`16 operaciones y 16 filas en <idioma>`), construidas desde el mapa y no desde un número escrito a
+mano. Lo que sigue **sin verificar sin pantalla** es el dibujo del menú en sí: se infiere del evento y de la
+invalidación, y se declara como tal.
+
+**Cómo re-medirlo, con el registro de verdad y sin dobles:** `node scripts/vertical-idioma-real.mjs <dir>`,
+donde `<dir>` es la carpeta `dsh/node_modules` extraída del `app.asar` instalado (con `scripts/asar-read.py`).
+Levanta un `Context` real, monta el plugin de comandos del anfitrión, registra las 16 operaciones reales y las
+invoca por `registry.execute()` —la ruta del humano, con `command/run`/`command/done`—: comprueba 16 filas por
+idioma, que el nombre del otro idioma **no resuelve** (`execute` devuelve `undefined`), tres operaciones (lista,
+lectura y aprobación de verdad, con `approved/` en disco) por cada nombre, y cinco cambios que no acumulan. No
+lo corre `npm test`: necesita el build instalado, y la suite no depende de la máquina.
 
 ## 2 · Qué se implementó para no depender de esa capacidad
 

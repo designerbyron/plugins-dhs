@@ -9,8 +9,8 @@
  *   2. texto de un idioma colado en el otro (la heurística que habría cazado `bulk_ids_hint`);
  *   3. cada código emitido tiene texto en los dos idiomas;
  *   4. el diccionario del panel tiene las mismas claves que el catalogo base y ningún valor crudo;
- *   5. los comandos de sesión tienen nombre inglés y los alias se declaran con `aliasOf`/`deprecatedIn`,
- *      sin duplicar el nombre de un canónico.
+ *   5. las 16 operaciones de sesión tienen UN nombre por idioma (el del otro idioma no se registra), ninguna
+ *      se queda sin operación ni al revés, y no queda rastro del modelo de alias.
  *
  * Uso: `node tools/i18n-gate.mjs [--root <dir>] [--json]`. Sale 0 si todo pasa; 1 con diagnóstico si no.
  */
@@ -27,7 +27,9 @@ const fallo = (regla, donde, detalle) => fallos.push({ regla, donde, detalle });
 
 const lee = (rel) => readFileSync(join(raiz, rel), 'utf8');
 const claves = (obj) => Object.keys(obj).sort();
-const huecos = (texto) => [...String(texto).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+// Los huecos incluyen las marcas de nombre (`{cmd:approve}`, `{row:approve}`): son placeholders igual que los
+// demas, y si una frase los tiene en un idioma y no en el otro, el texto no dice lo mismo.
+const huecos = (texto) => [...String(texto).matchAll(/\{([\w:.]+)\}/g)].map((m) => m[1]).sort();
 
 // ── 1..3 · catálogos ────────────────────────────────────────────────────────────────────────────────
 let en = {};
@@ -53,7 +55,7 @@ if (Object.keys(en).length > 0) {
 }
 
 // El texto cruzado se mide sin placeholders: se llaman igual en los dos idiomas y no son idioma.
-const sinHuecos = (v) => String(v).replace(/\{\w+\}/g, ' ');
+const sinHuecos = (v) => String(v).replace(/\{[\w:.]+\}/g, ' ');
 const ESPANOL = /\b(de|del|la|el|los|las|una|que|para|con|sin|por|como|cuando|desde|hasta|cada|más|pero|aunque|sólo|también|aquí|idioma|fuente|guardado|usa|está|hay)\b/i;
 const INGLES = /\b(the|and|with|from|this|that|use|language|source|saved|when|each|only|also|here|nothing|where|should)\b/i;
 for (const [clave, valor] of Object.entries(en)) {
@@ -111,45 +113,149 @@ try {
   fallo('panel', 'client.js', `no se pudo revisar: ${error.message}`);
 }
 
-// ── 5 · nombres y alias ────────────────────────────────────────────────────────────────────────────
+// ── 5 · nombres: una operacion, un nombre por idioma ───────────────────────────────────────────────
+//
+// La regla vieja contaba 15 alias espanoles y exigia `aliasOf`/`deprecatedIn`. El modelo se retiro: ahora los
+// nombres espanoles son **el nombre de su operacion en espanol**, no un alias del ingles, y el conjunto activo
+// tiene una fila por operacion. Lo que se mide aqui es el mapa (`lib/operations.mjs`) contra las definiciones
+// base (`lib/commands.mjs`), importando los dos modulos en vez de leer su texto: una tabla de nombres copiada a
+// mano en el gate mide la memoria de quien la copio.
+const OPERACIONES_ESPERADAS = 16;
+
 try {
-  const comandos = lee('lib/commands.mjs');
-  const nombres = [...comandos.matchAll(/^\s{6}name: '([^']+)',$/gm)].map((m) => m[1]);
-  // Dos comandos se registran con nombre plantilla (`skill-ownership-${SOLO_DSH}`); se resuelven aquí porque
-  // el gate mira el texto, no ejecuta el módulo.
-  if (/name: `skill-ownership-\$\{SOLO_DSH\}`/.test(comandos)) nombres.push('skill-ownership-dsh-only');
-  if (/name: `skill-ownership-\$\{MAQUINA\}`/.test(comandos)) nombres.push('skill-ownership-machine');
-  const españoles = /^skill-(propuestas|pendientes|ver|aprobar|globalizar|ambito|deshabilitar|habilitar|eliminar|retiradas|sistemas|rechazar)$|^skill-propiedad(-dsh-only|-machine)?$/;
-  for (const nombre of nombres) {
-    if (españoles.test(nombre)) fallo('nombre-espanol', `lib/commands.mjs:${nombre}`, 'comando canónico con nombre español');
-    if (!/^skill-[a-z][a-z0-9-]*$/.test(nombre)) fallo('nombre-gramatica', `lib/commands.mjs:${nombre}`, 'nombre fuera de la gramática');
+  const { LOCALIZED_OPERATIONS, createLocalizedSet } = await import(`file://${join(raiz, 'lib/localized-commands.mjs').replace(/\\/g, '/')}`);
+  const { skillCommands } = await import(`file://${join(raiz, 'lib/commands.mjs').replace(/\\/g, '/')}`);
+
+  // 5.1 el mapa declara las 16 operaciones, cada una con un nombre valido en cada idioma
+  if (LOCALIZED_OPERATIONS.length !== OPERACIONES_ESPERADAS) {
+    fallo('operaciones-cuenta', 'lib/operations.mjs',
+      `se esperan ${OPERACIONES_ESPERADAS} operaciones en el mapa, hay ${LOCALIZED_OPERATIONS.length}`);
   }
-  const alias = [...comandos.matchAll(/'([^']+)': '([^']+)',/g)].filter(([, a]) => españoles.test(a));
-  if (alias.length !== 15) fallo('alias-cuenta', 'lib/commands.mjs', `se esperan 15 alias, hay ${alias.length}`);
-  for (const [, viejo, nuevo] of alias) {
-    if (!nombres.includes(nuevo)) fallo('alias-destino', `lib/commands.mjs:${viejo}`, `su canónico «${nuevo}» no existe`);
-    if (nombres.includes(`'${viejo}'`)) fallo('alias-duplicado', `lib/commands.mjs:${viejo}`, 'el alias se registra como comando propio');
+  const GRAMATICA = /^[a-z][a-z0-9_-]*$/u;
+  const ocupados = new Map();
+  for (const op of LOCALIZED_OPERATIONS) {
+    for (const lang of ['en', 'es']) {
+      const nombre = op?.names?.[lang];
+      if (typeof nombre !== 'string' || !GRAMATICA.test(nombre)) {
+        fallo('nombre-gramatica', `lib/operations.mjs:${op?.id}`, lang === 'en' ? 'sin nombre ingles o fuera de la gramatica' : 'sin nombre espanol o fuera de la gramatica');
+        continue;
+      }
+      const duenio = ocupados.get(nombre);
+      if (duenio !== undefined && duenio !== op.id) {
+        fallo('nombre-duplicado', `lib/operations.mjs:${op.id}`, `«${nombre}» ya lo ocupa la operacion «${duenio}» (una fila del menu no puede tener dos duenios)`);
+      }
+      ocupados.set(nombre, op.id);
+    }
   }
-  // El metadato tiene que decir lo MISMO que la retirada declarada. Estaba clavado en '4.0.0' mientras la
-  // descripcion del mismo objeto decia «se retira en 5.0.0»: la puerta daba por bueno un dato que se
-  // contradecia con la frase, y la incoherencia viajo hasta la puerta de release. Ahora se lee la constante y
-  // se exige que el metadato sea ella, o su literal exacto.
-  const retirada = /export const RETIRADA_DE_ALIAS = '(\d+\.\d+\.\d+)'/.exec(comandos)?.[1];
-  const declarado = /deprecatedIn: ([^,\n]+),/.exec(comandos)?.[1]?.trim();
-  const coherente = declarado === 'RETIRADA_DE_ALIAS' || (retirada !== undefined && declarado === `'${retirada}'`);
-  if (!/aliasOf: nuevo/.test(comandos) || !coherente) {
-    fallo('alias-metadatos', 'lib/commands.mjs',
-      `los alias no declaran aliasOf/deprecatedIn coherentes con la retirada (RETIRADA_DE_ALIAS=${retirada ?? 'ausente'}, deprecatedIn=${declarado ?? 'ausente'})`);
+
+  // 5.2 ninguna definicion base se queda sin operacion, y ninguna operacion sin definicion base
+  const base = skillCommands({ root: join(raiz, '.i18n-gate-sin-almacen') });
+  const nombresBase = base.map((c) => c.name).sort();
+  const nombresMapa = LOCALIZED_OPERATIONS.map((op) => op?.names?.en).sort();
+  for (const nombre of nombresBase) {
+    if (!nombresMapa.includes(nombre)) fallo('operacion-huerfana', `lib/commands.mjs:${nombre}`, 'la definicion base no tiene entrada en el mapa localizado: su nombre no seguiria al idioma');
   }
+  for (const nombre of nombresMapa) {
+    if (!nombresBase.includes(nombre)) fallo('operacion-sin-base', `lib/operations.mjs:${nombre}`, 'el mapa declara una operacion sin definicion base: no tiene handler que heredar');
+  }
+
+  // 5.3 el conjunto activo: 16 filas por idioma, sin repetir, y el nombre del otro idioma NO esta dentro
+  if (nombresBase.length === LOCALIZED_OPERATIONS.length && ocupados.size > 0) {
+    const conjunto = createLocalizedSet({ definitions: base });
+    for (const lang of ['en', 'es']) {
+      const otro = lang === 'en' ? 'es' : 'en';
+      const activos = conjunto.namesFor(lang);
+      if (activos.length !== OPERACIONES_ESPERADAS) {
+        fallo('filas-idioma', `lib/operations.mjs:${lang}`, `el idioma ${lang} registra ${activos.length} filas y se esperan ${OPERACIONES_ESPERADAS}`);
+      }
+      if (new Set(activos).size !== activos.length) {
+        fallo('filas-idioma', `lib/operations.mjs:${lang}`, 'el conjunto del idioma repite un nombre');
+      }
+      for (const op of LOCALIZED_OPERATIONS) {
+        const ajeno = op?.names?.[otro];
+        // La excepcion es una operacion que NO se traduce (`skill-auto`): mismo nombre en los dos idiomas.
+        if (activos.includes(ajeno) && ajeno !== op?.names?.[lang]) {
+          fallo('nombre-ajeno', `lib/operations.mjs:${op.id}`, `en ${lang} se registra «${ajeno}», que es el nombre del otro idioma`);
+        }
+      }
+    }
+    // El unico nombre que no cambia de idioma es `skill-auto`; si otro deja de traducirse, se decide aqui.
+    const sinTraducir = LOCALIZED_OPERATIONS.filter((op) => op?.names?.en === op?.names?.es).map((op) => op.id);
+    if (sinTraducir.sort().join(',') !== 'auto') {
+      fallo('nombre-sin-traducir', 'lib/operations.mjs', `solo «auto» comparte nombre en los dos idiomas; hoy: ${sinTraducir.join(', ') || 'ninguna'}`);
+    }
+  }
+
+  // 5.4b Los NOMBRES de comando no se copian en el catalogo: se citan con una marca (`{cmd:x}`, `{row:x}`).
+  //
+  // Un texto que escribe `/skill-aprobar` a mano es una segunda copia del mapa, y el dia que un nombre cambie
+  // el mensaje ofrecera un comando que no existe: es lo que ya pasaba con las filas —citadas en ingles dentro
+  // del catalogo espanol— y con `/skill-pending` en la ayuda de los dos idiomas.
+  const marcas = [];
+  for (const [idioma, dicc] of [['en', en], ['es', es]]) {
+    for (const [clave, valor] of Object.entries(dicc)) {
+      if (typeof valor !== 'string') continue;
+      // Una cita es un nombre de comando precedido de nada alfanumerico: `node bin/skill-compiler.mjs` es una
+      // ruta, no un comando, y el nombre del plugin (`skill-compiler`) tampoco es una operacion.
+      const citados = [...valor.matchAll(/(?<![A-Za-z0-9_.])\/skill-(?![a-z]*compiler\b)[a-z][a-z0-9-]*|(?<![A-Za-z0-9_.])skill-[a-z][a-z0-9_-]*-<id>/g)].map((m) => m[0]);
+      for (const cita of citados) marcas.push(`${idioma}:${clave} cita «${cita}»`);
+      // Una marca que no corresponda a una operacion se quedaria visible en el texto: se denuncia aqui.
+      for (const [, marca] of valor.matchAll(/\{(?:cmd|row):([a-z0-9-]+)\}/g)) {
+        if (!LOCALIZED_OPERATIONS.some((op) => op?.id === marca)) marcas.push(`${idioma}:${clave} usa una marca sin operacion: «${marca}»`);
+      }
+    }
+  }
+  if (marcas.length > 0) {
+    fallo('nombre-copiado', 'lib/i18n/', `los nombres de comando se citan con una marca, no a mano: ${marcas.slice(0, 6).join('; ')}`);
+  }
+
+  // 5.4c Las FILAS del menu tambien son comandos: su nombre sale del mapa, y el del otro idioma no se anuncia.
+  //
+  // Una fila se ofrece en el menu `/` y se ejecuta al elegirla, asi que un nombre que no corresponda al registro
+  // activo es una instruccion falsa. Se comprueba la composicion —prefijo localizado del verbo— y que el
+  // prefijo del otro idioma no coincida nunca.
+  try {
+    const { ROW_VERBS } = await import(`file://${join(raiz, 'lib/pending-rows.mjs').replace(/\\/g, '/')}`);
+    const { rowPrefixOf, slashNameOf } = await import(`file://${join(raiz, 'lib/operations.mjs').replace(/\\/g, '/')}`);
+    const verbos = ROW_VERBS.map((v) => v.operation);
+    if (verbos.length === 0) fallo('filas-verbos', 'lib/pending-rows.mjs', 'no declara ningun verbo');
+    for (const operacion of verbos) {
+      const enFila = rowPrefixOf(operacion, 'en');
+      const esFila = rowPrefixOf(operacion, 'es');
+      if (enFila === null || esFila === null) {
+        fallo('filas-verbos', `lib/pending-rows.mjs:${operacion}`, 'su verbo no es una operacion del mapa');
+        continue;
+      }
+      if (enFila === esFila && operacion !== 'auto') {
+        fallo('fila-sin-traducir', `lib/pending-rows.mjs:${operacion}`, `la fila se anuncia igual en los dos idiomas («${enFila}»)`);
+      }
+      if (!nombresBase.includes(slashNameOf(operacion, 'en').slice(1))) {
+        fallo('fila-huerfana', `lib/pending-rows.mjs:${operacion}`, 'la fila cita un verbo que no es un comando registrado');
+      }
+    }
+  } catch (error) {
+    fallo('filas', 'lib/pending-rows.mjs', `no se pudo revisar: ${error.message}`);
+  }
+
+  // 5.4 no queda rastro del modelo de alias: ni el metadato, ni la tabla, ni la clave de su aviso
+  const conAlias = [];
+  for (const rel of ['lib/commands.mjs', 'lib/presentation.mjs', 'lib/localized-commands.mjs', 'lib/operations.mjs', 'index.js', 'client.js', 'lib/i18n/es.mjs', 'lib/i18n/en.mjs']) {
+    const texto = lee(rel);
+    for (const marca of ['aliasOf', 'deprecatedIn', 'ALIAS_ESPERADOS', 'RETIRADA_DE_ALIAS', 'cmd.alias.']) {
+      if (texto.includes(marca)) conAlias.push(`${rel}: ${marca}`);
+    }
+  }
+  if (conAlias.length > 0) fallo('alias-retirado', 'lib/', `el modelo de alias esta retirado y sigue citado en ${conAlias.join('; ')}`);
 } catch (error) {
-  fallo('comandos', 'lib/commands.mjs', `no se pudo revisar: ${error.message}`);
+  fallo('comandos', 'lib/operations.mjs', `no se pudo revisar: ${error.message}`);
 }
 
 // ── salida ─────────────────────────────────────────────────────────────────────────────────────────
 if (comoJson) {
   process.stdout.write(`${JSON.stringify({ ok: fallos.length === 0, fallos }, null, 2)}\n`);
 } else if (fallos.length === 0) {
-  process.stdout.write(`I18N: en orden (${claves(en).length} claves por idioma · ${claves(es).length} · 15 alias)\n`);
+  process.stdout.write(`I18N: en orden (${claves(en).length} claves por idioma · ${claves(es).length} · ${OPERACIONES_ESPERADAS} operaciones x 2 nombres, 1 activo por idioma)
+`);
 } else {
   for (const f of fallos) process.stdout.write(`FALLO ${f.regla} · ${f.donde} — ${f.detalle}\n`);
   process.stdout.write(`\nI18N: ${fallos.length} problema(s) en ${relative(raiz, raiz) || '.'}\n`);

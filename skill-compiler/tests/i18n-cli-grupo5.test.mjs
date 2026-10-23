@@ -90,9 +90,12 @@ describe('F1.2 · grupo 5 en los dos idiomas · la ayuda', () => {
     assert.match(es.salida, /^Salida: 0 correcto/m);
     assert.doesNotMatch(es.salida, /Commands:|Options:|Exit: 0 ok|From the session:/);
 
-    // La ayuda anuncia lo que se hace desde la sesion: es el texto que enlaza CLI y plugin.
-    assert.match(en.salida, /\/skill-pending/);
-    assert.match(es.salida, /\/skill-pending/);
+    // La ayuda anuncia lo que se hace desde la sesion: es el texto que enlaza CLI y plugin, y el nombre que
+    // anuncia es el del registro ACTIVO. Antes citaba `/skill-pending` en los dos idiomas, que en espanol es
+    // una instruccion que no existe: el comando se llama `/skill-pendientes`.
+    assert.match(en.salida, /\/skill-pending\b/);
+    assert.match(es.salida, /\/skill-pendientes\b/);
+    assert.doesNotMatch(es.salida, /\/skill-pending\b/, 'el nombre del otro idioma no se anuncia');
   });
 
   it('una opcion desconocida se dice en el idioma que toca y sale con 2', () => {

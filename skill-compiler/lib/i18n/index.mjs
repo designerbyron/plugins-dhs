@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path';
 
 import en from './en.mjs';
 import es from './es.mjs';
+import { rowNameOf, slashNameOf } from '../operations.mjs';
 
 export const LANGS = Object.freeze(['en', 'es']);
 export const BASE = 'en';
@@ -128,13 +129,23 @@ export function setLang(tag, { root = storeRoot() } = {}) {
 /**
  * Traduce una clave. Los parámetros se interpolan como `{nombre}`; un parámetro ausente se deja visible —es un
  * defecto del código, y la prueba de paridad lo impide llegar a producción— en vez de imprimir `undefined`.
+ *
+ * Dos marcas no son parametros sino **nombres de comando**, y se resuelven contra el mapa (`operations.mjs`)
+ * para el idioma de la frase: `{cmd:approve}` da `/skill-approve` o `/skill-aprobar`, y `{row:approve}` da
+ * `skill-approve-<id>` o `skill-aprobar-<id>`. Asi un mensaje no puede citar un nombre que no existe en el
+ * registro activo, y el catalogo no guarda una segunda copia de los nombres. Una marca que no corresponda a
+ * ninguna operacion se deja visible: es un defecto del catalogo, y la puerta de i18n lo mide.
  */
 export function t(key, params = {}, { lang } = {}) {
   const idioma = lang ?? resolveLang().lang;
   const dicc = DICTIONARIES[idioma] ?? DICTIONARIES[BASE];
   const texto = dicc[key] ?? DICTIONARIES[BASE][key];
   if (typeof texto !== 'string') return String(key);
-  return texto.replace(/\{(\w+)\}/g, (_, nombre) => (params[nombre] === undefined ? `{${nombre}}` : String(params[nombre])));
+  return texto.replace(/\{([\w:.]+)\}/g, (marca, nombre) => {
+    if (nombre.startsWith('cmd:')) return slashNameOf(nombre.slice(4), idioma) ?? marca;
+    if (nombre.startsWith('row:')) return rowNameOf(nombre.slice(4), idioma) ?? marca;
+    return params[nombre] === undefined ? marca : String(params[nombre]);
+  });
 }
 
 /** ¿Está el catálogo de un idioma completo respecto al base? Para `doctor` y para la prueba de paridad. */

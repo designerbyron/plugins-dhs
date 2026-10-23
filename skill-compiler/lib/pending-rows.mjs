@@ -31,31 +31,26 @@
 import { join } from 'node:path';
 
 import { pending, projectKey, scanTree } from './compiler.mjs';
+import { resolveLang, t } from './i18n/index.mjs';
+import { rowPrefixOf } from './operations.mjs';
 
 /** La gramática del registro de comandos del harness, copiada del contrato: `/^[a-z][a-z0-9_-]*$/u`. */
 export const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
 
 /**
- * Los verbos de una fila, en el orden en que se usan (leer → decidir). `command` compone el nombre y
- * `describe` la descripción que se lee en el menú.
+ * Los verbos de una fila, en el orden en que se usan (leer -> decidir). `verb` es el **codigo interno** con
+ * el que se despacha (no cambia de idioma: es contrato), `operation` es la operacion del mapa de la que salen
+ * el NOMBRE de la fila y su descripcion, y `describeKey` la clave del catalogo.
+ *
+ * El nombre de la fila se compone del nombre localizado de la operacion (`skill-approve`, `skill-aprobar`) mas
+ * el slug del id. No se escribe aqui: si se escribiera, la fila ofreceria en espanol un comando que solo existe
+ * en ingles -una instruccion falsa, y de las caras: la fila se elige y no pasa nada-.
  */
 export const ROW_VERBS = Object.freeze([
-  Object.freeze({
-    verb: 'show',
-    describe: (id, project) => `Lee entera «${id}», pendiente en ${project}.`,
-  }),
-  Object.freeze({
-    verb: 'approve',
-    describe: (id, project) => `Activa «${id}» en ${project}, si pasa la puerta de validación. Aprobar es tuyo: el modelo no puede.`,
-  }),
-  Object.freeze({
-    verb: 'publish',
-    describe: (id, project) => `Activa «${id}» para TODOS tus proyectos: la publica en la biblioteca de usuario. Lo aprendido en ${project} es tuyo, no del proyecto.`,
-  }),
-  Object.freeze({
-    verb: 'reject',
-    describe: (id, project) => `Aparta «${id}» de ${project} sin borrarla: queda en rejected/.`,
-  }),
+  Object.freeze({ verb: 'show', operation: 'show', describeKey: 'row.show' }),
+  Object.freeze({ verb: 'approve', operation: 'approve', describeKey: 'row.approve' }),
+  Object.freeze({ verb: 'publish', operation: 'publish', describeKey: 'row.publish' }),
+  Object.freeze({ verb: 'reject', operation: 'reject', describeKey: 'row.reject' }),
 ]);
 
 /**
@@ -104,11 +99,14 @@ function uniqueName(base, taken) {
  * @param cwd - directorio de trabajo de la sesión; es el único origen válido del ámbito.
  * @param taken - nombres ya usados por otras filas del mismo registro (se comparte entre proyectos:
  *   el registro de comandos es global y un nombre repetido lanza al registrar).
+ * @param lang - idioma de los NOMBRES y de las descripciones. Se resuelve contra la raiz que se le da (no
+ *   contra el almacen real del proceso) para que una prueba en su arena no dependa del idioma del operador.
  * @returns `[{ name, description, verb, id, key, project }]`, en el orden leer → activar, publicar, apartar.
  */
-export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
+export function pendingRowsFor({ root, cwd, taken = new Set(), lang = null } = {}) {
   const key = projectKey(cwd);
   if (key === null) return [];
+  const idioma = lang ?? resolveLang({ root }).lang;
   const project = projectName(cwd, key);
   const rows = [];
   const propuestas = pending({ root, key });
@@ -127,17 +125,22 @@ export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
     // El lote se dice **en la descripción de la fila**: es lo que hace que en el menú se vea que estas
     // propuestas van juntas, sin añadir un clic nuevo que escriba en varias skills a la vez.
     const lote = proposal.group
-      ? ` · va en el lote «${proposal.group.id}» (${tamano.get(proposal.group.id)} propuesta(s) juntas: ${proposal.group.motivo})`
+      ? t('row.group', { group: proposal.group.id, n: tamano.get(proposal.group.id), motivo: proposal.group.motivo }, { lang: idioma })
       : '';
-    for (const { verb, describe } of ROW_VERBS) {
-      const name = uniqueName(`skill-${verb}-${slug}`, taken);
+    for (const { verb, operation, describeKey } of ROW_VERBS) {
+      // El nombre sale del MAPA de operaciones (`operations.mjs`): en espanol, `skill-aprobar-<id>`, y el
+      // nombre ingles no se registra ni se anuncia. Es la diferencia entre ofrecer un comando que existe y
+      // ofrecer una instruccion que no lleva a ninguna parte.
+      const prefijo = rowPrefixOf(operation, idioma);
+      if (prefijo === null) continue;
+      const name = uniqueName(`${prefijo}${slug}`, taken);
       // Última guarda antes de devolver algo que se va a registrar: un nombre fuera de la gramática no
       // se registra y la fila desaparecería en silencio; aquí se cae con el motivo.
       if (!COMMAND_NAME.test(name)) continue;
       taken.add(name);
       rows.push({
         name,
-        description: `${describe(proposal.id, project)}${actualiza ? ' Actualiza una skill que ya está activa: si pasa la puerta, la sustituye y la anterior queda apartada.' : ''}${lote}`,
+        description: `${t(describeKey, { id: proposal.id, project }, { lang: idioma })}${actualiza ? t('row.update-active', {}, { lang: idioma }) : ''}${lote}`,
         verb,
         id: proposal.id,
         key,
@@ -159,34 +162,50 @@ export function pendingRowsFor({ root, cwd, taken = new Set() } = {}) {
 /**
  * Verbos de una skill **apagada**. Son pocas por definición —lo que el humano acaba de apagar— así que
  * caben en el menú sin llenarlo, y es justo donde se decide volver a encenderla o retirarla del todo.
+ *
+ * Igual que los de pendientes: codigo interno estable y operacion del mapa para el nombre y la descripcion.
  */
 const RETIRED_VERBS = [
-  { verb: 'enable', describe: (id, proyecto) => `Vuelve a encender «${id}» en ${proyecto}: se conserva entera y no hubo que reinstalarla.` },
-  { verb: 'retire', describe: (id, proyecto) => `Retira «${id}» de ${proyecto}: se mueve a un respaldo fechado, nunca se borra, y vuelve con \`restore\`.` },
+  { verb: 'enable', operation: 'enable', describeKey: 'row.enable' },
+  { verb: 'retire', operation: 'retire', describeKey: 'row.retire' },
 ];
 
 /** Las filas de lo apagado de un proyecto, con la misma gramática que las de lo pendiente. */
-export function retiredRowsFor({ root, cwd, taken = new Set() } = {}) {
+export function retiredRowsFor({ root, cwd, taken = new Set(), lang = null } = {}) {
   const key = projectKey(cwd);
   if (key === null) return [];
+  const idioma = lang ?? resolveLang({ root }).lang;
   const proyecto = projectName(cwd, key);
   const rows = [];
   for (const apagada of scanTree(join(root, 'projects', key, 'disabled'), 'apagada')) {
     const slug = commandSlug(apagada.id);
     if (slug === null) continue;
-    for (const { verb, describe } of RETIRED_VERBS) {
-      const name = uniqueName(`skill-${verb}-${slug}`, taken);
+    for (const { verb, operation, describeKey } of RETIRED_VERBS) {
+      const prefijo = rowPrefixOf(operation, idioma);
+      if (prefijo === null) continue;
+      const name = uniqueName(`${prefijo}${slug}`, taken);
       if (!COMMAND_NAME.test(name)) continue;
       taken.add(name);
-      rows.push({ id: apagada.id, verb, name, description: describe(apagada.id, proyecto) });
+      // `key` y `project` viajan en la fila: el despachador comprueba el ambito al ejecutar, y una fila sin
+      // ambito se niega en todas partes ("esta pendiente en undefined"). Ese defecto existio: la fila se
+      // ofrecia en el menu y no hacia nada.
+      rows.push({
+        id: apagada.id,
+        verb,
+        name,
+        description: t(describeKey, { id: apagada.id, project: proyecto }, { lang: idioma }),
+        key,
+        project: proyecto,
+      });
     }
   }
   return rows;
 }
 
-export function pendingRowsForAll({ root, cwds = [] } = {}) {
+export function pendingRowsForAll({ root, cwds = [], lang = null } = {}) {
   const taken = new Set();
   const rows = [];
-  for (const cwd of cwds) rows.push(...pendingRowsFor({ root, cwd, taken }));
+  const idioma = lang ?? resolveLang({ root }).lang;
+  for (const cwd of cwds) rows.push(...pendingRowsFor({ root, cwd, taken, lang: idioma }));
   return rows;
 }

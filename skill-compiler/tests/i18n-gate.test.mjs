@@ -22,17 +22,20 @@ function copia() {
   temporales.push(dir);
   cpSync(join(RAIZ, 'lib'), join(dir, 'lib'), { recursive: true });
   cpSync(join(RAIZ, 'client.js'), join(dir, 'client.js'));
+  cpSync(join(RAIZ, 'index.js'), join(dir, 'index.js'));
   return dir;
 }
 
 const corre = (raiz) => spawnSync(process.execPath, [GATE, '--root', raiz], { encoding: 'utf8' });
 
 describe('i18n gate · el repositorio pasa', () => {
-  it('en orden, y dice cuántas claves y alias ha visto', () => {
+  it('en orden, y dice cuántas claves y cuántas operaciones ha visto', () => {
     const r = corre(RAIZ);
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /I18N: en orden/);
-    assert.match(r.stdout, /15 alias/);
+    // El recuento es el del modelo nuevo: 16 operaciones x 2 nombres, 1 activo por idioma.
+    assert.match(r.stdout, /16 operaciones x 2 nombres, 1 activo por idioma/);
+    assert.doesNotMatch(r.stdout, /alias/);
   });
 });
 
@@ -68,22 +71,49 @@ describe('i18n gate · detecta violaciones reales', () => {
     assert.match(r.stdout, /FALLO codigo-sin-texto · es:code\.inventado/);
   });
 
-  it('un alias que apunta a un canónico inexistente se denuncia', () => {
+  it('dos operaciones con el MISMO nombre en un idioma se denuncian', () => {
     const dir = copia();
-    const cmds = join(dir, 'lib', 'commands.mjs');
-    writeFileSync(cmds, readFileSync(cmds, 'utf8').replace("'skill-aprobar': 'skill-approve',", "'skill-aprobar': 'skill-inexistente',"), 'utf8');
+    const mapa = join(dir, 'lib', 'operations.mjs');
+    writeFileSync(mapa, readFileSync(mapa, 'utf8')
+      .replace("names: Object.freeze({ en: 'skill-reject', es: 'skill-rechazar' })", "names: Object.freeze({ en: 'skill-reject', es: 'skill-aprobar' })"), 'utf8');
     const r = corre(dir);
     assert.equal(r.status, 1);
-    assert.match(r.stdout, /FALLO alias-destino · lib\/commands\.mjs:skill-aprobar/);
+    assert.match(r.stdout, /FALLO nombre-duplicado · lib\/operations\.mjs:reject/);
   });
 
-  it('un comando canónico con nombre español se denuncia', () => {
+  it('una definicion base sin operacion (o al reves) se denuncia: su nombre no seguiria al idioma', () => {
     const dir = copia();
     const cmds = join(dir, 'lib', 'commands.mjs');
     writeFileSync(cmds, readFileSync(cmds, 'utf8').replace("      name: 'skill-reject',", "      name: 'skill-rechazar',"), 'utf8');
     const r = corre(dir);
     assert.equal(r.status, 1);
-    assert.match(r.stdout, /FALLO nombre-espanol · lib\/commands\.mjs:skill-rechazar/);
+    assert.match(r.stdout, /FALLO operacion-huerfana · lib\/commands\.mjs:skill-rechazar/);
+    assert.match(r.stdout, /FALLO operacion-sin-base · lib\/operations\.mjs:skill-reject/);
+  });
+
+  it('quitar una operacion del mapa se denuncia por recuento', () => {
+    const dir = copia();
+    const mapa = join(dir, 'lib', 'operations.mjs');
+    const texto = readFileSync(mapa, 'utf8');
+    const inicio = texto.indexOf("  Object.freeze({\n    id: 'reject',");
+    const fin = texto.indexOf('  }),', inicio);
+    if (inicio < 0 || fin < 0) throw new Error('no se encontro la entrada reject');
+    writeFileSync(mapa, texto.slice(0, inicio) + texto.slice(fin + 6), 'utf8');
+    const r = corre(dir);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /FALLO operaciones-cuenta · lib\/operations\.mjs/);
+  });
+
+  it('el modelo de alias retirado no puede reaparecer en el codigo', () => {
+    const dir = copia();
+    const cmds = join(dir, 'lib', 'commands.mjs');
+    const marca = "      description: t('cmd.reject.description'),";
+    const texto = readFileSync(cmds, 'utf8');
+    if (texto.split(marca).length - 1 !== 1) throw new Error('ancla reject ambigua');
+    writeFileSync(cmds, texto.replace(marca, marca + String.fromCharCode(10) + "      deprecatedIn: '5.0.0',"), 'utf8');
+    const r = corre(dir);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /FALLO alias-retirado · lib\//);
   });
 
   it('un diccionario del panel sin paridad se denuncia', () => {
